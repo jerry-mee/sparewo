@@ -1,0 +1,45 @@
+plugins {
+    id "com.android.application" // Required for Android app projects
+    id "kotlin-android" // Enables Kotlin support
+    id "dev.flutter.flutter-gradle-plugin" // Flutter Gradle plugin
+    id "com.google.gms.google-services" // Google Services plugin for Firebase integration
+}
+
+android {
+    namespace = "com.sparewo.client" // Replace with your actual namespace
+    compileSdk = 34 // Updated to SDK 34 for compatibility with dependencies
+
+    defaultConfig {
+        applicationId = "com.sparewo.client" // Replace with your app's actual package name
+        minSdk = 23 // Minimum SDK version supported
+        targetSdk = 34 // Match compileSdk for compatibility
+        versionCode = 1 // Increment this for new app versions
+        versionName = "1.0.0" // App version name
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8 // Ensure compatibility with Java 8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    kotlinOptions {
+        jvmTarget = "1.8" // Ensure compatibility with Java 8 for Kotlin
+    }
+
+    buildTypes {
+        release {
+            // Define signing configuration for release builds
+            signingConfig signingConfigs.debug
+        }
+    }
+}
+
+flutter {
+    source = "../.." // Points to your Flutter project directory
+}
+
+dependencies {
+    implementation platform('com.google.firebase:firebase-bom:32.7.0') // Firebase BOM for consistent versioning
+    implementation 'com.google.firebase:firebase-analytics' // Firebase Analytics
+    implementation 'com.google.firebase:firebase-auth' // Firebase Authentication
+}

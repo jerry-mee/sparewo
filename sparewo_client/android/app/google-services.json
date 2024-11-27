@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "858998050859",
+    "project_id": "sparewoapp",
+    "storage_bucket": "sparewoapp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:858998050859:android:79af5856ed22a972071a6e",
+        "android_client_info": {
+          "package_name": "com.sparewo.client"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDwaPqmEV0UPdPPMV351GXPycDvjgoF5UE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
