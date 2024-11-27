@@ -1,0 +1,159 @@
+name: sparewo
+description: SpareWo - Car Parts and Service App
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Firebase
+  firebase_core: ^3.8.0
+  firebase_auth: ^5.3.3
+  cloud_firestore: ^5.5.0
+  firebase_storage: ^12.3.6
+
+  # Core Functionality
+  vibration: ^2.0.1
+  fluttertoast: ^8.2.8
+  collection: ^1.18.0
+  intl: ^0.19.0 # Downgraded to resolve conflict with form_builder_validators
+  json_annotation: ^4.8.1
+
+  # UI and Design
+  cupertino_icons: ^1.0.6
+  google_fonts: ^6.1.0
+  flutter_svg: ^2.0.15
+  cached_network_image: ^3.4.1
+  shimmer: ^3.0.0
+  flutter_screenutil: ^5.9.0
+  font_awesome_flutter: ^10.6.0
+  dropdown_button2: ^2.3.9
+  carousel_slider: ^5.0.0
+  pull_to_refresh: ^2.0.0
+  flutter_form_builder: ^9.1.1
+  form_builder_validators: ^11.0.0
+
+  # Animation and Transitions
+  flutter_animate: ^4.5.1
+  animations: ^2.0.8
+  flutter_easyloading: ^3.0.5
+  lottie: ^3.1.3
+
+  # State Management
+  provider: ^6.1.1
+  flutter_riverpod: ^2.4.9
+
+  # Authentication and Storage
+  google_sign_in: ^6.2.2
+  shared_preferences: ^2.3.3
+  flutter_secure_storage: ^9.0.0
+
+  # Networking
+  http: ^1.2.2
+  dio: ^5.4.0
+  connectivity_plus: ^6.1.0
+
+  # Date and Time
+  flutter_datetime_picker_plus: ^2.1.0
+
+  # Utils and Tools
+  url_launcher: ^6.2.2
+  package_info_plus: ^8.1.1
+  device_info_plus: ^11.1.1
+  path_provider: ^2.1.1
+  permission_handler: ^11.0.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+
+  # Development Tools
+  flutter_lints: ^5.0.0
+  build_runner: ^2.4.7
+  json_serializable: ^6.9.0
+  flutter_gen_runner: ^5.3.2
+  flutter_launcher_icons: ^0.14.1
+  flutter_native_splash: ^2.4.3
+  mockito: ^5.4.4
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/logo/
+    - assets/images/
+    - assets/icons/
+    - assets/fonts/
+    - assets/animations/
+    - assets/logo/logo.png
+    - assets/logo/splash_logo.png
+    - assets/logo/splash_logo_dark.png
+    - assets/logo/branding.png
+    - assets/logo/branding_dark.png
+    - assets/logo/app_icon.png
+
+  fonts:
+    - family: Poppins
+      fonts:
+        - asset: assets/fonts/Poppins-Light.ttf
+          weight: 300
+        - asset: assets/fonts/Poppins-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Poppins-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Poppins-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Poppins-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Poppins-ExtraBold.ttf
+          weight: 800
+        - asset: assets/fonts/Poppins-Italic.ttf
+          style: italic
+
+flutter_icons:
+  android: true
+  ios: true
+  remove_alpha_ios: true
+  image_path: "assets/logo/app_icon.png"
+  min_sdk_android: 21
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/logo/app_icon.png"
+  web:
+    generate: true
+    image_path: "assets/logo/app_icon.png"
+    background_color: "#1A1B4B"
+    theme_color: "#FF9800"
+
+flutter_native_splash:
+  color: "#1A1B4B"
+  image: assets/logo/splash_logo.png
+  branding: assets/logo/branding.png
+  color_dark: "#1A1B4B"
+  image_dark: assets/logo/splash_logo.png
+  branding_dark: assets/logo/branding.png
+
+  android_12:
+    color: "#1A1B4B"
+    image: assets/logo/splash_logo.png
+    icon_background_color: "#1A1B4B"
+    image_dark: assets/logo/splash_logo.png
+    icon_background_color_dark: "#1A1B4B"
+
+  android: true
+  ios: true
+  web: false
+
+  fullscreen: true
+  android_gravity: center
+  ios_content_mode: center
+  web_image_mode: center
+
+  info_plist_files:
+    - 'ios/Runner/Info-Debug.plist'
+    - 'ios/Runner/Info-Release.plist'
