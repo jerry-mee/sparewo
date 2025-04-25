@@ -1,0 +1,19 @@
+{
+  "presets": [
+    [
+      "next/babel",
+      {
+        "preset-env": {
+          "targets": {
+            "browsers": "> 1%, not dead, not ie 11, not op_mini all"
+          }
+        }
+      }
+    ]
+  ],
+  "plugins": [
+    "@babel/plugin-transform-private-methods",
+    "@babel/plugin-transform-private-property-in-object",
+    "@babel/plugin-transform-class-properties"
+  ]
+}

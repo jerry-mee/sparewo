@@ -1,0 +1,13 @@
+{
+  "name": "@/components/ui",
+  "version": "0.0.0",
+  "private": true,
+  "main": "./index.tsx",
+  "types": "./index.tsx",
+  "dependencies": {
+    "@radix-ui/react-select": "^2.0.0",
+    "@radix-ui/react-checkbox": "^1.0.4",
+    "lucide-react": "^0.363.0",
+    "class-variance-authority": "^0.7.0"
+  }
+}

@@ -1,0 +1,351 @@
+/* Modern Dashboard Styles - Inspired by Horizon UI */
+
+/* Base card styles */
+.modern-card {
+    @apply bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden transition-all duration-300 hover:shadow-md dark:bg-boxdark dark:border-gray-700;
+  }
+  
+  /* Stats cards */
+  .stats-card {
+    @apply p-6 relative;
+  }
+  
+  .stats-card-title {
+    @apply text-sm font-medium text-gray-600 mb-1 dark:text-gray-400;
+  }
+  
+  .stats-card-value {
+    @apply text-3xl font-bold mb-1 dark:text-white;
+  }
+  
+  .stats-card-detail {
+    @apply text-xs font-medium flex items-center;
+  }
+  
+  .stats-card-icon {
+    @apply absolute top-6 right-6 w-12 h-12 rounded-full flex items-center justify-center;
+  }
+  
+  /* Action cards */
+  .action-card {
+    @apply p-5 flex flex-col h-full transition-all duration-300;
+  }
+  
+  .action-card:hover {
+    @apply bg-gray-50 dark:bg-gray-800 border-primary;
+  }
+  
+  .action-card-icon {
+    @apply w-12 h-12 rounded-full flex items-center justify-center bg-primary/10 text-primary mb-4;
+  }
+  
+  .action-card-title {
+    @apply text-lg font-semibold mb-1;
+  }
+  
+  .action-card-description {
+    @apply text-sm text-gray-600 dark:text-gray-400 mb-3;
+  }
+  
+  .action-card-count {
+    @apply text-sm font-medium text-primary mt-auto;
+  }
+  
+  /* Chart containers */
+  .chart-container {
+    @apply p-6 h-72;
+  }
+  
+  .chart-placeholder {
+    @apply h-full w-full bg-gray-50 rounded-lg flex items-center justify-center dark:bg-gray-800;
+  }
+  
+  /* Status components */
+  .status-item {
+    @apply rounded-lg bg-gray-50 p-4 mb-4 dark:bg-gray-800;
+  }
+  
+  .status-header {
+    @apply flex items-center justify-between mb-3;
+  }
+  
+  .status-title {
+    @apply font-medium text-gray-800 dark:text-gray-300;
+  }
+  
+  .status-action {
+    @apply text-sm text-primary hover:underline;
+  }
+  
+  .status-content {
+    @apply flex items-center justify-between;
+  }
+  
+  .status-info-container {
+    @apply flex items-center gap-3;
+  }
+  
+  .status-icon {
+    @apply w-10 h-10 rounded-full flex items-center justify-center bg-primary/10;
+  }
+  
+  .status-info-title {
+    @apply font-medium;
+  }
+  
+  .status-info-subtitle {
+    @apply text-sm text-gray-500;
+  }
+  
+  .status-badge {
+    @apply rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+  
+  .status-badge-active {
+    @apply bg-green-100 text-green-600 dark:bg-green-900/20 dark:text-green-400;
+  }
+  
+  /* Quick actions section */
+  .quick-actions {
+    @apply mt-6 border-t border-gray-200 pt-4 dark:border-gray-700;
+  }
+  
+  .quick-actions-title {
+    @apply text-lg font-semibold mb-4 text-gray-800 dark:text-white;
+  }
+  
+  .quick-actions-container {
+    @apply flex flex-wrap gap-3;
+  }
+  
+  .action-button-primary {
+    @apply inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-dark;
+  }
+  
+  .action-button-secondary {
+    @apply inline-flex items-center rounded-lg border border-primary px-4 py-2 text-sm font-medium text-primary hover:bg-primary hover:text-white;
+  }
+  
+  /* System status display */
+  .system-status-container {
+    @apply space-y-2 mt-3;
+  }
+  
+  .system-status-item {
+    @apply flex items-center justify-between;
+  }
+  
+  .system-status-name {
+    @apply text-sm;
+  }
+  
+  .system-status-indicator {
+    @apply rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+  
+  /* Main layout container */
+  .dashboard-container {
+    @apply grid grid-cols-1 gap-6 lg:grid-cols-3;
+  }
+  
+  .main-content {
+    @apply lg:col-span-2;
+  }
+  
+  .sidebar-content {
+    @apply lg:col-span-1;
+  }
+  
+  /* Header styling */
+  .dashboard-header {
+    @apply mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between;
+  }
+  
+  .dashboard-title {
+    @apply text-2xl font-bold text-gray-800 dark:text-white;
+  }
+  
+  .dashboard-subtitle {
+    @apply text-sm text-gray-500 dark:text-gray-400;
+  }
+  
+  /* User menu styling */
+  .user-menu-button {
+    @apply flex items-center gap-3 rounded-full transition-colors duration-200 hover:bg-gray-100 dark:hover:bg-gray-800 p-1;
+  }
+  
+  .user-avatar {
+    @apply h-10 w-10 rounded-full flex items-center justify-center bg-primary text-white font-medium overflow-hidden;
+  }
+  
+  .notification-button {
+    @apply relative flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-white hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700;
+  }
+  
+  .notification-badge {
+    @apply absolute -top-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-danger text-white text-xs;
+  }
+  
+  /* Wave animation for charts */
+  .wave-bg {
+    position: relative;
+    overflow: hidden;
+    height: 100%;
+  }
+  
+  .wave {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+  }
+  
+  .wave-1 {
+    background: linear-gradient(to bottom, rgba(76, 29, 253, 0.05) 0%, rgba(76, 29, 253, 0) 100%);
+    animation: wave-animation 8s linear infinite;
+  }
+  
+  .wave-2 {
+    background: linear-gradient(to bottom, rgba(76, 29, 253, 0.03) 0%, rgba(76, 29, 253, 0) 100%);
+    animation: wave-animation 10s linear -3s infinite;
+  }
+  
+  @keyframes wave-animation {
+    0% {
+      transform: translateY(0) scale(1, 0.2);
+    }
+    50% {
+      transform: translateY(-5%) scale(1, 0.3);
+    }
+    100% {
+      transform: translateY(0) scale(1, 0.2);
+    }
+  }
+  
+  /* Gradient text */
+  .gradient-text {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-primary to-purple-500;
+  }
+  
+  /* Advanced stat card designs */
+  .stat-card-modern {
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .stat-icon-bg {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    opacity: 0.1;
+    transform: scale(1.5);
+  }
+  
+  .stat-card-modern:hover .stat-icon-bg {
+    animation: pulse 2s infinite;
+  }
+  
+  @keyframes pulse {
+    0% {
+      transform: scale(1.5);
+    }
+    50% {
+      transform: scale(1.7);
+    }
+    100% {
+      transform: scale(1.5);
+    }
+  }
+  
+  .progress-bar {
+    @apply h-2 rounded-full bg-gray-200 overflow-hidden mt-2 dark:bg-gray-700;
+  }
+  
+  .progress-bar-fill {
+    @apply h-full rounded-full transition-all duration-500;
+  }
+  
+  /* Scrollbar styling */
+  .custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e0 #f7fafc;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-track {
+    @apply bg-gray-100 rounded dark:bg-gray-800;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-gray-300 rounded dark:bg-gray-600;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-400 dark:bg-gray-500;
+  }
+  
+  /* Table styling */
+  .modern-table {
+    @apply w-full;
+  }
+  
+  .modern-table th {
+    @apply px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 bg-gray-50 dark:bg-gray-800 dark:text-gray-400;
+  }
+  
+  .modern-table td {
+    @apply px-4 py-4 whitespace-nowrap border-b border-gray-100 dark:border-gray-700;
+  }
+  
+  .modern-table tr:hover td {
+    @apply bg-gray-50 dark:bg-gray-800;
+  }
+  
+  /* Transitions and animations */
+  .fade-in {
+    animation: fadeIn 0.5s ease-in-out;
+  }
+  
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  .slide-in {
+    animation: slideIn 0.3s ease-in-out;
+  }
+  
+  @keyframes slideIn {
+    from {
+      transform: translateX(-20px);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+  
+  /* Mobile optimization */
+  @media (max-width: 768px) {
+    .stats-card {
+      @apply p-4;
+    }
+    
+    .stats-card-icon {
+      @apply top-4 right-4 w-10 h-10;
+    }
+    
+    .action-card {
+      @apply p-4;
+    }
+  }

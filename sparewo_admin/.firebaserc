@@ -1,0 +1,15 @@
+{
+  "projects": {
+    "default": "sparewoapp"
+  },
+  "targets": {
+    "sparewoapp": {
+      "hosting": {
+        "admin": [
+          "sparewo-admin"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}
