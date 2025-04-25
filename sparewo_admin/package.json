@@ -9,8 +9,8 @@
     "start": "next start",
     "lint": "next lint",
     "clean": "rm -rf .next && rm -rf node_modules/.cache && rm -rf out",
-    "export": "next export",
-    "deploy": "npm run build && firebase deploy --only hosting"
+    "vercel-build": "next build",
+    "deploy": "npm run build && vercel --prod"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",

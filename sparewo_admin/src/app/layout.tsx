@@ -1,4 +1,3 @@
-import ClientSideNavigator from './_components/ClientSideNavigator';
 import { Providers } from './providers';
 import { ScriptHelper } from './layout-script-helper';
 import { Metadata } from 'next';
@@ -25,8 +24,6 @@ export default function RootLayout({
           {children}
           <ScriptHelper pathname={typeof window !== 'undefined' ? window.location.pathname : ''} />
         </Providers>
-          <ClientSideNavigator />
-          <ScriptHelper pathname={typeof window !== 'undefined' ? window.location.pathname : ''} />
       </body>
     </html>
   );
