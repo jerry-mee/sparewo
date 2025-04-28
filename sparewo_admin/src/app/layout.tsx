@@ -1,11 +1,10 @@
+import type { Metadata } from 'next';
 import { Providers } from './providers';
-import { ScriptHelper } from './layout-script-helper';
-import { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
   title: 'SpareWo Admin Dashboard',
-  description: 'Administration panel for SpareWo auto parts marketplace',
+  description: 'Administration Panel for SpareWo',
 };
 
 export default function RootLayout({
@@ -15,14 +14,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <head>
-        <meta charSet="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-      </head>
       <body>
         <Providers>
           {children}
-          <ScriptHelper pathname={typeof window !== 'undefined' ? window.location.pathname : ''} />
         </Providers>
       </body>
     </html>

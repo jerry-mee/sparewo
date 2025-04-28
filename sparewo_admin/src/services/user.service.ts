@@ -1,27 +1,57 @@
-import { 
-  getAuth, 
-  createUserWithEmailAndPassword,
-  updateProfile,
-  sendPasswordResetEmail,
-  User
-} from "firebase/auth";
-import { 
-  collection, 
-  doc,
-  addDoc,
-  setDoc,
-  updateDoc, 
-  deleteDoc, 
-  getDocs,
-  getDoc,
-  query,
-  where,
-  orderBy,
-  Timestamp 
-} from "firebase/firestore";
-import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { db, auth, storage } from "./firebase.service";
-import { collection as safeCollection, doc as safeDoc, ref as safeRef, verifyAuth } from "@/lib/firebase-utils";
+// src/services/user.service.ts
+import { safeCollection, safeDoc, safeRef, verifyAuth } from "@/lib/firebase-utils";
+import type { User } from "firebase/auth";
+import type { DocumentData, DocumentSnapshot, QueryDocumentSnapshot } from "firebase/firestore";
+import { NOW, Timestamp } from "./firebase.service";
+
+// Firebase modules will be loaded dynamically
+let firebaseModules: {
+  auth?: any;
+  firestore?: any;
+  storage?: any;
+  initialized: boolean;
+} = { initialized: false };
+
+// Initialize Firebase modules when needed
+async function loadFirebaseModules() {
+  if (typeof window === 'undefined') {
+    throw new Error("Firebase cannot be used on the server side");
+  }
+  
+  if (firebaseModules.initialized) {
+    return firebaseModules;
+  }
+  
+  try {
+    // Dynamically import modules
+    const authModule = await import('firebase/auth');
+    const firestoreModule = await import('firebase/firestore');
+    const storageModule = await import('firebase/storage');
+    
+    firebaseModules = {
+      auth: authModule,
+      firestore: firestoreModule,
+      storage: storageModule,
+      initialized: true
+    };
+    
+    return firebaseModules;
+  } catch (error) {
+    console.error("Failed to import Firebase modules:", error);
+    throw new Error("Failed to load Firebase modules");
+  }
+}
+
+// Get Firebase service instances
+async function getFirebaseInstances() {
+  if (typeof window === 'undefined') {
+    throw new Error("Firebase cannot be used on the server side");
+  }
+  
+  // Import our firebase service module to get instances
+  const firebaseService = await import('./firebase.service');
+  return firebaseService;
+}
 
 export enum UserRole {
   ADMIN = "admin",
@@ -55,37 +85,65 @@ const userService = {
   /**
    * Create a new admin user
    */
-  createAdminUser: async (email: string, password: string, userData: Partial<UserData>) => {
+  createAdminUser: async (email: string, password: string, userData: Partial<UserData>): Promise<UserData> => {
     try {
+      if (typeof window === 'undefined') {
+        throw new Error("This function cannot be called on the server side");
+      }
+
+      // Load Firebase modules
+      const firebase = await loadFirebaseModules();
+      
+      // Get Firebase instances from our service
+      const firebaseService = await import('./firebase.service');
+      const authInstance = await firebase.auth.getAuth();
+      
+      if (!authInstance) {
+        throw new Error("Firebase Auth is not initialized");
+      }
+
       // Create Firebase Auth user
-      const verifiedAuth = verifyAuth(auth);
-      const userCredential = await createUserWithEmailAndPassword(verifiedAuth, email, password);
+      const userCredential = await firebase.auth.createUserWithEmailAndPassword(
+        authInstance, 
+        email, 
+        password
+      );
       const user = userCredential.user;
       
       // Update profile if display name provided
       if (userData.displayName) {
-        await updateProfile(user, {
+        await firebase.auth.updateProfile(user, {
           displayName: userData.displayName,
           photoURL: userData.photoURL || null
         });
       }
       
-      // Add user data to Firestore
-      const userDocRef = safeDoc(db, "users", user.uid);
-      await setDoc(userDocRef, {
-        ...userData,
-        email: user.email,
+      // Get Firestore instance
+      const firestoreInstance = await firebase.firestore.getFirestore();
+      
+      if (!firestoreInstance) {
+        throw new Error("Firestore is not initialized");
+      }
+      
+      // Prepare user data with required fields
+      const completeUserData: UserData = {
+        email: user.email || email,
         role: UserRole.ADMIN,
-        status: UserStatus.ACTIVE,
-        createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now()
+        status: UserStatus.ACTIVE, // Ensure status is set
+        ...userData,
+      };
+      
+      // Add user data to Firestore
+      const userDocRef = firebase.firestore.doc(firestoreInstance, "users", user.uid);
+      await firebase.firestore.setDoc(userDocRef, {
+        ...completeUserData,
+        createdAt: firebase.firestore.Timestamp.now(),
+        updatedAt: firebase.firestore.Timestamp.now()
       });
       
       return {
         id: user.uid,
-        email: user.email,
-        ...userData,
-        role: UserRole.ADMIN
+        ...completeUserData
       };
     } catch (error) {
       console.error("Error creating admin user:", error);
@@ -96,15 +154,29 @@ const userService = {
   /**
    * Get all users
    */
-  getAllUsers: async () => {
+  getAllUsers: async (): Promise<UserData[]> => {
     try {
-      const usersRef = safeCollection(db, "users");
-      const snapshot = await getDocs(usersRef);
+      if (typeof window === 'undefined') {
+        throw new Error("This function cannot be called on the server side");
+      }
+
+      // Load Firebase modules
+      const firebase = await loadFirebaseModules();
       
-      return snapshot.docs.map(doc => ({
+      // Get Firestore instance
+      const firestoreInstance = await firebase.firestore.getFirestore();
+      
+      if (!firestoreInstance) {
+        throw new Error("Firestore is not initialized");
+      }
+
+      const usersRef = firebase.firestore.collection(firestoreInstance, "users");
+      const snapshot = await firebase.firestore.getDocs(usersRef);
+      
+      return snapshot.docs.map((doc: QueryDocumentSnapshot<DocumentData>) => ({
         id: doc.id,
         ...doc.data()
-      }));
+      } as UserData));
     } catch (error) {
       console.error("Error getting users:", error);
       throw error;
@@ -114,21 +186,35 @@ const userService = {
   /**
    * Get users by role
    */
-  getUsersByRole: async (role: UserRole) => {
+  getUsersByRole: async (role: UserRole): Promise<UserData[]> => {
     try {
-      const usersRef = safeCollection(db, "users");
-      const q = query(
+      if (typeof window === 'undefined') {
+        throw new Error("This function cannot be called on the server side");
+      }
+
+      // Load Firebase modules
+      const firebase = await loadFirebaseModules();
+      
+      // Get Firestore instance
+      const firestoreInstance = await firebase.firestore.getFirestore();
+      
+      if (!firestoreInstance) {
+        throw new Error("Firestore is not initialized");
+      }
+
+      const usersRef = firebase.firestore.collection(firestoreInstance, "users");
+      const q = firebase.firestore.query(
         usersRef,
-        where("role", "==", role),
-        orderBy("createdAt", "desc")
+        firebase.firestore.where("role", "==", role),
+        firebase.firestore.orderBy("createdAt", "desc")
       );
       
-      const snapshot = await getDocs(q);
+      const snapshot = await firebase.firestore.getDocs(q);
       
-      return snapshot.docs.map(doc => ({
+      return snapshot.docs.map((doc: QueryDocumentSnapshot<DocumentData>) => ({
         id: doc.id,
         ...doc.data()
-      }));
+      } as UserData));
     } catch (error) {
       console.error(`Error getting ${role} users:`, error);
       throw error;
@@ -138,10 +224,24 @@ const userService = {
   /**
    * Get a single user by ID
    */
-  getUserById: async (userId: string) => {
+  getUserById: async (userId: string): Promise<UserData> => {
     try {
-      const userRef = safeDoc(db, "users", userId);
-      const snapshot = await getDoc(userRef);
+      if (typeof window === 'undefined') {
+        throw new Error("This function cannot be called on the server side");
+      }
+
+      // Load Firebase modules
+      const firebase = await loadFirebaseModules();
+      
+      // Get Firestore instance
+      const firestoreInstance = await firebase.firestore.getFirestore();
+      
+      if (!firestoreInstance) {
+        throw new Error("Firestore is not initialized");
+      }
+
+      const userRef = firebase.firestore.doc(firestoreInstance, "users", userId);
+      const snapshot = await firebase.firestore.getDoc(userRef);
       
       if (!snapshot.exists()) {
         throw new Error(`User with ID ${userId} not found`);
@@ -150,7 +250,7 @@ const userService = {
       return {
         id: snapshot.id,
         ...snapshot.data()
-      };
+      } as UserData;
     } catch (error) {
       console.error("Error getting user:", error);
       throw error;
@@ -160,18 +260,32 @@ const userService = {
   /**
    * Update a user
    */
-  updateUser: async (userId: string, userData: Partial<UserData>) => {
+  updateUser: async (userId: string, userData: Partial<UserData>): Promise<UserData> => {
     try {
-      const userRef = safeDoc(db, "users", userId);
+      if (typeof window === 'undefined') {
+        throw new Error("This function cannot be called on the server side");
+      }
+
+      // Load Firebase modules
+      const firebase = await loadFirebaseModules();
+      
+      // Get Firestore instance
+      const firestoreInstance = await firebase.firestore.getFirestore();
+      
+      if (!firestoreInstance) {
+        throw new Error("Firestore is not initialized");
+      }
+
+      const userRef = firebase.firestore.doc(firestoreInstance, "users", userId);
       
       // Update the user in Firestore
-      await updateDoc(userRef, {
+      await firebase.firestore.updateDoc(userRef, {
         ...userData,
-        updatedAt: Timestamp.now()
+        updatedAt: firebase.firestore.Timestamp.now()
       });
       
       // Return the updated user data
-      const updatedSnapshot = await getDoc(userRef);
+      const updatedSnapshot = await firebase.firestore.getDoc(userRef);
       
       if (!updatedSnapshot.exists()) {
         throw new Error(`User with ID ${userId} not found after update`);
@@ -180,7 +294,7 @@ const userService = {
       return {
         id: updatedSnapshot.id,
         ...updatedSnapshot.data()
-      };
+      } as UserData;
     } catch (error) {
       console.error("Error updating user:", error);
       throw error;
@@ -190,7 +304,7 @@ const userService = {
   /**
    * Change user status
    */
-  updateUserStatus: async (userId: string, status: UserStatus) => {
+  updateUserStatus: async (userId: string, status: UserStatus): Promise<UserData> => {
     try {
       return await userService.updateUser(userId, { status });
     } catch (error) {
@@ -202,18 +316,32 @@ const userService = {
   /**
    * Upload a profile image for a user
    */
-  uploadProfileImage: async (userId: string, file: File) => {
+  uploadProfileImage: async (userId: string, file: File): Promise<string> => {
     try {
+      if (typeof window === 'undefined') {
+        throw new Error("This function cannot be called on the server side");
+      }
+
+      // Load Firebase modules
+      const firebase = await loadFirebaseModules();
+      
+      // Get Storage instance
+      const storageInstance = await firebase.storage.getStorage();
+      
+      if (!storageInstance) {
+        throw new Error("Firebase Storage is not initialized");
+      }
+
       const fileExtension = file.name.split(".").pop();
-      const storageRef = safeRef(storage, `profileImages/${userId}.${fileExtension}`);
+      const storageRef = firebase.storage.ref(storageInstance, `profileImages/${userId}.${fileExtension}`);
       
       // Upload the file
-      await uploadBytes(storageRef, file);
+      await firebase.storage.uploadBytes(storageRef, file);
       
       // Get the download URL
-      const photoURL = await getDownloadURL(storageRef);
+      const photoURL = await firebase.storage.getDownloadURL(storageRef);
       
-      // Update the user"s photoURL
+      // Update the user's photoURL
       await userService.updateUser(userId, { photoURL });
       
       return photoURL;
@@ -226,10 +354,23 @@ const userService = {
   /**
    * Send password reset email
    */
-  sendPasswordReset: async (email: string) => {
+  sendPasswordReset: async (email: string): Promise<boolean> => {
     try {
-      const verifiedAuth = verifyAuth(auth);
-      await sendPasswordResetEmail(verifiedAuth, email);
+      if (typeof window === 'undefined') {
+        throw new Error("This function cannot be called on the server side");
+      }
+
+      // Load Firebase modules
+      const firebase = await loadFirebaseModules();
+      
+      // Get Auth instance
+      const authInstance = await firebase.auth.getAuth();
+      
+      if (!authInstance) {
+        throw new Error("Firebase Auth is not initialized");
+      }
+
+      await firebase.auth.sendPasswordResetEmail(authInstance, email);
       return true;
     } catch (error) {
       console.error("Error sending password reset:", error);

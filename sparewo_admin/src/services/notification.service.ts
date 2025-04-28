@@ -1,17 +1,41 @@
-import { 
-  collection, 
-  addDoc, 
-  updateDoc, 
-  getDocs, 
-  doc, 
-  query, 
-  where,
-  orderBy,
-  Timestamp, 
-  getDoc
+// src/services/notification.service.ts
+import type {
+  Timestamp as FirebaseTimestamp,
+  DocumentData,
+  QueryDocumentSnapshot
 } from "firebase/firestore";
-import { db } from "./firebase.service";
-import { collection as safeCollection, doc as safeDoc } from "@/lib/firebase-utils";
+
+// Firebase modules will be loaded dynamically
+let firebaseModules: {
+  firestore?: any;
+  initialized: boolean;
+} = { initialized: false };
+
+// Initialize Firebase modules when needed
+async function loadFirebaseModules() {
+  if (typeof window === 'undefined') {
+    throw new Error("Firebase cannot be used on the server side");
+  }
+  
+  if (firebaseModules.initialized) {
+    return firebaseModules;
+  }
+  
+  try {
+    // Dynamically import modules
+    const firestoreModule = await import('firebase/firestore');
+    
+    firebaseModules = {
+      firestore: firestoreModule,
+      initialized: true
+    };
+    
+    return firebaseModules;
+  } catch (error) {
+    console.error("Failed to import Firebase modules:", error);
+    throw new Error("Failed to load Firebase modules");
+  }
+}
 
 export enum NotificationType {
   INFO = "info",
@@ -46,16 +70,31 @@ const notificationService = {
    */
   createNotification: async (notification: Notification) => {
     try {
-      const notificationsRef = safeCollection(db, "notifications");
+      if (typeof window === 'undefined') {
+        throw new Error("This function cannot be called on the server side");
+      }
+
+      // Load Firebase modules
+      const firebase = await loadFirebaseModules();
+      
+      // Get Firestore instance
+      const firebaseService = await import('./firebase.service');
+      const firestoreInstance = await firebase.firestore.getFirestore();
+      
+      if (!firestoreInstance) {
+        throw new Error("Firestore is not initialized");
+      }
+      
+      const notificationsRef = firebase.firestore.collection(firestoreInstance, "notifications");
       
       const newNotification = {
         ...notification,
         read: false,
-        createdAt: Timestamp.now(),
-        expiresAt: notification.expiresAt || Timestamp.fromDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)) // Default 30 days
+        createdAt: firebase.firestore.Timestamp.now(),
+        expiresAt: notification.expiresAt || firebase.firestore.Timestamp.fromDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)) // Default 30 days
       };
       
-      const docRef = await addDoc(notificationsRef, newNotification);
+      const docRef = await firebase.firestore.addDoc(notificationsRef, newNotification);
       
       // If notification should be sent as email, trigger email sending
       if (notification.sendEmail) {
@@ -74,30 +113,47 @@ const notificationService = {
    */
   getNotifications: async (userId: string, unreadOnly: boolean = false) => {
     try {
-      const notificationsRef = safeCollection(db, "notifications");
+      if (typeof window === 'undefined') {
+        throw new Error("This function cannot be called on the server side");
+      }
+
+      // Load Firebase modules
+      const firebase = await loadFirebaseModules();
+      
+      // Get Firestore instance
+      const firebaseService = await import('./firebase.service');
+      const firestoreInstance = await firebase.firestore.getFirestore();
+      
+      if (!firestoreInstance) {
+        throw new Error("Firestore is not initialized");
+      }
+      
+      const notificationsRef = firebase.firestore.collection(firestoreInstance, "notifications");
       
       // Query notifications for this specific user or for their group (customer, vendor, admin)
       // Also include notifications targeted at "all"
-      let q = query(
-        notificationsRef,
-        where("target", "in", [userId, "all"]), // Include specific user ID and "all"
-        orderBy("createdAt", "desc")
-      );
+      let q;
       
       // If only unread notifications are requested
       if (unreadOnly) {
-        q = query(
+        q = firebase.firestore.query(
           notificationsRef,
-          where("target", "in", [userId, "all"]),
-          where("read", "==", false),
-          orderBy("createdAt", "desc")
+          firebase.firestore.where("target", "in", [userId, "all"]),
+          firebase.firestore.where("read", "==", false),
+          firebase.firestore.orderBy("createdAt", "desc")
+        );
+      } else {
+        q = firebase.firestore.query(
+          notificationsRef,
+          firebase.firestore.where("target", "in", [userId, "all"]),
+          firebase.firestore.orderBy("createdAt", "desc")
         );
       }
       
-      const querySnapshot = await getDocs(q);
+      const querySnapshot = await firebase.firestore.getDocs(q);
       const notifications: Notification[] = [];
       
-      querySnapshot.forEach((doc) => {
+      querySnapshot.forEach((doc: QueryDocumentSnapshot<DocumentData>) => {
         notifications.push({ id: doc.id, ...doc.data() } as Notification);
       });
       
@@ -113,8 +169,23 @@ const notificationService = {
    */
   markAsRead: async (notificationId: string) => {
     try {
-      const notificationRef = safeDoc(db, "notifications", notificationId);
-      await updateDoc(notificationRef, {
+      if (typeof window === 'undefined') {
+        throw new Error("This function cannot be called on the server side");
+      }
+
+      // Load Firebase modules
+      const firebase = await loadFirebaseModules();
+      
+      // Get Firestore instance
+      const firebaseService = await import('./firebase.service');
+      const firestoreInstance = await firebase.firestore.getFirestore();
+      
+      if (!firestoreInstance) {
+        throw new Error("Firestore is not initialized");
+      }
+      
+      const notificationRef = firebase.firestore.doc(firestoreInstance, "notifications", notificationId);
+      await firebase.firestore.updateDoc(notificationRef, {
         read: true
       });
       return true;
@@ -129,8 +200,23 @@ const notificationService = {
    */
   deleteNotification: async (notificationId: string) => {
     try {
-      const notificationRef = safeDoc(db, "notifications", notificationId);
-      await updateDoc(notificationRef, {
+      if (typeof window === 'undefined') {
+        throw new Error("This function cannot be called on the server side");
+      }
+
+      // Load Firebase modules
+      const firebase = await loadFirebaseModules();
+      
+      // Get Firestore instance
+      const firebaseService = await import('./firebase.service');
+      const firestoreInstance = await firebase.firestore.getFirestore();
+      
+      if (!firestoreInstance) {
+        throw new Error("Firestore is not initialized");
+      }
+      
+      const notificationRef = firebase.firestore.doc(firestoreInstance, "notifications", notificationId);
+      await firebase.firestore.updateDoc(notificationRef, {
         deleted: true
       });
       return true;

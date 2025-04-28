@@ -1,145 +1,151 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { 
-  getAuth, 
-  signInWithEmailAndPassword, 
-  signOut, 
-  onAuthStateChanged,
-  User
-} from 'firebase/auth';
-import { 
-  getFirestore,
-  doc,
-  getDoc
-} from 'firebase/firestore';
-import { initializeApp } from 'firebase/app';
+import type { User } from 'firebase/auth';
 
-// Your Firebase configuration
-const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
-};
-
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-
+// Define the shape of our AuthContext
 interface AuthContextType {
   user: User | null;
-  userRoles: {
-    isAdmin: boolean;
-    [key: string]: any;
-  } | null;
   loading: boolean;
+  error: string | null;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
-  error: string | null;
+  currentUser: User | null;
 }
 
-// Export the context so it can be imported elsewhere
-export const AuthContext = createContext<AuthContextType>({
-  user: null,
-  userRoles: null,
-  loading: true,
-  login: async () => {},
-  logout: async () => {},
-  error: null
-});
+// Create context with a default value
+export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const useAuth = () => useContext(AuthContext);
-
-export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+// AuthProvider component
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [userRoles, setUserRoles] = useState<{ isAdmin: boolean; [key: string]: any } | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
-  // Fetch user roles from Firestore
-  const fetchUserRoles = async (uid: string) => {
-    try {
-      const userRolesRef = doc(db, 'user_roles', uid);
-      const userRolesSnapshot = await getDoc(userRolesRef);
-
-      if (userRolesSnapshot.exists()) {
-        const data = userRolesSnapshot.data();
-        setUserRoles({
-          isAdmin: data.isAdmin === true,
-          ...data
-        });
-      } else {
-        setUserRoles({
-          isAdmin: false
-        });
-      }
-    } catch (error) {
-      console.error('Error fetching user roles:', error);
-      setUserRoles({
-        isAdmin: false
-      });
+  // Initialize Firebase modules
+  async function loadFirebaseModules() {
+    if (typeof window === 'undefined') {
+      return null;
     }
-  };
+    
+    try {
+      // Dynamic import of Firebase auth module
+      const authModule = await import('firebase/auth');
+      return authModule;
+    } catch (error) {
+      console.error("Failed to import Firebase auth module:", error);
+      return null;
+    }
+  }
 
+  // Get Auth instance
+  async function getAuthInstance() {
+    try {
+      const firebaseService = await import('@/services/firebase.service');
+      const authModule = await loadFirebaseModules();
+      
+      if (!authModule) return null;
+      
+      return await authModule.getAuth();
+    } catch (error) {
+      console.error("Failed to get auth instance:", error);
+      return null;
+    }
+  }
+
+  // Check auth state on component mount
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
-      
-      if (currentUser) {
-        await fetchUserRoles(currentUser.uid);
-      } else {
-        setUserRoles(null);
+    if (typeof window === 'undefined') return;
+    
+    const checkAuthState = async () => {
+      try {
+        const authModule = await loadFirebaseModules();
+        const auth = await getAuthInstance();
+        
+        if (!authModule || !auth) {
+          setLoading(false);
+          return;
+        }
+        
+        const unsubscribe = authModule.onAuthStateChanged(auth, (authUser) => {
+          setUser(authUser);
+          setLoading(false);
+        }, (authError) => {
+          console.error("Auth state change error:", authError);
+          setError(authError.message);
+          setLoading(false);
+        });
+        
+        // Cleanup subscription on unmount
+        return () => unsubscribe();
+      } catch (error) {
+        console.error("Error checking auth state:", error);
+        setLoading(false);
       }
-      
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
+    };
+    
+    checkAuthState();
   }, []);
 
-  const handleLogin = async (email: string, password: string) => {
+  // Login function
+  const login = async (email: string, password: string) => {
     setError(null);
+    setLoading(true);
+    
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      await fetchUserRoles(userCredential.user.uid);
+      const authModule = await loadFirebaseModules();
+      const auth = await getAuthInstance();
+      
+      if (!authModule || !auth) {
+        throw new Error("Authentication not available");
+      }
+      
+      await authModule.signInWithEmailAndPassword(auth, email, password);
       router.push('/');
-    } catch (err: any) {
-      console.error('Login error:', err);
-      setError(err.message || 'Failed to login');
-      throw err;
+    } catch (error: any) {
+      console.error("Login error:", error);
+      setError(error.message || 'Failed to login');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleLogout = async () => {
-    setError(null);
+  // Logout function
+  const logout = async () => {
+    setLoading(true);
+    
     try {
-      await signOut(auth);
-      setUser(null);
-      setUserRoles(null);
+      const authModule = await loadFirebaseModules();
+      const auth = await getAuthInstance();
+      
+      if (!authModule || !auth) {
+        throw new Error("Authentication not available");
+      }
+      
+      await authModule.signOut(auth);
       router.push('/auth/sign-in');
-    } catch (err: any) {
-      console.error('Logout error:', err);
-      setError(err.message || 'Failed to logout');
+    } catch (error: any) {
+      console.error("Logout error:", error);
+      setError(error.message || 'Failed to logout');
+    } finally {
+      setLoading(false);
     }
+  };
+
+  // Context value
+  const value = {
+    user,
+    loading,
+    error,
+    login,
+    logout,
+    currentUser: user
   };
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        userRoles,
-        loading,
-        login: handleLogin,
-        logout: handleLogout,
-        error
-      }}
-    >
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

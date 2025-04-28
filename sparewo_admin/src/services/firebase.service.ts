@@ -1,30 +1,30 @@
 // src/services/firebase.service.ts
-import { 
-  getAuth, 
-  signInWithEmailAndPassword, 
-  signOut, 
-  onAuthStateChanged,
-  User 
+import type {
+  Auth,
+  User,
+  UserCredential,
 } from "firebase/auth";
-import { 
-  collection, 
-  doc,
-  getFirestore, 
-  onSnapshot, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
-  getDocs,
-  query,
-  where,
-  getDoc,
-  orderBy,
-  Timestamp,
+import type {
+  Firestore,
+  DocumentReference,
+  CollectionReference,
+  Timestamp as FirebaseTimestamp,
+  DocumentData
 } from "firebase/firestore";
-import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { initializeApp, FirebaseApp, getApps, getApp } from "firebase/app";
+import type { FirebaseStorage } from "firebase/storage";
+import type { FirebaseApp } from "firebase/app";
 
-// Make these available to importers
+// Export a type alias for Timestamp to avoid importing the actual type
+export type Timestamp = {
+  toDate: () => Date;
+  seconds: number;
+  nanoseconds: number;
+}
+
+// Export a type alias for Unsubscribe to avoid importing the actual type
+export type Unsubscribe = () => void;
+
+// Enums for vendor status
 export enum VendorStatus {
   PENDING = "pending",
   APPROVED = "approved",
@@ -32,6 +32,7 @@ export enum VendorStatus {
   SUSPENDED = "suspended"
 }
 
+// Enums for product status
 export enum ProductStatus {
   PENDING = "pending",
   APPROVED = "approved",
@@ -40,6 +41,7 @@ export enum ProductStatus {
   DISCONTINUED = "discontinued"
 }
 
+// Enums for order status
 export enum OrderStatus {
   PENDING = "pending",
   PROCESSING = "processing",
@@ -48,7 +50,7 @@ export enum OrderStatus {
   CANCELLED = "cancelled"
 }
 
-// Type definitions
+// Define interfaces for data models
 export interface Vendor {
   id: string;
   name: string;
@@ -58,20 +60,31 @@ export interface Vendor {
   businessAddress?: string;
   status: VendorStatus | string;
   isVerified?: boolean;
-  createdAt: any;
+  createdAt: Timestamp | Date | any;
   productCount?: number;
+  statusUpdatedAt?: Timestamp | Date;
+  updatedAt?: Timestamp | Date;
   [key: string]: any;
 }
 
 export interface Product {
   id: string;
-  name: string;
-  description: string;
-  price: number;
+  name?: string;
+  partName?: string;
+  description?: string;
+  price?: number;
+  unitPrice?: number;
   vendorId: string;
   vendorName?: string;
   status: ProductStatus | string;
-  createdAt: any;
+  createdAt: Timestamp | Date | any;
+  brand?: string;
+  partNumber?: string;
+  condition?: string;
+  stockQuantity?: number;
+  images?: string[];
+  statusUpdatedAt?: Timestamp | Date;
+  updatedAt?: Timestamp | Date;
   [key: string]: any;
 }
 
@@ -84,509 +97,607 @@ export interface Order {
   productNames?: string[];
   totalAmount: number;
   status: OrderStatus | string;
-  createdAt: any;
+  createdAt: Timestamp | Date | any;
+  statusUpdatedAt?: Timestamp | Date;
+  updatedAt?: Timestamp | Date;
   [key: string]: any;
 }
 
-// Firebase configuration
-const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-  databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL
+// Firebase modules container
+let firebaseModules: {
+  app?: any;
+  auth?: any;
+  firestore?: any;
+  storage?: any;
+  initialized: boolean;
+} = {
+  initialized: false
 };
 
-// Initialize Firebase with error handling and singleton pattern
+// Firebase instances
+let auth: Auth | null = null;
+let db: Firestore | null = null;
+let storage: FirebaseStorage | null = null;
 let firebaseApp: FirebaseApp | undefined = undefined;
 
-// Firebase services
-export let auth: any = null;
-export let db: any = null;
-export let storage: any = null;
-export let functions: any = null;
-
-// Only initialize in browser environment
-if (typeof window !== 'undefined') {
+// Initialize Firebase only on the client
+async function initializeFirebase() {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  
+  if (firebaseModules.initialized) {
+    return;
+  }
+  
   try {
-    // Check if Firebase is already initialized
-    if (getApps().length > 0) {
-      firebaseApp = getApp();
+    // Dynamically import Firebase modules
+    const appModule = await import('firebase/app');
+    const authModule = await import('firebase/auth');
+    const firestoreModule = await import('firebase/firestore');
+    const storageModule = await import('firebase/storage');
+    
+    firebaseModules = {
+      app: appModule,
+      auth: authModule,
+      firestore: firestoreModule,
+      storage: storageModule,
+      initialized: true
+    };
+    
+    const firebaseConfig = {
+      apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+      authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+      projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+      storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+      messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+      appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+    };
+    
+    // Initialize Firebase app
+    if (appModule.getApps().length === 0) {
+      firebaseApp = appModule.initializeApp(firebaseConfig);
     } else {
-      // Initialize a new Firebase instance
-      firebaseApp = initializeApp(firebaseConfig);
+      firebaseApp = appModule.getApp();
     }
     
-    // Initialize services
-    if (firebaseApp) {
-      auth = getAuth(firebaseApp);
-      db = getFirestore(firebaseApp);
-      storage = getStorage(firebaseApp);
-      
-      // IMPORTANT: We're not initializing Firebase Functions here
-      // to avoid the undici module issue during build
-    }
+    // Initialize Firebase services
+    auth = authModule.getAuth(firebaseApp);
+    db = firestoreModule.getFirestore(firebaseApp);
+    storage = storageModule.getStorage(firebaseApp);
+    
   } catch (error) {
-    console.error("Firebase initialization error:", error);
+    console.error("Error initializing Firebase:", error);
   }
 }
 
-// Connection manager implementation
-export const connectionManager = {
-  addConnectionListener: (listener: (isConnected: boolean) => void) => {
-    // Default implementation always returns connected
-    listener(true);
-    return () => {}; // Cleanup function
-  },
-  isConnected: () => true,
-  getLastOnlineTime: () => new Date(),
-  goOffline: async () => {},
-  goOnline: async () => {}
-};
+// Initialize Firebase when this module is imported on the client
+if (typeof window !== 'undefined') {
+  initializeFirebase();
+}
 
 // Error formatter helper
-const formatFirebaseError = (error: any): string => {
-  // Standard Firebase Auth errors
-  if (error.code) {
-    switch (error.code) {
-      // Auth errors
-      case "auth/invalid-email": return "The email address is not valid.";
-      case "auth/user-disabled": return "This account has been disabled.";
-      case "auth/user-not-found": return "No account found with this email.";
-      case "auth/wrong-password": return "Incorrect password.";
-      case "auth/email-already-in-use": return "This email is already registered.";
-      case "auth/weak-password": return "The password is too weak.";
-      
-      // Firestore errors
-      case "permission-denied": return "You don't have permission to access this resource.";
-      case "unavailable": return "The service is currently unavailable. Please try again later.";
-      case "not-found": return "The requested document was not found.";
-      
-      // Default
-      default: return error.message || "An unknown error occurred.";
+export const formatFirebaseError = (error: any): string => {
+  let message = "An unknown error occurred.";
+  
+  if (error instanceof Error) {
+    message = error.message;
+  }
+  
+  if (error && typeof error === 'object' && 'code' in error) {
+    // Handle Firebase error codes
+    const errorCode = String(error.code);
+    
+    if (errorCode.includes('auth/')) {
+      if (errorCode.includes('user-not-found') || errorCode.includes('wrong-password')) {
+        message = "Invalid email or password. Please try again.";
+      } else if (errorCode.includes('too-many-requests')) {
+        message = "Too many login attempts. Please try again later.";
+      }
     }
   }
   
-  // Fallback for non-standard errors
-  return error.message || "An unknown error occurred.";
+  console.error("Firebase Error:", error);
+  return message;
 };
 
-// Auth Services with error handling
-export const login = async (email: string, password: string) => {
-  if (!auth) throw new Error("Firebase Auth is not initialized");
+// Auth functions
+export const loginUser = async (email: string, password: string): Promise<User> => {
+  await initializeFirebase();
+  
+  if (!auth || !firebaseModules.auth) {
+    throw new Error("Auth not initialized.");
+  }
   
   try {
-    return await signInWithEmailAndPassword(auth, email, password);
-  } catch (error: any) {
+    const userCredential = await firebaseModules.auth.signInWithEmailAndPassword(auth, email, password);
+    return userCredential.user;
+  } catch (error) {
     throw new Error(formatFirebaseError(error));
   }
 };
 
-export const logout = async () => {
-  if (!auth) throw new Error("Firebase Auth is not initialized");
+export const logoutUser = async (): Promise<void> => {
+  await initializeFirebase();
+  
+  if (!auth || !firebaseModules.auth) {
+    throw new Error("Auth not initialized.");
+  }
   
   try {
-    return await signOut(auth);
-  } catch (error: any) {
+    await firebaseModules.auth.signOut(auth);
+  } catch (error) {
     throw new Error(formatFirebaseError(error));
   }
 };
 
-export const onAuthStateChange = (callback: (user: User | null) => void) => {
-  if (!auth) {
-    console.error("Firebase Auth is not initialized");
+export const setupAuthListener = (callback: (user: User | null) => void): Unsubscribe => {
+  initializeFirebase().then(() => {
+    if (!auth || !firebaseModules.auth) {
+      console.warn("Auth not initialized.");
+      callback(null);
+      return;
+    }
+    
+    return firebaseModules.auth.onAuthStateChanged(auth, callback);
+  });
+  
+  return () => {};
+};
+
+// Generic Firestore listener function
+async function createFirestoreListener<T>(
+  collectionName: string,
+  orderByField: string = "createdAt",
+  orderByDirection: "asc" | "desc" = "desc",
+  callback: (data: T[]) => void,
+  onError?: (error: Error) => void
+): Promise<Unsubscribe> {
+  await initializeFirebase();
+  
+  if (!db || !firebaseModules.firestore) {
+    console.warn(`Firestore not initialized. Listener for ${collectionName} cannot attach.`);
+    callback([]);
     return () => {};
   }
   
-  return onAuthStateChanged(auth, callback);
-};
+  try {
+    const collectionRef = firebaseModules.firestore.collection(db, collectionName);
+    const q = firebaseModules.firestore.query(
+      collectionRef,
+      firebaseModules.firestore.orderBy(orderByField, orderByDirection)
+    );
+    
+    const unsubscribe = firebaseModules.firestore.onSnapshot(
+      q,
+      (snapshot: any) => {
+        const dataList = snapshot.docs.map((doc: any) => ({ 
+          id: doc.id, 
+          ...doc.data() 
+        } as T));
+        callback(dataList);
+      },
+      (error: any) => {
+        const formattedError = new Error(formatFirebaseError(error));
+        console.error(`Error listening to ${collectionName}:`, formattedError.message);
+        if (onError) {
+          onError(formattedError);
+        }
+      }
+    );
+    
+    return unsubscribe;
+  } catch (error: any) {
+    const formattedError = new Error(formatFirebaseError(error));
+    console.error(`Error setting up listener for ${collectionName}:`, formattedError.message);
+    if (onError) {
+      onError(formattedError);
+    }
+    return () => {};
+  }
+}
 
-// Vendor Services with enhanced error handling
+// Vendor service
 export const vendorService = {
-  // Get all vendors with real-time updates
-  listenToVendors: (callback: (vendors: Vendor[]) => void) => {
-    if (!db) {
-      console.error("Firestore is not initialized");
-      callback([]);
-      return () => {};
+  listenToVendors: (callback: (vendors: Vendor[]) => void, onError?: (error: Error) => void): Unsubscribe => {
+    let unsubscribe: Unsubscribe = () => {};
+    
+    createFirestoreListener<Vendor>("vendors", "createdAt", "desc", callback, onError)
+      .then(unsub => {
+        unsubscribe = unsub;
+      });
+    
+    return () => unsubscribe();
+  },
+  
+  getPendingVendors: async (): Promise<Vendor[]> => {
+    await initializeFirebase();
+    
+    if (!db || !firebaseModules.firestore) {
+      throw new Error("Firestore is not initialized.");
     }
     
     try {
-      const vendorsRef = collection(db, "vendors");
-      const q = query(vendorsRef, orderBy("createdAt", "desc"));
+      const q = firebaseModules.firestore.query(
+        firebaseModules.firestore.collection(db, "vendors"),
+        firebaseModules.firestore.where("status", "==", VendorStatus.PENDING),
+        firebaseModules.firestore.orderBy("createdAt", "desc")
+      );
       
-      return onSnapshot(
-        q, 
-        (snapshot) => {
-          const vendorsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Vendor));
-          callback(vendorsList);
-        },
-        (error: any) => {
-          console.error("Error listening to vendors:", error);
-          // Return empty array on error rather than breaking the UI
-          callback([]);
-        }
-      );
+      const snapshot = await firebaseModules.firestore.getDocs(q);
+      return snapshot.docs.map((doc: any) => ({ 
+        id: doc.id, 
+        ...doc.data() 
+      } as Vendor));
     } catch (error: any) {
-      console.error("Error setting up vendors listener:", error);
-      callback([]);
-      return () => {};
-    }
-  },
-
-  // Get pending vendors
-  getPendingVendors: async () => {
-    if (!db) throw new Error("Firestore is not initialized");
-    
-    try {
-      const vendorsRef = collection(db, "vendors");
-      const q = query(
-        vendorsRef, 
-        where("status", "==", VendorStatus.PENDING),
-        orderBy("createdAt", "desc")
-      );
-      const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Vendor));
-    } catch (error: any) {
-      console.error("Error fetching pending vendors:", error);
       throw new Error(formatFirebaseError(error));
     }
   },
-
-  // Get a single vendor
-  getVendor: async (id: string) => {
-    if (!db) throw new Error("Firestore is not initialized");
+  
+  getVendor: async (id: string): Promise<Vendor | null> => {
+    await initializeFirebase();
+    
+    if (!db || !firebaseModules.firestore) {
+      throw new Error("Firestore is not initialized.");
+    }
     
     try {
-      const docRef = doc(db, "vendors", id);
-      const snapshot = await getDoc(docRef);
-      if (snapshot.exists()) {
-        return { id: snapshot.id, ...snapshot.data() } as Vendor;
-      }
-      return null;
+      const docRef = firebaseModules.firestore.doc(db, "vendors", id);
+      const snapshot = await firebaseModules.firestore.getDoc(docRef);
+      
+      return snapshot.exists() 
+        ? { id: snapshot.id, ...snapshot.data() } as Vendor 
+        : null;
     } catch (error: any) {
-      console.error("Error fetching vendor:", error);
       throw new Error(formatFirebaseError(error));
     }
   },
-
-  // Update vendor status
-  updateVendorStatus: async (id: string, status: VendorStatus | string) => {
-    if (!db) throw new Error("Firestore is not initialized");
+  
+  updateVendorStatus: async (id: string, status: VendorStatus | string): Promise<void> => {
+    await initializeFirebase();
+    
+    if (!db || !firebaseModules.firestore) {
+      throw new Error("Firestore is not initialized.");
+    }
     
     try {
-      const docRef = doc(db, "vendors", id);
-      await updateDoc(docRef, { 
-        status,
-        statusUpdatedAt: Timestamp.now()
+      const docRef = firebaseModules.firestore.doc(db, "vendors", id);
+      await firebaseModules.firestore.updateDoc(docRef, { 
+        status, 
+        statusUpdatedAt: firebaseModules.firestore.Timestamp.now() 
       });
     } catch (error: any) {
-      console.error("Error updating vendor status:", error);
       throw new Error(formatFirebaseError(error));
     }
   },
-
-  // Full vendor update
-  updateVendor: async (id: string, data: Partial<Vendor>) => {
-    if (!db) throw new Error("Firestore is not initialized");
+  
+  updateVendor: async (id: string, data: Partial<Omit<Vendor, 'id' | 'createdAt'>>): Promise<void> => {
+    await initializeFirebase();
+    
+    if (!db || !firebaseModules.firestore) {
+      throw new Error("Firestore is not initialized.");
+    }
     
     try {
-      const docRef = doc(db, "vendors", id);
-      await updateDoc(docRef, { 
-        ...data,
-        updatedAt: Timestamp.now()
+      const docRef = firebaseModules.firestore.doc(db, "vendors", id);
+      await firebaseModules.firestore.updateDoc(docRef, { 
+        ...data, 
+        updatedAt: firebaseModules.firestore.Timestamp.now() 
       });
     } catch (error: any) {
-      console.error("Error updating vendor:", error);
       throw new Error(formatFirebaseError(error));
     }
   },
-
-  // Delete vendor
-  deleteVendor: async (id: string) => {
-    if (!db) throw new Error("Firestore is not initialized");
+  
+  deleteVendor: async (id: string): Promise<void> => {
+    await initializeFirebase();
+    
+    if (!db || !firebaseModules.firestore) {
+      throw new Error("Firestore is not initialized.");
+    }
     
     try {
-      const docRef = doc(db, "vendors", id);
-      await deleteDoc(docRef);
+      const docRef = firebaseModules.firestore.doc(db, "vendors", id);
+      await firebaseModules.firestore.deleteDoc(docRef);
     } catch (error: any) {
-      console.error("Error deleting vendor:", error);
       throw new Error(formatFirebaseError(error));
     }
   }
 };
 
-// Product Services with enhanced error handling
+// Product service
 export const productService = {
-  // Get all products with real-time updates
-  listenToProducts: (callback: (products: Product[]) => void) => {
-    if (!db) {
-      console.error("Firestore is not initialized");
-      callback([]);
-      return () => {};
+  listenToProducts: (callback: (products: Product[]) => void, onError?: (error: Error) => void): Unsubscribe => {
+    let unsubscribe: Unsubscribe = () => {};
+    
+    createFirestoreListener<Product>("products", "createdAt", "desc", callback, onError)
+      .then(unsub => {
+        unsubscribe = unsub;
+      });
+    
+    return () => unsubscribe();
+  },
+  
+  getPendingProducts: async (): Promise<Product[]> => {
+    await initializeFirebase();
+    
+    if (!db || !firebaseModules.firestore) {
+      throw new Error("Firestore is not initialized.");
     }
     
     try {
-      const productsRef = collection(db, "products");
-      const q = query(productsRef, orderBy("createdAt", "desc"));
+      const q = firebaseModules.firestore.query(
+        firebaseModules.firestore.collection(db, "products"),
+        firebaseModules.firestore.where("status", "==", ProductStatus.PENDING),
+        firebaseModules.firestore.orderBy("createdAt", "desc")
+      );
       
-      return onSnapshot(
-        q,
-        (snapshot) => {
-          const productsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
-          callback(productsList);
-        },
-        (error: any) => {
-          console.error("Error listening to products:", error);
-          // Return empty array on error rather than breaking the UI
-          callback([]);
-        }
-      );
+      const snapshot = await firebaseModules.firestore.getDocs(q);
+      return snapshot.docs.map((doc: any) => ({ 
+        id: doc.id, 
+        ...doc.data() 
+      } as Product));
     } catch (error: any) {
-      console.error("Error setting up products listener:", error);
-      callback([]);
-      return () => {};
-    }
-  },
-
-  // Get pending products
-  getPendingProducts: async () => {
-    if (!db) throw new Error("Firestore is not initialized");
-    
-    try {
-      const productsRef = collection(db, "products");
-      const q = query(
-        productsRef, 
-        where("status", "==", ProductStatus.PENDING),
-        orderBy("createdAt", "desc")
-      );
-      const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
-    } catch (error: any) {
-      console.error("Error fetching pending products:", error);
       throw new Error(formatFirebaseError(error));
     }
   },
-
-  // Get a single product
-  getProduct: async (id: string) => {
-    if (!db) throw new Error("Firestore is not initialized");
+  
+  getProduct: async (id: string): Promise<Product | null> => {
+    await initializeFirebase();
+    
+    if (!db || !firebaseModules.firestore) {
+      throw new Error("Firestore is not initialized.");
+    }
     
     try {
-      const docRef = doc(db, "products", id);
-      const snapshot = await getDoc(docRef);
-      if (snapshot.exists()) {
-        return { id: snapshot.id, ...snapshot.data() } as Product;
-      }
-      return null;
+      const docRef = firebaseModules.firestore.doc(db, "products", id);
+      const snapshot = await firebaseModules.firestore.getDoc(docRef);
+      
+      return snapshot.exists() 
+        ? { id: snapshot.id, ...snapshot.data() } as Product 
+        : null;
     } catch (error: any) {
-      console.error("Error fetching product:", error);
       throw new Error(formatFirebaseError(error));
     }
   },
-
-  // Update product status
-  updateProductStatus: async (id: string, status: ProductStatus | string) => {
-    if (!db) throw new Error("Firestore is not initialized");
+  
+  updateProductStatus: async (id: string, status: ProductStatus | string): Promise<void> => {
+    await initializeFirebase();
+    
+    if (!db || !firebaseModules.firestore) {
+      throw new Error("Firestore is not initialized.");
+    }
     
     try {
-      const docRef = doc(db, "products", id);
-      await updateDoc(docRef, { 
-        status,
-        statusUpdatedAt: Timestamp.now()
+      const docRef = firebaseModules.firestore.doc(db, "products", id);
+      await firebaseModules.firestore.updateDoc(docRef, { 
+        status, 
+        statusUpdatedAt: firebaseModules.firestore.Timestamp.now() 
       });
     } catch (error: any) {
-      console.error("Error updating product status:", error);
       throw new Error(formatFirebaseError(error));
     }
   },
-
-  // Full product update
-  updateProduct: async (id: string, data: Partial<Product>) => {
-    if (!db) throw new Error("Firestore is not initialized");
+  
+  updateProduct: async (id: string, data: Partial<Omit<Product, 'id' | 'createdAt'>>): Promise<void> => {
+    await initializeFirebase();
+    
+    if (!db || !firebaseModules.firestore) {
+      throw new Error("Firestore is not initialized.");
+    }
     
     try {
-      const docRef = doc(db, "products", id);
-      await updateDoc(docRef, { 
-        ...data,
-        updatedAt: Timestamp.now()
+      const docRef = firebaseModules.firestore.doc(db, "products", id);
+      await firebaseModules.firestore.updateDoc(docRef, { 
+        ...data, 
+        updatedAt: firebaseModules.firestore.Timestamp.now() 
       });
     } catch (error: any) {
-      console.error("Error updating product:", error);
       throw new Error(formatFirebaseError(error));
     }
   },
-
-  // Delete product
-  deleteProduct: async (id: string) => {
-    if (!db) throw new Error("Firestore is not initialized");
+  
+  deleteProduct: async (id: string): Promise<void> => {
+    await initializeFirebase();
+    
+    if (!db || !firebaseModules.firestore) {
+      throw new Error("Firestore is not initialized.");
+    }
     
     try {
-      const docRef = doc(db, "products", id);
-      await deleteDoc(docRef);
+      const docRef = firebaseModules.firestore.doc(db, "products", id);
+      await firebaseModules.firestore.deleteDoc(docRef);
     } catch (error: any) {
-      console.error("Error deleting product:", error);
       throw new Error(formatFirebaseError(error));
     }
   },
-
-  // Add new product
-  addProduct: async (data: Partial<Product>) => {
-    if (!db) throw new Error("Firestore is not initialized");
+  
+  addProduct: async (data: Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'status'>): Promise<string> => {
+    await initializeFirebase();
+    
+    if (!db || !firebaseModules.firestore) {
+      throw new Error("Firestore is not initialized.");
+    }
     
     try {
-      const productsRef = collection(db, "products");
-      return await addDoc(productsRef, {
-        ...data,
-        createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now(),
-        status: ProductStatus.PENDING
+      const collectionRef = firebaseModules.firestore.collection(db, "products");
+      const docRef = await firebaseModules.firestore.addDoc(collectionRef, { 
+        ...data, 
+        createdAt: firebaseModules.firestore.Timestamp.now(), 
+        updatedAt: firebaseModules.firestore.Timestamp.now(), 
+        status: ProductStatus.PENDING 
       });
+      
+      return docRef.id;
     } catch (error: any) {
-      console.error("Error adding product:", error);
       throw new Error(formatFirebaseError(error));
     }
   }
 };
 
-// Order Services with enhanced error handling
+// Order service
 export const orderService = {
-  // Get all orders with real-time updates
-  listenToOrders: (callback: (orders: Order[]) => void) => {
-    if (!db) {
-      console.error("Firestore is not initialized");
-      callback([]);
-      return () => {};
+  listenToOrders: (callback: (orders: Order[]) => void, onError?: (error: Error) => void): Unsubscribe => {
+    let unsubscribe: Unsubscribe = () => {};
+    
+    createFirestoreListener<Order>("orders", "createdAt", "desc", callback, onError)
+      .then(unsub => {
+        unsubscribe = unsub;
+      });
+    
+    return () => unsubscribe();
+  },
+  
+  getOrdersByStatus: async (status: OrderStatus | string): Promise<Order[]> => {
+    await initializeFirebase();
+    
+    if (!db || !firebaseModules.firestore) {
+      throw new Error("Firestore is not initialized.");
     }
     
     try {
-      const ordersRef = collection(db, "orders");
-      const q = query(ordersRef, orderBy("createdAt", "desc"));
+      const q = firebaseModules.firestore.query(
+        firebaseModules.firestore.collection(db, "orders"),
+        firebaseModules.firestore.where("status", "==", status),
+        firebaseModules.firestore.orderBy("createdAt", "desc")
+      );
       
-      return onSnapshot(
-        q,
-        (snapshot) => {
-          const ordersList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
-          callback(ordersList);
-        },
-        (error: any) => {
-          console.error("Error listening to orders:", error);
-          // Return empty array on error rather than breaking the UI
-          callback([]);
-        }
-      );
+      const snapshot = await firebaseModules.firestore.getDocs(q);
+      return snapshot.docs.map((doc: any) => ({ 
+        id: doc.id, 
+        ...doc.data() 
+      } as Order));
     } catch (error: any) {
-      console.error("Error setting up orders listener:", error);
-      callback([]);
-      return () => {};
-    }
-  },
-
-  // Get orders by status
-  getOrdersByStatus: async (status: OrderStatus | string) => {
-    if (!db) throw new Error("Firestore is not initialized");
-    
-    try {
-      const ordersRef = collection(db, "orders");
-      const q = query(
-        ordersRef, 
-        where("status", "==", status),
-        orderBy("createdAt", "desc")
-      );
-      const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
-    } catch (error: any) {
-      console.error("Error fetching orders by status:", error);
       throw new Error(formatFirebaseError(error));
     }
   },
-
-  // Get a single order
-  getOrder: async (id: string) => {
-    if (!db) throw new Error("Firestore is not initialized");
+  
+  getOrder: async (id: string): Promise<Order | null> => {
+    await initializeFirebase();
+    
+    if (!db || !firebaseModules.firestore) {
+      throw new Error("Firestore is not initialized.");
+    }
     
     try {
-      const docRef = doc(db, "orders", id);
-      const snapshot = await getDoc(docRef);
-      if (snapshot.exists()) {
-        return { id: snapshot.id, ...snapshot.data() } as Order;
-      }
-      return null;
+      const docRef = firebaseModules.firestore.doc(db, "orders", id);
+      const snapshot = await firebaseModules.firestore.getDoc(docRef);
+      
+      return snapshot.exists() 
+        ? { id: snapshot.id, ...snapshot.data() } as Order 
+        : null;
     } catch (error: any) {
-      console.error("Error fetching order:", error);
       throw new Error(formatFirebaseError(error));
     }
   },
-
-  // Update order status
-  updateOrderStatus: async (id: string, status: OrderStatus | string) => {
-    if (!db) throw new Error("Firestore is not initialized");
+  
+  updateOrderStatus: async (id: string, status: OrderStatus | string): Promise<void> => {
+    await initializeFirebase();
+    
+    if (!db || !firebaseModules.firestore) {
+      throw new Error("Firestore is not initialized.");
+    }
     
     try {
-      const docRef = doc(db, "orders", id);
-      await updateDoc(docRef, { 
-        status,
-        statusUpdatedAt: Timestamp.now()
+      const docRef = firebaseModules.firestore.doc(db, "orders", id);
+      await firebaseModules.firestore.updateDoc(docRef, { 
+        status, 
+        statusUpdatedAt: firebaseModules.firestore.Timestamp.now() 
       });
     } catch (error: any) {
-      console.error("Error updating order status:", error);
       throw new Error(formatFirebaseError(error));
     }
   },
-
-  // Full order update
-  updateOrder: async (id: string, data: Partial<Order>) => {
-    if (!db) throw new Error("Firestore is not initialized");
+  
+  updateOrder: async (id: string, data: Partial<Omit<Order, 'id' | 'createdAt'>>): Promise<void> => {
+    await initializeFirebase();
+    
+    if (!db || !firebaseModules.firestore) {
+      throw new Error("Firestore is not initialized.");
+    }
     
     try {
-      const docRef = doc(db, "orders", id);
-      await updateDoc(docRef, { 
-        ...data,
-        updatedAt: Timestamp.now()
+      const docRef = firebaseModules.firestore.doc(db, "orders", id);
+      await firebaseModules.firestore.updateDoc(docRef, { 
+        ...data, 
+        updatedAt: firebaseModules.firestore.Timestamp.now() 
       });
     } catch (error: any) {
-      console.error("Error updating order:", error);
       throw new Error(formatFirebaseError(error));
     }
   },
-
-  // Delete order
-  deleteOrder: async (id: string) => {
-    if (!db) throw new Error("Firestore is not initialized");
+  
+  deleteOrder: async (id: string): Promise<void> => {
+    await initializeFirebase();
+    
+    if (!db || !firebaseModules.firestore) {
+      throw new Error("Firestore is not initialized.");
+    }
     
     try {
-      const docRef = doc(db, "orders", id);
-      await deleteDoc(docRef);
+      const docRef = firebaseModules.firestore.doc(db, "orders", id);
+      await firebaseModules.firestore.deleteDoc(docRef);
     } catch (error: any) {
-      console.error("Error deleting order:", error);
       throw new Error(formatFirebaseError(error));
     }
   }
 };
 
-// Storage Service with better error handling
+// Storage service
 export const storageService = {
-  uploadFile: async (file: File, path: string) => {
-    if (!storage) throw new Error("Firebase Storage is not initialized");
+  uploadFile: async (file: File, path: string): Promise<string> => {
+    await initializeFirebase();
+    
+    if (!storage || !firebaseModules.storage) {
+      throw new Error("Firebase Storage is not initialized.");
+    }
     
     try {
-      const storageRef = ref(storage, path);
-      await uploadBytes(storageRef, file);
-      return await getDownloadURL(storageRef);
+      const storageRef = firebaseModules.storage.ref(storage, path);
+      const snapshot = await firebaseModules.storage.uploadBytes(storageRef, file);
+      return await firebaseModules.storage.getDownloadURL(snapshot.ref);
     } catch (error: any) {
-      console.error("Error uploading file:", error);
       throw new Error(formatFirebaseError(error));
     }
   }
 };
 
-// Create a mock function for Firebase Functions operations
-// This allows code to compile but won't actually call Firebase Functions during build
-export const mockFunctionsService = {
-  callFunction: async (name: string, data: any) => {
-    console.log(`Mock function call: ${name}`, data);
-    return { success: true, message: "This is a mock response" };
+// Connection management
+export const connectionManager = {
+  addConnectionListener: (callback: (isConnected: boolean) => void): Unsubscribe => {
+    initializeFirebase().then(() => {
+      if (!db || !firebaseModules.firestore) {
+        console.warn("Firestore not initialized. Connection listener cannot be set up.");
+        callback(false);
+        return;
+      }
+      
+      try {
+        const connectedRef = firebaseModules.firestore.doc(db, ".info/connected");
+        
+        return firebaseModules.firestore.onSnapshot(connectedRef, (snap: any) => {
+          const isConnected = snap.exists() && snap.data()?.connected === true;
+          callback(isConnected);
+        });
+      } catch (error) {
+        console.error("Error setting up connection listener:", error);
+        callback(false);
+      }
+    });
+    
+    return () => {};
   }
+};
+
+// Export NOW function for timestamp creation
+export const NOW = (): Timestamp => {
+  if (firebaseModules.firestore) {
+    return firebaseModules.firestore.Timestamp.now();
+  }
+  // Fallback implementation
+  return {
+    toDate: () => new Date(),
+    seconds: Math.floor(Date.now() / 1000),
+    nanoseconds: 0
+  };
 };

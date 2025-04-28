@@ -1,52 +1,103 @@
-import { 
-  Firestore, 
-  DocumentReference, 
-  CollectionReference, 
-  collection as firestoreCollection,
-  doc as firestoreDoc,
-  DocumentData,
+// src/lib/firebase-utils.ts
+import type {
+  Firestore,
+  DocumentReference,
+  CollectionReference,
+  DocumentData
 } from "firebase/firestore";
-import { Auth } from "firebase/auth";
-import { FirebaseStorage, StorageReference, ref as storageRef } from "firebase/storage";
-import { Functions } from "firebase/functions";
+import type { FirebaseStorage, StorageReference } from "firebase/storage";
+import type { Auth } from "firebase/auth";
+import type { Functions } from "firebase/functions";
 
 /**
  * Safely create a collection reference, ensuring db is not null
  */
-export function collection(db: Firestore | null, path: string, ...pathSegments: string[]): CollectionReference<DocumentData> {
+export function collection(
+  db: Firestore | null, 
+  path: string, 
+  ...pathSegments: string[]
+): CollectionReference<DocumentData> {
+  if (typeof window === 'undefined') {
+    throw new Error("Cannot use Firestore in server-side context");
+  }
+
   if (!db) {
     throw new Error("Firestore is not initialized");
   }
-  return firestoreCollection(db, path, ...pathSegments);
+  
+  try {
+    // Dynamic import of firestore module
+    const firestoreModule = require('firebase/firestore');
+    return firestoreModule.collection(db, path, ...pathSegments);
+  } catch (error) {
+    console.error("Error creating collection reference:", error);
+    throw new Error("Failed to create collection reference");
+  }
 }
 
 /**
  * Safely create a document reference, ensuring db is not null
  */
-export function doc(db: Firestore | null, path: string, ...pathSegments: string[]): DocumentReference<DocumentData> {
+export function doc(
+  db: Firestore | null, 
+  path: string, 
+  ...pathSegments: string[]
+): DocumentReference<DocumentData> {
+  if (typeof window === 'undefined') {
+    throw new Error("Cannot use Firestore in server-side context");
+  }
+
   if (!db) {
     throw new Error("Firestore is not initialized");
   }
-  return firestoreDoc(db, path, ...pathSegments);
+  
+  try {
+    // Dynamic import of firestore module
+    const firestoreModule = require('firebase/firestore');
+    return firestoreModule.doc(db, path, ...pathSegments);
+  } catch (error) {
+    console.error("Error creating document reference:", error);
+    throw new Error("Failed to create document reference");
+  }
 }
 
 /**
  * Safely create a storage reference, ensuring storage is not null
  */
-export function ref(storage: FirebaseStorage | null, path?: string): StorageReference {
+export function ref(
+  storage: FirebaseStorage | null, 
+  path?: string
+): StorageReference {
+  if (typeof window === 'undefined') {
+    throw new Error("Cannot use Firebase Storage in server-side context");
+  }
+
   if (!storage) {
     throw new Error("Firebase Storage is not initialized");
   }
-  return storageRef(storage, path);
+  
+  try {
+    // Dynamic import of storage module
+    const storageModule = require('firebase/storage');
+    return storageModule.ref(storage, path);
+  } catch (error) {
+    console.error("Error creating storage reference:", error);
+    throw new Error("Failed to create storage reference");
+  }
 }
 
 /**
  * Verify auth is initialized
  */
 export function verifyAuth(auth: Auth | null): Auth {
+  if (typeof window === 'undefined') {
+    throw new Error("Cannot use Firebase Auth in server-side context");
+  }
+
   if (!auth) {
     throw new Error("Firebase Auth is not initialized");
   }
+  
   return auth;
 }
 
@@ -54,9 +105,14 @@ export function verifyAuth(auth: Auth | null): Auth {
  * Verify functions is initialized
  */
 export function verifyFunctions(functions: Functions | null): Functions {
+  if (typeof window === 'undefined') {
+    throw new Error("Cannot use Firebase Functions in server-side context");
+  }
+
   if (!functions) {
     throw new Error("Firebase Functions is not initialized");
   }
+  
   return functions;
 }
 
@@ -94,3 +150,8 @@ export async function safelyCallFunction<T>(
     throw error;
   }
 }
+
+// Create safe versions of the collection, doc, and ref functions
+export const safeCollection = collection;
+export const safeDoc = doc;
+export const safeRef = ref;
