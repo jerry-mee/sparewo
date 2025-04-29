@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useForm } from 'react-hook-form';
@@ -23,9 +22,8 @@ const loginSchema = z.object({
 type LoginFormValues = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
-  const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
-
+  
   const {
     register,
     handleSubmit,
@@ -37,18 +35,22 @@ export default function LoginPage() {
       password: '',
     },
   });
-
+  
   const onSubmit = async (data: LoginFormValues) => {
     setIsLoading(true);
-
+    
     try {
       await signIn(data.email, data.password);
-
+      
       // Show success toast
       toast.success('Signed in successfully');
-
-      // Redirect to dashboard
-      router.push('/dashboard');
+      
+      // Use direct window location for more reliable redirect
+      // Add a slight delay to ensure Firebase auth state is propagated
+      setTimeout(() => {
+        window.location.href = '/dashboard';
+      }, 1000);
+      
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : 'Authentication failed';
       toast.error(errorMessage);
@@ -56,7 +58,7 @@ export default function LoginPage() {
       setIsLoading(false);
     }
   };
-
+  
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-100 dark:bg-gray-900 p-4">
       <Card className="w-full max-w-md">
@@ -78,11 +80,11 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="name@company.com"
-                {...register('email')}
+              <Input 
+                id="email" 
+                type="email" 
+                placeholder="name@company.com" 
+                {...register('email')} 
                 className={errors.email ? 'border-red-500' : ''}
               />
               {errors.email && (
@@ -92,25 +94,25 @@ export default function LoginPage() {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="password">Password</Label>
-                <Link
-                  href="/forgot-password"
+                <Link 
+                  href="/forgot-password" 
                   className="text-xs text-primary hover:underline"
                 >
                   Forgot password?
                 </Link>
               </div>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                {...register('password')}
+              <Input 
+                id="password" 
+                type="password" 
+                placeholder="••••••••" 
+                {...register('password')} 
                 className={errors.password ? 'border-red-500' : ''}
               />
               {errors.password && (
                 <p className="text-xs text-red-500">{errors.password.message}</p>
               )}
             </div>
-
+            
             <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={isLoading}>
               {isLoading ? (
                 <div className="flex items-center">
