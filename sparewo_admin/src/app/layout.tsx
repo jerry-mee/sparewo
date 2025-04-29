@@ -1,6 +1,6 @@
 import { Poppins } from "next/font/google";
-import { ThemeProvider } from "@/components/providers/theme-provider";
-import { Toaster } from "@/components/ui/toaster";
+import { Providers } from "@/components/providers/providers";
+import { Toaster } from "sonner";
 import "./globals.css";
 
 import type { Metadata } from "next";
@@ -24,15 +24,10 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${poppins.variable} font-sans`}>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="light"
-          enableSystem
-          disableTransitionOnChange
-        >
+        <Providers>
           {children}
-          <Toaster />
-        </ThemeProvider>
+          <Toaster position="bottom-right" />
+        </Providers>
       </body>
     </html>
   );

@@ -6,7 +6,7 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-// Format currency
+// Format currency (UGX)
 export function formatCurrency(amount: number): string {
   return new Intl.NumberFormat('en-UG', {
     style: 'currency',
@@ -15,19 +15,29 @@ export function formatCurrency(amount: number): string {
 }
 
 // Format date
-export function formatDate(date: Date | null | undefined): string {
+export function formatDate(date: Date | null | undefined | any): string {
   if (!date) return '';
+  
+  // Handle Firestore timestamps
+  if (typeof date === 'object' && date.toDate && typeof date.toDate === 'function') {
+    date = date.toDate();
+  }
   
   return new Intl.DateTimeFormat('en-US', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
-  }).format(date);
+  }).format(new Date(date));
 }
 
 // Format date with time
-export function formatDateTime(date: Date | null | undefined): string {
+export function formatDateTime(date: Date | null | undefined | any): string {
   if (!date) return '';
+  
+  // Handle Firestore timestamps
+  if (typeof date === 'object' && date.toDate && typeof date.toDate === 'function') {
+    date = date.toDate();
+  }
   
   return new Intl.DateTimeFormat('en-US', {
     year: 'numeric',
@@ -35,7 +45,7 @@ export function formatDateTime(date: Date | null | undefined): string {
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
-  }).format(date);
+  }).format(new Date(date));
 }
 
 // Truncate text

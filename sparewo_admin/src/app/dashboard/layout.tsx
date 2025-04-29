@@ -1,7 +1,8 @@
-'use client';
+"use client";
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import {
@@ -12,10 +13,16 @@ import {
   Settings,
   Menu,
   X,
-  Bell,
   Sun,
-  Moon
+  Moon,
+  LogOut
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { NotificationDropdown } from '@/components/ui/notification-dropdown';
+import { useAuth } from '@/lib/context/auth-context';
+import { logOut } from '@/lib/firebase/auth';
+import { toast } from 'sonner';
+import { getInitials } from '@/lib/utils';
 
 export default function DashboardLayout({
   children,
@@ -23,13 +30,33 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isMobile, setIsMobile] = useState(false);
   const pathname = usePathname();
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
+  const { user, adminData } = useAuth();
 
-  // Fix hydration issues by only rendering after mount
+  // Check if mobile on mount and add resize listener
   useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 1024);
+      if (window.innerWidth < 1024) {
+        setIsSidebarOpen(false);
+      } else {
+        setIsSidebarOpen(true);
+      }
+    };
+
+    // Initial check
+    checkMobile();
+
+    // Add resize listener
+    window.addEventListener('resize', checkMobile);
+
+    // Fix hydration issues by only rendering after mount
     setMounted(true);
+
+    return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
   const toggleSidebar = () => {
@@ -39,7 +66,16 @@ export default function DashboardLayout({
   const toggleTheme = () => {
     setTheme(theme === 'dark' ? 'light' : 'dark');
   };
-  
+
+  const handleLogout = async () => {
+    try {
+      await logOut();
+      toast.success('Logged out successfully');
+    } catch (error) {
+      toast.error('Failed to log out');
+    }
+  };
+
   // Navigation items
   const navItems = [
     {
@@ -73,27 +109,70 @@ export default function DashboardLayout({
       active: pathname.startsWith('/dashboard/settings'),
     },
   ];
-  
+
+  // Get current page title
+  const getCurrentPageTitle = () => {
+    if (pathname === '/dashboard') return 'Dashboard';
+
+    const parts = pathname.split('/');
+    const lastPart = parts[parts.length - 1];
+
+    if (lastPart === 'dashboard') return 'Dashboard';
+
+    // Handle ID routes like /vendors/[id]
+    if (parts.length > 2 && parts[parts.length - 2] === 'vendors') {
+      return 'Vendor Details';
+    }
+
+    if (parts.length > 2 && parts[parts.length - 2] === 'products') {
+      return 'Product Details';
+    }
+
+    // Capitalize first letter
+    return lastPart.charAt(0).toUpperCase() + lastPart.slice(1);
+  };
+
+  // Add overlay when sidebar is open on mobile
+  const sidebarOverlay = isMobile && isSidebarOpen ? (
+    <div
+      className="fixed inset-0 bg-black/50 z-20 lg:hidden"
+      onClick={() => setIsSidebarOpen(false)}
+    />
+  ) : null;
+
   return (
-    <div className={`flex h-screen ${mounted && theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-gray-100'}`}>
+    <div className={`flex min-h-screen ${mounted && theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-gray-100'}`}>
+      {/* Sidebar overlay */}
+      {sidebarOverlay}
+
       {/* Sidebar */}
       <div
         className={`${
-          isSidebarOpen ? "w-64" : "w-20"
-        } ${mounted && theme === 'dark' ? 'bg-gray-800' : 'bg-indigo-900'} fixed inset-y-0 left-0 z-30 transition-all duration-300 ease-in-out flex flex-col`}
+          isSidebarOpen ? "w-64" : "w-0 lg:w-20"
+        } ${mounted && theme === 'dark' ? 'bg-gray-800' : 'bg-indigo-900'} fixed inset-y-0 left-0 z-30 transition-all duration-300 ease-in-out flex flex-col overflow-hidden`}
       >
         {/* Logo */}
         <div className="flex items-center justify-between h-16 px-4 border-b border-opacity-20 border-gray-600">
-          {isSidebarOpen ? (
-            <div className="text-lg font-semibold text-white">SpareWo Admin</div>
-          ) : (
-            <div className="text-lg font-semibold text-white">SW</div>
-          )}
-          <button onClick={toggleSidebar} className="text-white">
+          <div className="flex items-center space-x-2">
+            {/* Update the path to your logo */}
+            {isSidebarOpen && (
+              <div className="text-lg font-semibold text-white flex items-center">
+                <Image
+                  src="/images/logo.png"
+                  alt="SpareWo Logo"
+                  width={32}
+                  height={32}
+                  className="mr-2"
+                />
+                SpareWo Admin
+              </div>
+            )}
+          </div>
+          <button onClick={toggleSidebar} className="text-white lg:block hidden">
             {isSidebarOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
         </div>
-        
+
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto py-4">
           <div className="px-4 space-y-1">
@@ -104,7 +183,7 @@ export default function DashboardLayout({
                     item.active
                       ? "bg-orange-500 text-white"
                       : "text-gray-300 hover:bg-orange-500 hover:bg-opacity-30 hover:text-white"
-                  }`}
+                  } ${!isSidebarOpen && 'justify-center'}`}
                 >
                   <div className="flex items-center justify-center">
                     {item.icon}
@@ -115,65 +194,76 @@ export default function DashboardLayout({
             ))}
           </div>
         </nav>
-        
+
         {/* User */}
         <div className="p-4 border-t border-gray-600 border-opacity-20">
           <div className="flex items-center">
             <div className="flex-shrink-0">
               <div className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-white font-medium">
-                A
+                {user ? getInitials(user.displayName || user.email || 'A') : 'A'}
               </div>
             </div>
             {isSidebarOpen && (
-              <div className="ml-3">
-                <p className="text-sm font-medium text-white">Admin User</p>
-                <p className="text-xs text-gray-300">Admin</p>
+              <div className="ml-3 overflow-hidden">
+                <p className="text-sm font-medium text-white truncate">
+                  {user?.displayName || 'Admin User'}
+                </p>
+                <p className="text-xs text-gray-300 truncate">
+                  {adminData?.role || 'Admin'}
+                </p>
               </div>
             )}
           </div>
         </div>
       </div>
-      
+
       {/* Main Content */}
       <div
         className={`flex-1 ${
-          isSidebarOpen ? "ml-64" : "ml-20"
+          isSidebarOpen ? "lg:ml-64" : "lg:ml-20"
         } transition-all duration-300 ease-in-out`}
       >
         {/* Header */}
         <header
-          className={`fixed right-0 ${
-            isSidebarOpen ? "left-64" : "left-20"
+          className={`fixed right-0 left-0 lg:left-auto ${
+            isSidebarOpen ? "lg:left-64" : "lg:left-20"
           } h-16 z-20 flex items-center justify-between px-4 border-b ${
             mounted && theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
           } transition-all duration-300`}
         >
           <div className="flex items-center">
-            <h1 className="text-xl font-semibold mr-4">
-              {pathname === '/dashboard' 
-                ? 'Dashboard' 
-                : pathname.split('/').pop() 
-                  ? (pathname.split('/').pop() || '').charAt(0).toUpperCase() + (pathname.split('/').pop() || '').slice(1) 
-                  : 'Dashboard'}
+            <button
+              onClick={toggleSidebar}
+              className="text-gray-500 dark:text-gray-300 mr-4 lg:hidden"
+            >
+              <Menu size={20} />
+            </button>
+            <h1 className="text-xl font-semibold truncate">
+              {getCurrentPageTitle()}
             </h1>
           </div>
-          
+
           <div className="flex items-center space-x-4">
-            <button 
-              onClick={toggleTheme} 
+            <button
+              onClick={toggleTheme}
               className={`p-1 rounded-full ${theme === 'dark' ? 'text-gray-300 hover:text-white' : 'text-gray-500 hover:text-gray-700'}`}
             >
               {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
             </button>
-            <button 
-              className={`p-1 rounded-full ${theme === 'dark' ? 'text-gray-300 hover:text-white' : 'text-gray-500 hover:text-gray-700'} relative`}
+
+            <NotificationDropdown />
+
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleLogout}
+              aria-label="Log out"
             >
-              <Bell size={20} />
-              <span className="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full"></span>
-            </button>
+              <LogOut size={20} />
+            </Button>
           </div>
         </header>
-        
+
         {/* Main content */}
         <main className="pt-24 px-4 md:px-6 pb-6 min-h-screen">
           <div className="max-w-7xl mx-auto">

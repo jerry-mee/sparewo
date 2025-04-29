@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { 
   Users, 
   Package, 
@@ -13,18 +13,56 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { StatCard } from "@/components/ui/stat-card";
+import { getTotalVendorCount, countVendorsByStatus } from "@/lib/firebase/vendors";
+import { getTotalProductCount, countProductsByStatus } from "@/lib/firebase/products";
+import Link from "next/link";
 
 export default function Dashboard() {
-  // Sample stats
-  const stats = {
-    vendors: 156,
-    vendorChange: "+12%",
-    products: 1284,
-    productChange: "+8%",
-    pendingApprovals: 42,
-    orders: 845,
-    orderChange: "+28%"
-  };
+  // Stats state
+  const [stats, setStats] = useState({
+    vendors: 0,
+    vendorChange: "+0%",
+    products: 0,
+    productChange: "+0%",
+    pendingApprovals: 0,
+    orders: 0,
+    orderChange: "+0%"
+  });
+
+  // Loading state
+  const [loading, setLoading] = useState(true);
+
+  // Fetch stats on component mount
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const totalVendors = await getTotalVendorCount();
+        const pendingVendors = await countVendorsByStatus('pending');
+        const totalProducts = await getTotalProductCount();
+        const pendingProducts = await countProductsByStatus('pending');
+        
+        // Calculate total pending approvals
+        const totalPending = pendingVendors + pendingProducts;
+        
+        setStats({
+          vendors: totalVendors,
+          vendorChange: "+12%", // Example - would need historical data for real value
+          products: totalProducts,
+          productChange: "+8%", // Example - would need historical data for real value
+          pendingApprovals: totalPending,
+          orders: 0, // Would need order data
+          orderChange: "+0%"
+        });
+      } catch (error) {
+        console.error('Error fetching dashboard stats:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchStats();
+  }, []);
 
   // Sample activity feed
   const recentActivity: {
@@ -118,34 +156,42 @@ export default function Dashboard() {
             <CardTitle>Quick Actions</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <Button 
-              variant="outline" 
-              className="flex items-center w-full justify-start"
-            >
-              <PlusCircle size={18} className="mr-2" />
-              Add New Vendor
-            </Button>
-            <Button 
-              variant="outline" 
-              className="flex items-center w-full justify-start"
-            >
-              <Package size={18} className="mr-2" />
-              Review Products
-            </Button>
-            <Button 
-              variant="outline" 
-              className="flex items-center w-full justify-start"
-            >
-              <Truck size={18} className="mr-2" />
-              Process Orders
-            </Button>
-            <Button 
-              variant="outline" 
-              className="flex items-center w-full justify-start"
-            >
-              <CheckCircle size={18} className="mr-2" />
-              Approve Vendors
-            </Button>
+            <Link href="/dashboard/vendors/pending">
+              <Button 
+                variant="outline" 
+                className="flex items-center w-full justify-start"
+              >
+                <CheckCircle size={18} className="mr-2" />
+                Approve Vendors
+              </Button>
+            </Link>
+            <Link href="/dashboard/products/pending">
+              <Button 
+                variant="outline" 
+                className="flex items-center w-full justify-start"
+              >
+                <Package size={18} className="mr-2" />
+                Review Products
+              </Button>
+            </Link>
+            <Link href="/dashboard/orders">
+              <Button 
+                variant="outline" 
+                className="flex items-center w-full justify-start"
+              >
+                <Truck size={18} className="mr-2" />
+                Process Orders
+              </Button>
+            </Link>
+            <Link href="/dashboard/vendors">
+              <Button 
+                variant="outline" 
+                className="flex items-center w-full justify-start"
+              >
+                <PlusCircle size={18} className="mr-2" />
+                Manage Vendors
+              </Button>
+            </Link>
           </CardContent>
         </Card>
         
@@ -173,41 +219,6 @@ export default function Dashboard() {
   );
 }
 
-// Stat Card Component
-interface StatCardProps {
-  title: string;
-  value: number | string;
-  change?: string;
-  icon: React.ReactNode;
-  color: string;
-}
-
-const StatCard = ({ title, value, change, icon, color }: StatCardProps) => {
-  return (
-    <Card>
-      <CardContent className="p-6">
-        <div className="flex items-center">
-          <div className={`p-3 rounded-full ${color} mr-4`}>
-            {icon}
-          </div>
-          <div>
-            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{title}</p>
-            <p className="text-2xl font-semibold">{value}</p>
-            {change && (
-              <div className="flex items-center mt-1">
-                <span className="text-xs font-medium text-green-500">
-                  {change}
-                </span>
-                <span className="text-xs ml-1 text-gray-500 dark:text-gray-400">from last month</span>
-              </div>
-            )}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-};
-
 // Activity Item Component
 interface ActivityItemProps {
   icon: React.ReactNode;
@@ -226,12 +237,12 @@ const ActivityItem = ({ icon, title, description, time, status }: ActivityItemPr
   
   return (
     <div className="flex items-start mb-4 pb-4 border-b border-gray-200 dark:border-gray-700 last:border-0">
-      <div className={`${statusColors[status]} p-2 rounded-full mr-4 text-white`}>
+      <div className={`${statusColors[status]} p-2 rounded-full mr-4 text-white flex-shrink-0`}>
         {icon}
       </div>
-      <div className="flex-1">
-        <h3 className="text-sm font-medium">{title}</h3>
-        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{description}</p>
+      <div className="flex-1 min-w-0">
+        <h3 className="text-sm font-medium truncate">{title}</h3>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate">{description}</p>
         <span className="text-xs text-gray-400 dark:text-gray-500 mt-1 block">{time}</span>
       </div>
     </div>
