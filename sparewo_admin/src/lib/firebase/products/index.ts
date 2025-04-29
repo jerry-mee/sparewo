@@ -36,7 +36,7 @@ export const getProducts = async (
     }
 
     let q = query(
-      collection(db, 'products'),
+      collection(db, 'vendor_products'),
       ...constraints,
       limit(pageSize)
     );
@@ -123,7 +123,7 @@ export const updateProductStatus = async (
 export const countProductsByStatus = async (status: string): Promise<number> => {
   try {
     const q = query(
-      collection(db, 'products'),
+      collection(db, 'vendor_products'),
       where('status', '==', status)
     );
 
@@ -138,7 +138,7 @@ export const countProductsByStatus = async (status: string): Promise<number> => 
 // Get total product count
 export const getTotalProductCount = async (): Promise<number> => {
   try {
-    const querySnapshot = await getDocs(collection(db, 'products'));
+    const querySnapshot = await getDocs(collection(db, 'vendor_products'));
     return querySnapshot.size;
   } catch (error) {
     console.error('Error getting total product count:', error);
