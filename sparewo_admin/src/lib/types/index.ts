@@ -2,7 +2,7 @@ export interface AdminUser {
   id: string;
   email: string;
   displayName: string;
-  role: 'superAdmin' | 'admin' | 'viewer';
+  role: 'superAdmin' | 'admin' | 'viewer' | 'super_admin';
   createdAt: any;
   updatedAt: any;
 }
