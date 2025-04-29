@@ -30,9 +30,6 @@ export default function Dashboard() {
     orderChange: "+0%"
   });
 
-  // Loading state
-  const [loading, setLoading] = useState(true);
-
   // Fetch stats on component mount
   useEffect(() => {
     const fetchStats = async () => {
@@ -56,8 +53,6 @@ export default function Dashboard() {
         });
       } catch (error) {
         console.error('Error fetching dashboard stats:', error);
-      } finally {
-        setLoading(false);
       }
     };
     

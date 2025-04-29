@@ -46,16 +46,16 @@ export default function DashboardLayout({
         setIsSidebarOpen(true);
       }
     };
-
+    
     // Initial check
     checkMobile();
-
+    
     // Add resize listener
     window.addEventListener('resize', checkMobile);
-
+    
     // Fix hydration issues by only rendering after mount
     setMounted(true);
-
+    
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
@@ -66,16 +66,16 @@ export default function DashboardLayout({
   const toggleTheme = () => {
     setTheme(theme === 'dark' ? 'light' : 'dark');
   };
-
+  
   const handleLogout = async () => {
     try {
       await logOut();
       toast.success('Logged out successfully');
-    } catch (error) {
+    } catch {
       toast.error('Failed to log out');
     }
   };
-
+  
   // Navigation items
   const navItems = [
     {
@@ -109,42 +109,42 @@ export default function DashboardLayout({
       active: pathname.startsWith('/dashboard/settings'),
     },
   ];
-
+  
   // Get current page title
   const getCurrentPageTitle = () => {
     if (pathname === '/dashboard') return 'Dashboard';
-
+    
     const parts = pathname.split('/');
     const lastPart = parts[parts.length - 1];
-
+    
     if (lastPart === 'dashboard') return 'Dashboard';
-
+    
     // Handle ID routes like /vendors/[id]
     if (parts.length > 2 && parts[parts.length - 2] === 'vendors') {
       return 'Vendor Details';
     }
-
+    
     if (parts.length > 2 && parts[parts.length - 2] === 'products') {
       return 'Product Details';
     }
-
+    
     // Capitalize first letter
     return lastPart.charAt(0).toUpperCase() + lastPart.slice(1);
   };
 
   // Add overlay when sidebar is open on mobile
   const sidebarOverlay = isMobile && isSidebarOpen ? (
-    <div
+    <div 
       className="fixed inset-0 bg-black/50 z-20 lg:hidden"
       onClick={() => setIsSidebarOpen(false)}
     />
   ) : null;
-
+  
   return (
     <div className={`flex min-h-screen ${mounted && theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-gray-100'}`}>
       {/* Sidebar overlay */}
       {sidebarOverlay}
-
+      
       {/* Sidebar */}
       <div
         className={`${
@@ -157,11 +157,11 @@ export default function DashboardLayout({
             {/* Update the path to your logo */}
             {isSidebarOpen && (
               <div className="text-lg font-semibold text-white flex items-center">
-                <Image
-                  src="/images/logo.png"
-                  alt="SpareWo Logo"
-                  width={32}
-                  height={32}
+                <Image 
+                  src="/images/logo.png" 
+                  alt="SpareWo Logo" 
+                  width={32} 
+                  height={32} 
                   className="mr-2"
                 />
                 SpareWo Admin
@@ -172,7 +172,7 @@ export default function DashboardLayout({
             {isSidebarOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
         </div>
-
+        
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto py-4">
           <div className="px-4 space-y-1">
@@ -194,7 +194,7 @@ export default function DashboardLayout({
             ))}
           </div>
         </nav>
-
+        
         {/* User */}
         <div className="p-4 border-t border-gray-600 border-opacity-20">
           <div className="flex items-center">
@@ -216,7 +216,7 @@ export default function DashboardLayout({
           </div>
         </div>
       </div>
-
+      
       {/* Main Content */}
       <div
         className={`flex-1 ${
@@ -232,8 +232,8 @@ export default function DashboardLayout({
           } transition-all duration-300`}
         >
           <div className="flex items-center">
-            <button
-              onClick={toggleSidebar}
+            <button 
+              onClick={toggleSidebar} 
               className="text-gray-500 dark:text-gray-300 mr-4 lg:hidden"
             >
               <Menu size={20} />
@@ -242,20 +242,20 @@ export default function DashboardLayout({
               {getCurrentPageTitle()}
             </h1>
           </div>
-
+          
           <div className="flex items-center space-x-4">
-            <button
-              onClick={toggleTheme}
+            <button 
+              onClick={toggleTheme} 
               className={`p-1 rounded-full ${theme === 'dark' ? 'text-gray-300 hover:text-white' : 'text-gray-500 hover:text-gray-700'}`}
             >
               {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
             </button>
-
+            
             <NotificationDropdown />
-
-            <Button
-              variant="ghost"
-              size="icon"
+            
+            <Button 
+              variant="ghost" 
+              size="icon" 
               onClick={handleLogout}
               aria-label="Log out"
             >
@@ -263,7 +263,7 @@ export default function DashboardLayout({
             </Button>
           </div>
         </header>
-
+        
         {/* Main content */}
         <main className="pt-24 px-4 md:px-6 pb-6 min-h-screen">
           <div className="max-w-7xl mx-auto">

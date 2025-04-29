@@ -15,28 +15,38 @@ export function formatCurrency(amount: number): string {
 }
 
 // Format date
-export function formatDate(date: Date | null | undefined | any): string {
+export function formatDate(date: Date | null | undefined | string | number | {toDate(): Date}): string {
   if (!date) return '';
   
   // Handle Firestore timestamps
-  if (typeof date === 'object' && date.toDate && typeof date.toDate === 'function') {
-    date = date.toDate();
+  if (typeof date === 'object' && 'toDate' in date && typeof date.toDate === 'function') {
+    return new Intl.DateTimeFormat('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    }).format(date.toDate());
   }
   
   return new Intl.DateTimeFormat('en-US', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
-  }).format(new Date(date));
+  }).format(new Date(date as string | number | Date));
 }
 
 // Format date with time
-export function formatDateTime(date: Date | null | undefined | any): string {
+export function formatDateTime(date: Date | null | undefined | string | number | {toDate(): Date}): string {
   if (!date) return '';
   
   // Handle Firestore timestamps
-  if (typeof date === 'object' && date.toDate && typeof date.toDate === 'function') {
-    date = date.toDate();
+  if (typeof date === 'object' && 'toDate' in date && typeof date.toDate === 'function') {
+    return new Intl.DateTimeFormat('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(date.toDate());
   }
   
   return new Intl.DateTimeFormat('en-US', {
@@ -45,7 +55,7 @@ export function formatDateTime(date: Date | null | undefined | any): string {
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
-  }).format(new Date(date));
+  }).format(new Date(date as string | number | Date));
 }
 
 // Truncate text

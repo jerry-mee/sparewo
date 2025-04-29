@@ -24,7 +24,7 @@ type ForgotPasswordFormValues = z.infer<typeof forgotPasswordSchema>;
 export default function ForgotPasswordPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
-
+  
   const {
     register,
     handleSubmit,
@@ -35,10 +35,10 @@ export default function ForgotPasswordPage() {
       email: '',
     },
   });
-
+  
   const onSubmit = async (data: ForgotPasswordFormValues) => {
     setIsLoading(true);
-
+    
     try {
       await resetPassword(data.email);
       setIsSubmitted(true);
@@ -50,7 +50,7 @@ export default function ForgotPasswordPage() {
       setIsLoading(false);
     }
   };
-
+  
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-100 dark:bg-gray-900 p-4">
       <Card className="w-full max-w-md">
@@ -67,7 +67,7 @@ export default function ForgotPasswordPage() {
           </div>
           <CardTitle className="text-2xl font-bold text-center">Forgot Password</CardTitle>
           <CardDescription className="text-center">
-            {isSubmitted
+            {isSubmitted 
               ? 'Check your email for a reset link'
               : 'Enter your email to reset your password'}
           </CardDescription>
@@ -76,7 +76,7 @@ export default function ForgotPasswordPage() {
           {isSubmitted ? (
             <div className="text-center py-4 space-y-6">
               <p className="text-gray-500 dark:text-gray-400">
-                We've sent a password reset link to your email.
+                We&apos;ve sent a password reset link to your email.
                 Please check your inbox and follow the instructions to reset your password.
               </p>
               <Link href="/login">
@@ -90,18 +90,18 @@ export default function ForgotPasswordPage() {
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="name@company.com"
-                  {...register('email')}
+                <Input 
+                  id="email" 
+                  type="email" 
+                  placeholder="name@company.com" 
+                  {...register('email')} 
                   className={errors.email ? 'border-red-500' : ''}
                 />
                 {errors.email && (
                   <p className="text-xs text-red-500">{errors.email.message}</p>
                 )}
               </div>
-
+              
               <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={isLoading}>
                 {isLoading ? (
                   <div className="flex items-center">
@@ -112,10 +112,10 @@ export default function ForgotPasswordPage() {
                   'Send Reset Link'
                 )}
               </Button>
-
+              
               <div className="text-center">
-                <Link
-                  href="/login"
+                <Link 
+                  href="/login" 
                   className="text-sm text-primary hover:underline"
                 >
                   Back to login
