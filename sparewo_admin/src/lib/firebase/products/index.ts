@@ -1,14 +1,14 @@
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  query,
-  where,
-  orderBy,
-  limit,
-  updateDoc,
-  serverTimestamp,
+import { 
+  collection, 
+  doc, 
+  getDoc, 
+  getDocs, 
+  query, 
+  where, 
+  orderBy, 
+  limit, 
+  updateDoc, 
+  serverTimestamp, 
   DocumentData,
   QueryConstraint,
   startAfter
@@ -26,35 +26,61 @@ export const getProducts = async (
   try {
     // Build query constraints
     const constraints: QueryConstraint[] = [orderBy('createdAt', 'desc')];
-
+    
     if (status) {
       constraints.push(where('status', '==', status));
     }
-
+    
     if (vendorId) {
       constraints.push(where('vendorId', '==', vendorId));
     }
-
+    
     let q = query(
       collection(db, 'vendor_products'),
       ...constraints,
       limit(pageSize)
     );
-
+    
     if (lastDoc) {
       q = query(q, startAfter(lastDoc));
     }
-
+    
     const querySnapshot = await getDocs(q);
-
+    
     const products: Product[] = [];
     let lastVisible: DocumentData | undefined = undefined;
-
+    
     querySnapshot.forEach((doc) => {
-      products.push({ id: doc.id, ...doc.data() } as Product);
+      const data = doc.data();
+      // Ensure all required fields exist to prevent undefined errors
+      const product: Product = {
+        id: doc.id,
+        name: data.name || data.partName || 'Unnamed Product', // Handle both name formats
+        description: data.description || '',
+        price: data.price || data.unitPrice || 0, // Handle both price formats
+        category: data.category || '',
+        subcategory: data.subcategory || '',
+        brand: data.brand || '',
+        model: data.model || '',
+        year: data.year || '',
+        condition: (data.condition as 'new' | 'used' | 'refurbished') || 'new',
+        quantity: data.quantity || data.stockQuantity || 0, // Handle both quantity formats
+        status: (data.status as 'pending' | 'approved' | 'rejected') || 'pending',
+        rejectionReason: data.rejectionReason || '',
+        showInCatalog: data.showInCatalog || false,
+        imageUrls: data.imageUrls || [],
+        specifications: data.specifications || {},
+        vendorId: data.vendorId || '',
+        createdAt: data.createdAt,
+        updatedAt: data.updatedAt,
+        approvedAt: data.approvedAt || null,
+        rejectedAt: data.rejectedAt || null,
+      };
+      
+      products.push(product);
       lastVisible = doc;
     });
-
+    
     return { products, lastDoc: lastVisible };
   } catch (error) {
     console.error('Error getting products:', error);
@@ -65,11 +91,37 @@ export const getProducts = async (
 // Get product by ID
 export const getProductById = async (id: string): Promise<Product | null> => {
   try {
-    const docRef = doc(db, 'products', id);
+    const docRef = doc(db, 'vendor_products', id);
     const docSnap = await getDoc(docRef);
 
     if (docSnap.exists()) {
-      return { id: docSnap.id, ...docSnap.data() } as Product;
+      const data = docSnap.data();
+      // Ensure all required fields exist to prevent undefined errors
+      const product: Product = {
+        id: docSnap.id,
+        name: data.name || data.partName || 'Unnamed Product',
+        description: data.description || '',
+        price: data.price || data.unitPrice || 0,
+        category: data.category || '',
+        subcategory: data.subcategory || '',
+        brand: data.brand || '',
+        model: data.model || '',
+        year: data.year || '',
+        condition: (data.condition as 'new' | 'used' | 'refurbished') || 'new',
+        quantity: data.quantity || data.stockQuantity || 0,
+        status: (data.status as 'pending' | 'approved' | 'rejected') || 'pending',
+        rejectionReason: data.rejectionReason || '',
+        showInCatalog: data.showInCatalog || false,
+        imageUrls: data.imageUrls || [],
+        specifications: data.specifications || {},
+        vendorId: data.vendorId || '',
+        createdAt: data.createdAt,
+        updatedAt: data.updatedAt,
+        approvedAt: data.approvedAt || null,
+        rejectedAt: data.rejectedAt || null,
+      };
+      
+      return product;
     }
 
     return null;
@@ -95,7 +147,7 @@ export const updateProductStatus = async (
   rejectionReason?: string
 ): Promise<void> => {
   try {
-    const docRef = doc(db, 'products', id);
+    const docRef = doc(db, 'vendor_products', id);
 
     const updateData: any = {
       status,

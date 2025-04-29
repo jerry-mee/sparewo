@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/table";
 import { ProductStatusBadge } from "@/components/product/product-status-badge";
 import { DocumentData } from "firebase/firestore";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency } from "@/lib/utils";
 import Link from "next/link";
 import { Search, ChevronRight, Package, ShoppingBag, Clock } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -73,15 +73,17 @@ export default function ProductsPage() {
   // Handle search
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    // In a real app, this would search by calling the Firebase function
   };
 
-  // Filter products by search query (client-side filtering for demo)
-  const filteredProducts = products.filter(product => 
-    product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    product.brand.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    product.category.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Filter products by search query (client-side filtering for demo) with null safety
+  const filteredProducts = products.filter(product => {
+    const searchLower = searchQuery.toLowerCase();
+    return (
+      (product.name && product.name.toLowerCase().includes(searchLower)) ||
+      (product.brand && product.brand.toLowerCase().includes(searchLower)) ||
+      (product.category && product.category.toLowerCase().includes(searchLower))
+    );
+  });
 
   // Count products by status
   const approvedCount = products.filter(p => p.status === 'approved').length;
@@ -214,10 +216,10 @@ export default function ProductsPage() {
                 ) : (
                   filteredProducts.map((product) => (
                     <TableRow key={product.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                      <TableCell className="font-medium">{product.name}</TableCell>
-                      <TableCell>{product.category}</TableCell>
-                      <TableCell>{product.brand}</TableCell>
-                      <TableCell>{formatCurrency(product.price)}</TableCell>
+                      <TableCell className="font-medium">{product.name || 'Unnamed Product'}</TableCell>
+                      <TableCell>{product.category || 'Uncategorized'}</TableCell>
+                      <TableCell>{product.brand || 'Unknown'}</TableCell>
+                      <TableCell>{formatCurrency(product.price || 0)}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <ProductStatusBadge status={product.status} />
