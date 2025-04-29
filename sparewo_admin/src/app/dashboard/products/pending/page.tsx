@@ -24,7 +24,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ProductStatusBadge } from "@/components/product/product-status-badge";
 import { DocumentData } from "firebase/firestore";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency } from "@/lib/utils";
+
+// Simple date formatting utility
+function formatDate(date: string | number | Date): string {
+  const d = new Date(date);
+  return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
 import Link from "next/link";
 import { CheckCircle, XCircle, ChevronRight, Package, Filter, Clock } from "lucide-react";
 import { toast } from "sonner";
@@ -43,7 +49,6 @@ export default function PendingProductsPage() {
   const [rejectionReason, setRejectionReason] = useState("");
   const [showInCatalog, setShowInCatalog] = useState(false);
 
-  // Fetch pending products on component mount
   useEffect(() => {
     const fetchProducts = async () => {
       setLoading(true);
@@ -63,7 +68,6 @@ export default function PendingProductsPage() {
     fetchProducts();
   }, []);
 
-  // Load more products
   const loadMore = async () => {
     if (!lastDoc) return;
     
@@ -78,7 +82,6 @@ export default function PendingProductsPage() {
     }
   };
 
-  // Open approval dialog
   const openApproveDialog = (product: Product) => {
     setSelectedProduct(product);
     setDialogAction("approve");
@@ -86,7 +89,6 @@ export default function PendingProductsPage() {
     setDialogOpen(true);
   };
 
-  // Open rejection dialog
   const openRejectDialog = (product: Product) => {
     setSelectedProduct(product);
     setDialogAction("reject");
@@ -94,7 +96,6 @@ export default function PendingProductsPage() {
     setDialogOpen(true);
   };
 
-  // Handle dialog confirmation
   const handleConfirm = async () => {
     if (!selectedProduct) return;
     
@@ -121,14 +122,15 @@ export default function PendingProductsPage() {
   // Group products by category
   const productsByCategory: Record<string, Product[]> = {};
   products.forEach(product => {
-    if (!productsByCategory[product.category]) {
-      productsByCategory[product.category] = [];
+    const category = product.category || 'Uncategorized';
+    if (!productsByCategory[category]) {
+      productsByCategory[category] = [];
     }
-    productsByCategory[product.category].push(product);
+    productsByCategory[category].push(product);
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 w-full">
       <div className="flex flex-col gap-2">
         <h1 className="text-2xl font-semibold">Pending Products</h1>
         <p className="text-gray-500 dark:text-gray-400">
@@ -136,7 +138,7 @@ export default function PendingProductsPage() {
         </p>
       </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="py-4">
             <CardTitle className="flex items-center gap-2 text-lg font-medium">
@@ -170,7 +172,9 @@ export default function PendingProductsPage() {
           </CardHeader>
           <CardContent className="pb-4">
             <div className="text-sm font-medium">
-              {products.length > 0 ? formatDate(products[products.length - 1]?.createdAt) : 'None'}
+              {products.length > 0 && products[products.length - 1]?.createdAt 
+                ? formatDate(products[products.length - 1].createdAt) 
+                : 'None'}
             </div>
           </CardContent>
         </Card>
@@ -184,17 +188,17 @@ export default function PendingProductsPage() {
           </CardDescription>
         </CardHeader>
         
-        <CardContent>
-          <div className="border rounded-lg overflow-hidden">
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Product Name</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead>Brand</TableHead>
-                  <TableHead>Price</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead className="w-[25%]">Product Name</TableHead>
+                  <TableHead className="w-[20%]">Category</TableHead>
+                  <TableHead className="w-[15%]">Brand</TableHead>
+                  <TableHead className="w-[15%]">Price</TableHead>
+                  <TableHead className="w-[10%]">Status</TableHead>
+                  <TableHead className="w-[15%] text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -218,20 +222,28 @@ export default function PendingProductsPage() {
                 ) : (
                   products.map((product) => (
                     <TableRow key={product.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                      <TableCell className="font-medium">{product.name}</TableCell>
-                      <TableCell>{product.category}</TableCell>
-                      <TableCell>{product.brand}</TableCell>
-                      <TableCell>{formatCurrency(product.price)}</TableCell>
+                      <TableCell className="font-medium truncate max-w-xs">
+                        {product.name || 'Unnamed Product'}
+                      </TableCell>
+                      <TableCell className="truncate">
+                        {product.category || 'Uncategorized'}
+                      </TableCell>
+                      <TableCell className="truncate">
+                        {product.brand || 'Unknown'}
+                      </TableCell>
+                      <TableCell>
+                        {formatCurrency(product.price || 0)}
+                      </TableCell>
                       <TableCell>
                         <ProductStatusBadge status={product.status} />
                       </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end items-center space-x-2">
+                      <TableCell className="p-0 pr-2">
+                        <div className="flex justify-end items-center gap-0.5 sm:gap-1 flex-nowrap">
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => openApproveDialog(product)}
-                            className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                            className="text-green-600 hover:text-green-700 hover:bg-green-50 p-1 sm:p-2"
                           >
                             <CheckCircle size={18} />
                           </Button>
@@ -239,12 +251,12 @@ export default function PendingProductsPage() {
                             variant="ghost"
                             size="sm"
                             onClick={() => openRejectDialog(product)}
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50 p-1 sm:p-2"
                           >
                             <XCircle size={18} />
                           </Button>
                           <Link href={`/dashboard/products/${product.id}`}>
-                            <Button variant="ghost" size="sm" className="hover:bg-gray-100 dark:hover:bg-gray-700">
+                            <Button variant="ghost" size="sm" className="hover:bg-gray-100 dark:hover:bg-gray-700 p-1 sm:p-2">
                               <ChevronRight size={18} />
                             </Button>
                           </Link>
@@ -258,12 +270,11 @@ export default function PendingProductsPage() {
           </div>
           
           {hasMore && (
-            <div className="flex justify-center mt-4">
+            <div className="flex justify-center py-4">
               <Button
                 variant="outline"
                 onClick={loadMore}
                 disabled={loading || !hasMore}
-                className="mt-4"
               >
                 Load More
               </Button>
@@ -274,7 +285,7 @@ export default function PendingProductsPage() {
       
       {/* Approval/Rejection Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md max-w-[95vw]">
           <DialogHeader>
             <DialogTitle>
               {dialogAction === "approve" ? "Approve Product" : "Reject Product"}

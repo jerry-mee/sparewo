@@ -35,7 +35,6 @@ export default function VendorsPage() {
   const [lastDoc, setLastDoc] = useState<DocumentData | undefined>(undefined);
   const [hasMore, setHasMore] = useState(true);
 
-  // Fetch vendors on component mount and when filters change
   useEffect(() => {
     const fetchVendors = async () => {
       setLoading(true);
@@ -55,7 +54,6 @@ export default function VendorsPage() {
     fetchVendors();
   }, [statusFilter]);
 
-  // Load more vendors
   const loadMore = async () => {
     if (!lastDoc) return;
     
@@ -70,21 +68,24 @@ export default function VendorsPage() {
     }
   };
 
-  // Handle search
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    // In a real app, this would search by calling the Firebase function
   };
 
-  // Filter vendors by search query (client-side filtering for demo)
-  const filteredVendors = vendors.filter(vendor => 
-    vendor.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    vendor.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    vendor.businessName.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredVendors = vendors.filter(vendor => {
+    const searchLower = searchQuery.toLowerCase();
+    return (
+      (vendor.name && vendor.name.toLowerCase().includes(searchLower)) ||
+      (vendor.email && vendor.email.toLowerCase().includes(searchLower)) ||
+      (vendor.businessName && vendor.businessName.toLowerCase().includes(searchLower))
+    );
+  });
+
+  const approvedCount = vendors.filter(v => v.status === 'approved').length;
+  const pendingCount = vendors.filter(v => v.status === 'pending').length;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 w-full">
       <div className="flex flex-col gap-2">
         <h1 className="text-2xl font-semibold">Vendors</h1>
         <p className="text-gray-500 dark:text-gray-400">
@@ -92,7 +93,7 @@ export default function VendorsPage() {
         </p>
       </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="py-4">
             <CardTitle className="flex items-center gap-2 text-lg font-medium">
@@ -109,13 +110,11 @@ export default function VendorsPage() {
           <CardHeader className="py-4">
             <CardTitle className="flex items-center gap-2 text-lg font-medium">
               <Users className="h-5 w-5 text-green-500" />
-              Approved Vendors
+              Approved
             </CardTitle>
           </CardHeader>
           <CardContent className="pb-4">
-            <div className="text-3xl font-bold">
-              {vendors.filter(v => v.status === 'approved').length}
-            </div>
+            <div className="text-3xl font-bold">{approvedCount}</div>
           </CardContent>
         </Card>
         
@@ -123,31 +122,29 @@ export default function VendorsPage() {
           <CardHeader className="py-4">
             <CardTitle className="flex items-center gap-2 text-lg font-medium">
               <Users className="h-5 w-5 text-amber-500" />
-              Pending Vendors
+              Pending
             </CardTitle>
           </CardHeader>
           <CardContent className="pb-4">
-            <div className="text-3xl font-bold">
-              {vendors.filter(v => v.status === 'pending').length}
-            </div>
+            <div className="text-3xl font-bold">{pendingCount}</div>
           </CardContent>
         </Card>
       </div>
       
       <Card>
-        <CardHeader>
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <CardHeader className="p-4 sm:p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <CardTitle>Vendor List</CardTitle>
             
-            <div className="flex flex-col sm:flex-row gap-2">
+            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
               <form onSubmit={handleSearch} className="flex w-full sm:w-auto">
                 <Input
                   placeholder="Search vendors..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="rounded-r-none"
+                  className="rounded-r-none w-full"
                 />
-                <Button type="submit" className="rounded-l-none">
+                <Button type="submit" className="rounded-l-none flex-shrink-0">
                   <Search size={18} />
                 </Button>
               </form>
@@ -170,17 +167,17 @@ export default function VendorsPage() {
           </div>
         </CardHeader>
         
-        <CardContent>
-          <div className="border rounded-lg overflow-hidden">
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Vendor Name</TableHead>
-                  <TableHead>Business Name</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Date Joined</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Action</TableHead>
+                  <TableHead className="w-[20%]">Vendor Name</TableHead>
+                  <TableHead className="w-[25%]">Business Name</TableHead>
+                  <TableHead className="w-[25%]">Email</TableHead>
+                  <TableHead className="w-[15%]">Date Joined</TableHead>
+                  <TableHead className="w-[10%]">Status</TableHead>
+                  <TableHead className="w-[5%] text-right">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -201,14 +198,22 @@ export default function VendorsPage() {
                 ) : (
                   filteredVendors.map((vendor) => (
                     <TableRow key={vendor.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                      <TableCell className="font-medium">{vendor.name}</TableCell>
-                      <TableCell>{vendor.businessName}</TableCell>
-                      <TableCell>{vendor.email}</TableCell>
-                      <TableCell>{formatDate(vendor.createdAt)}</TableCell>
+                      <TableCell className="font-medium truncate">
+                        {vendor.name || 'Unnamed'}
+                      </TableCell>
+                      <TableCell className="truncate">
+                        {vendor.businessName || 'No business name'}
+                      </TableCell>
+                      <TableCell className="truncate">
+                        {vendor.email || 'No email'}
+                      </TableCell>
+                      <TableCell>
+                        {vendor.createdAt ? formatDate(vendor.createdAt) : 'Unknown date'}
+                      </TableCell>
                       <TableCell>
                         <VendorStatusBadge status={vendor.status} />
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right p-0 pr-2">
                         <Link href={`/dashboard/vendors/${vendor.id}`}>
                           <Button variant="ghost" size="sm" className="hover:bg-gray-100 dark:hover:bg-gray-700">
                             <ChevronRight size={18} />
@@ -223,12 +228,11 @@ export default function VendorsPage() {
           </div>
           
           {hasMore && (
-            <div className="flex justify-center mt-4">
+            <div className="flex justify-center py-4">
               <Button
                 variant="outline"
                 onClick={loadMore}
                 disabled={loading || !hasMore}
-                className="mt-4"
               >
                 Load More
               </Button>

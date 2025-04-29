@@ -35,7 +35,6 @@ export default function ProductsPage() {
   const [lastDoc, setLastDoc] = useState<DocumentData | undefined>(undefined);
   const [hasMore, setHasMore] = useState(true);
 
-  // Fetch products on component mount and when filters change
   useEffect(() => {
     const fetchProducts = async () => {
       setLoading(true);
@@ -55,7 +54,6 @@ export default function ProductsPage() {
     fetchProducts();
   }, [statusFilter]);
 
-  // Load more products
   const loadMore = async () => {
     if (!lastDoc) return;
     
@@ -70,12 +68,10 @@ export default function ProductsPage() {
     }
   };
 
-  // Handle search
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
   };
 
-  // Filter products by search query (client-side filtering for demo) with null safety
   const filteredProducts = products.filter(product => {
     const searchLower = searchQuery.toLowerCase();
     return (
@@ -85,13 +81,12 @@ export default function ProductsPage() {
     );
   });
 
-  // Count products by status
   const approvedCount = products.filter(p => p.status === 'approved').length;
   const pendingCount = products.filter(p => p.status === 'pending').length;
   const catalogCount = products.filter(p => p.status === 'approved' && p.showInCatalog).length;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 w-full">
       <div className="flex flex-col gap-2">
         <h1 className="text-2xl font-semibold">Products</h1>
         <p className="text-gray-500 dark:text-gray-400">
@@ -99,7 +94,7 @@ export default function ProductsPage() {
         </p>
       </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="py-4">
             <CardTitle className="flex items-center gap-2 text-lg font-medium">
@@ -150,19 +145,19 @@ export default function ProductsPage() {
       </div>
       
       <Card>
-        <CardHeader>
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <CardHeader className="p-4 sm:p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <CardTitle>Product List</CardTitle>
             
-            <div className="flex flex-col sm:flex-row gap-2">
+            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
               <form onSubmit={handleSearch} className="flex w-full sm:w-auto">
                 <Input
                   placeholder="Search products..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="rounded-r-none"
+                  className="rounded-r-none w-full"
                 />
-                <Button type="submit" className="rounded-l-none">
+                <Button type="submit" className="rounded-l-none flex-shrink-0">
                   <Search size={18} />
                 </Button>
               </form>
@@ -185,17 +180,17 @@ export default function ProductsPage() {
           </div>
         </CardHeader>
         
-        <CardContent>
-          <div className="border rounded-lg overflow-hidden">
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Product Name</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead>Brand</TableHead>
-                  <TableHead>Price</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Action</TableHead>
+                  <TableHead className="w-[30%]">Product Name</TableHead>
+                  <TableHead className="w-[20%]">Category</TableHead>
+                  <TableHead className="w-[15%]">Brand</TableHead>
+                  <TableHead className="w-[15%]">Price</TableHead>
+                  <TableHead className="w-[15%]">Status</TableHead>
+                  <TableHead className="w-[5%] text-right">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -216,21 +211,29 @@ export default function ProductsPage() {
                 ) : (
                   filteredProducts.map((product) => (
                     <TableRow key={product.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                      <TableCell className="font-medium">{product.name || 'Unnamed Product'}</TableCell>
-                      <TableCell>{product.category || 'Uncategorized'}</TableCell>
-                      <TableCell>{product.brand || 'Unknown'}</TableCell>
-                      <TableCell>{formatCurrency(product.price || 0)}</TableCell>
+                      <TableCell className="font-medium truncate max-w-xs">
+                        {product.name || 'Unnamed Product'}
+                      </TableCell>
+                      <TableCell className="truncate">
+                        {product.category || 'Uncategorized'}
+                      </TableCell>
+                      <TableCell className="truncate">
+                        {product.brand || 'Unknown'}
+                      </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-2">
+                        {formatCurrency(product.price || 0)}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2 flex-wrap">
                           <ProductStatusBadge status={product.status} />
                           {product.showInCatalog && product.status === 'approved' && (
-                            <span className="px-2 py-0.5 text-xs bg-blue-100 text-blue-800 rounded-full">
+                            <span className="px-2 py-0.5 text-xs bg-blue-100 text-blue-800 rounded-full whitespace-nowrap">
                               Catalog
                             </span>
                           )}
                         </div>
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right p-0 pr-2">
                         <Link href={`/dashboard/products/${product.id}`}>
                           <Button variant="ghost" size="sm" className="hover:bg-gray-100 dark:hover:bg-gray-700">
                             <ChevronRight size={18} />
@@ -245,12 +248,11 @@ export default function ProductsPage() {
           </div>
           
           {hasMore && (
-            <div className="flex justify-center mt-4">
+            <div className="flex justify-center py-4">
               <Button
                 variant="outline"
                 onClick={loadMore}
                 disabled={loading || !hasMore}
-                className="mt-4"
               >
                 Load More
               </Button>

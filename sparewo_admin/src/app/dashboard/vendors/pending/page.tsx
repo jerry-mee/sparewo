@@ -41,7 +41,6 @@ export default function PendingVendorsPage() {
   const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
   const [rejectionReason, setRejectionReason] = useState("");
 
-  // Fetch pending vendors on component mount
   useEffect(() => {
     const fetchVendors = async () => {
       setLoading(true);
@@ -61,7 +60,6 @@ export default function PendingVendorsPage() {
     fetchVendors();
   }, []);
 
-  // Load more vendors
   const loadMore = async () => {
     if (!lastDoc) return;
     
@@ -76,14 +74,12 @@ export default function PendingVendorsPage() {
     }
   };
 
-  // Open approval dialog
   const openApproveDialog = (vendor: Vendor) => {
     setSelectedVendor(vendor);
     setDialogAction("approve");
     setDialogOpen(true);
   };
 
-  // Open rejection dialog
   const openRejectDialog = (vendor: Vendor) => {
     setSelectedVendor(vendor);
     setDialogAction("reject");
@@ -91,7 +87,6 @@ export default function PendingVendorsPage() {
     setDialogOpen(true);
   };
 
-  // Handle dialog confirmation
   const handleConfirm = async () => {
     if (!selectedVendor) return;
     
@@ -118,14 +113,15 @@ export default function PendingVendorsPage() {
   // Group vendors by businessType
   const vendorsByType: Record<string, Vendor[]> = {};
   vendors.forEach(vendor => {
-    if (!vendorsByType[vendor.businessType]) {
-      vendorsByType[vendor.businessType] = [];
+    const type = vendor.businessType || 'Unknown';
+    if (!vendorsByType[type]) {
+      vendorsByType[type] = [];
     }
-    vendorsByType[vendor.businessType].push(vendor);
+    vendorsByType[type].push(vendor);
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 w-full">
       <div className="flex flex-col gap-2">
         <h1 className="text-2xl font-semibold">Pending Vendors</h1>
         <p className="text-gray-500 dark:text-gray-400">
@@ -133,7 +129,7 @@ export default function PendingVendorsPage() {
         </p>
       </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="py-4">
             <CardTitle className="flex items-center gap-2 text-lg font-medium">
@@ -167,7 +163,9 @@ export default function PendingVendorsPage() {
           </CardHeader>
           <CardContent className="pb-4">
             <div className="text-sm font-medium">
-              {vendors.length > 0 ? formatDate(vendors[vendors.length - 1]?.createdAt) : 'None'}
+              {vendors.length > 0 && vendors[vendors.length - 1]?.createdAt
+                ? formatDate(vendors[vendors.length - 1].createdAt)
+                : 'None'}
             </div>
           </CardContent>
         </Card>
@@ -181,17 +179,17 @@ export default function PendingVendorsPage() {
           </CardDescription>
         </CardHeader>
         
-        <CardContent>
-          <div className="border rounded-lg overflow-hidden">
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Vendor Name</TableHead>
-                  <TableHead>Business Name</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Date Joined</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead className="w-[20%]">Vendor Name</TableHead>
+                  <TableHead className="w-[25%]">Business Name</TableHead>
+                  <TableHead className="w-[25%]">Email</TableHead>
+                  <TableHead className="w-[15%]">Date Joined</TableHead>
+                  <TableHead className="w-[10%]">Status</TableHead>
+                  <TableHead className="w-[10%] text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -215,20 +213,28 @@ export default function PendingVendorsPage() {
                 ) : (
                   vendors.map((vendor) => (
                     <TableRow key={vendor.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                      <TableCell className="font-medium">{vendor.name}</TableCell>
-                      <TableCell>{vendor.businessName}</TableCell>
-                      <TableCell>{vendor.email}</TableCell>
-                      <TableCell>{formatDate(vendor.createdAt)}</TableCell>
+                      <TableCell className="font-medium truncate">
+                        {vendor.name || 'Unnamed'}
+                      </TableCell>
+                      <TableCell className="truncate">
+                        {vendor.businessName || 'No business name'}
+                      </TableCell>
+                      <TableCell className="truncate">
+                        {vendor.email || 'No email'}
+                      </TableCell>
+                      <TableCell>
+                        {vendor.createdAt ? formatDate(vendor.createdAt) : 'Unknown date'}
+                      </TableCell>
                       <TableCell>
                         <VendorStatusBadge status={vendor.status} />
                       </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end items-center space-x-2">
+                      <TableCell className="p-0 pr-2">
+                        <div className="flex justify-end items-center gap-0.5 sm:gap-1 flex-nowrap">
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => openApproveDialog(vendor)}
-                            className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                            className="text-green-600 hover:text-green-700 hover:bg-green-50 p-1 sm:p-2"
                           >
                             <CheckCircle size={18} />
                           </Button>
@@ -236,12 +242,12 @@ export default function PendingVendorsPage() {
                             variant="ghost"
                             size="sm"
                             onClick={() => openRejectDialog(vendor)}
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50 p-1 sm:p-2"
                           >
                             <XCircle size={18} />
                           </Button>
                           <Link href={`/dashboard/vendors/${vendor.id}`}>
-                            <Button variant="ghost" size="sm" className="hover:bg-gray-100 dark:hover:bg-gray-700">
+                            <Button variant="ghost" size="sm" className="hover:bg-gray-100 dark:hover:bg-gray-700 p-1 sm:p-2">
                               <ChevronRight size={18} />
                             </Button>
                           </Link>
@@ -255,12 +261,11 @@ export default function PendingVendorsPage() {
           </div>
           
           {hasMore && (
-            <div className="flex justify-center mt-4">
+            <div className="flex justify-center py-4">
               <Button
                 variant="outline"
                 onClick={loadMore}
                 disabled={loading || !hasMore}
-                className="mt-4"
               >
                 Load More
               </Button>
@@ -271,7 +276,7 @@ export default function PendingVendorsPage() {
       
       {/* Approval/Rejection Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md max-w-[95vw]">
           <DialogHeader>
             <DialogTitle>
               {dialogAction === "approve" ? "Approve Vendor" : "Reject Vendor"}
