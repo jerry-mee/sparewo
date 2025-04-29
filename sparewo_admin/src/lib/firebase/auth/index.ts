@@ -14,26 +14,41 @@ import { AdminUser } from '@/lib/types';
 // Sign in with email and password
 export const signIn = async (email: string, password: string) => {
   try {
-    // Set persistence to LOCAL for session persistence
+    // Enable persistent login sessions
     await setPersistence(auth, browserLocalPersistence);
     
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
     
+    // Get the user ID
+    const uid = userCredential.user.uid;
+    console.log("User signed in with UID:", uid);
+    
     // Check if user is an admin
-    const adminDocRef = doc(db, 'adminUsers', userCredential.user.uid);
+    const adminDocRef = doc(db, 'adminUsers', uid);
     const adminDocSnap = await getDoc(adminDocRef);
     
     if (!adminDocSnap.exists()) {
-      // If user is not an admin, sign them out and throw error
-      await signOut(auth);
-      throw new Error('Access denied. You do not have admin privileges.');
+      console.log("No admin document found for user");
+      // Also check user_roles collection for backward compatibility
+      const rolesDocRef = doc(db, 'user_roles', uid);
+      const rolesDocSnap = await getDoc(rolesDocRef);
+      
+      if (!rolesDocSnap.exists() || !rolesDocSnap.data().isAdmin) {
+        // If user is not an admin, sign them out and throw error
+        await signOut(auth);
+        throw new Error('Access denied. You do not have admin privileges.');
+      }
     }
+    
+    console.log("Admin access confirmed");
     
     // Create session cookie for middleware
     document.cookie = `__session=${await userCredential.user.getIdToken()}; path=/; max-age=${60 * 60 * 24 * 14}; SameSite=Strict`;
+    console.log("Session cookie set");
     
     return userCredential.user;
   } catch (error: unknown) {
+    console.error("Sign in error:", error);
     if (error instanceof Error) {
       throw new Error(error.message);
     }
