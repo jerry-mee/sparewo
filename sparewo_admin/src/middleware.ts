@@ -1,65 +1,32 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-
-// Define public paths that do not require authentication
-const PUBLIC_PATHS = new Set([
-  '/auth/sign-in',
-  '/auth/sign-up',
-  '/auth/forgot-password',
-]);
-
-// Define paths related to authentication
-const AUTH_PATHS = new Set([
-  '/auth/sign-in',
-  '/auth/sign-up',
-  '/auth/forgot-password',
-]);
-
-const ROOT_PATH = '/';
-const SIGN_IN_PATH = '/auth/sign-in';
-
+ 
+// This function can be marked `async` if using `await` inside
 export function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
-  const authToken = request.cookies.get('auth_token')?.value;
-
-  const isPublicPath = PUBLIC_PATHS.has(pathname);
-  const isAuthPath = AUTH_PATHS.has(pathname);
-
-  // Case 1: User is authenticated
-  if (authToken) {
-    if (isAuthPath) {
-      const url = request.nextUrl.clone();
-      url.pathname = ROOT_PATH;
-      return NextResponse.redirect(url);
-    }
-    return NextResponse.next();
+  // Get the pathname of the request
+  const path = request.nextUrl.pathname;
+  
+  // Define public paths that don't require authentication
+  const isPublicPath = path === '/login' || path === '/forgot-password';
+  
+  // Get the token from the cookies
+  const token = request.cookies.get('auth-token')?.value || '';
+  
+  // Redirect logic
+  if (isPublicPath && token) {
+    // If user is authenticated and tries to access login page,
+    // redirect to dashboard
+    return NextResponse.redirect(new URL('/', request.url));
   }
-
-  // Case 2: User is not authenticated
-  if (!authToken) {
-    if (!isPublicPath) {
-      const url = request.nextUrl.clone();
-      url.pathname = SIGN_IN_PATH;
-      url.searchParams.set('redirectedFrom', pathname);
-      return NextResponse.redirect(url);
-    }
-    return NextResponse.next();
+  
+  if (!isPublicPath && !token) {
+    // If user is not authenticated and tries to access protected route,
+    // redirect to login page
+    return NextResponse.redirect(new URL('/login', request.url));
   }
-
-  return NextResponse.next();
 }
-
-// Update the matcher to be more specific for App Router
+ 
+// See "Matching Paths" below to learn more
 export const config = {
-  matcher: [
-    /*
-     * Match all request paths except:
-     * - api (API routes)
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public folder
-     */
-    '/((?!api|_next/static|_next/image|favicon.ico|public).*)',
-  ],
+  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
 };

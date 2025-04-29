@@ -1,84 +1,74 @@
 /** @type {import('tailwindcss').Config} */
+ 
+import animatePlugin from "tailwindcss-animate";
+
 module.exports = {
   darkMode: ["class"],
   content: [
-    './src/pages/**/*.{ts,tsx}',
-    './src/components/**/*.{ts,tsx}',
-    './src/app/**/*.{ts,tsx}',
+    './pages/**/*.{ts,tsx}',
+    './components/**/*.{ts,tsx}',
+    './app/**/*.{ts,tsx}',
     './src/**/*.{ts,tsx}',
   ],
   theme: {
     container: {
       center: true,
-      padding: {
-        DEFAULT: '1rem',
-        sm: '2rem',
-        lg: '4rem',
-        xl: '5rem',
-        '2xl': '6rem',
-      },
+      padding: "2rem",
       screens: {
         "2xl": "1400px",
       },
     },
     extend: {
       colors: {
-        border: "var(--border)",
-        input: "var(--input)",
-        ring: "var(--ring)",
-        background: "var(--background)",
-        foreground: "var(--foreground)",
+        // SpareWo Theme Colors from theme.dart
         primary: {
-          DEFAULT: "var(--primary)",
-          foreground: "var(--primary-foreground)",
+          DEFAULT: "#FF9800", // VendorColors.primary
+          foreground: "#ffffff",
         },
         secondary: {
-          DEFAULT: "var(--secondary)",
-          foreground: "var(--secondary-foreground)",
+          DEFAULT: "#1A1B4B", // VendorColors.secondary
+          foreground: "#ffffff",
         },
+        background: "#F5F5F5", // VendorColors.background
+        card: "#FFFFFF", // VendorColors.cardBackground
+        text: {
+          DEFAULT: "#2D2D2D", // VendorColors.text
+          light: "#757575", // VendorColors.textLight
+        },
+        status: {
+          error: "#D32F2F", // VendorColors.error
+          success: "#388E3C", // VendorColors.success
+          pending: "#FFA726", // VendorColors.pending
+          approved: "#66BB6A", // VendorColors.approved
+          rejected: "#EF5350", // VendorColors.rejected
+        },
+        border: "#E0E0E0", // VendorColors.divider
+        input: "#FFFFFF",
+        ring: "#FF9800",
         destructive: {
-          DEFAULT: "var(--destructive)",
-          foreground: "var(--destructive-foreground)",
+          DEFAULT: "#D32F2F",
+          foreground: "#FFFFFF",
         },
         muted: {
-          DEFAULT: "var(--muted)",
-          foreground: "var(--muted-foreground)",
+          DEFAULT: "#F5F5F5",
+          foreground: "#757575",
         },
         accent: {
-          DEFAULT: "var(--accent)",
-          foreground: "var(--accent-foreground)",
+          DEFAULT: "#1A1B4B",
+          foreground: "#FFFFFF",
         },
         popover: {
-          DEFAULT: "var(--popover)",
-          foreground: "var(--popover-foreground)",
-        },
-        card: {
-          DEFAULT: "var(--card)",
-          foreground: "var(--card-foreground)",
-        },
-        chart: {
-          1: "var(--chart-1)",
-          2: "var(--chart-2)",
-          3: "var(--chart-3)",
-          4: "var(--chart-4)",
-          5: "var(--chart-5)",
+          DEFAULT: "#FFFFFF",
+          foreground: "#2D2D2D",
         },
       },
       borderRadius: {
-        sm: "calc(var(--radius) - 4px)",
-        md: "calc(var(--radius) - 2px)",
         lg: "var(--radius)",
-        xl: "calc(var(--radius) + 4px)",
+        md: "calc(var(--radius) - 2px)",
+        sm: "calc(var(--radius) - 4px)",
       },
-      boxShadow: {
-        sm: "0 1px 2px 0 rgba(0, 0, 0, 0.05)",
-        DEFAULT: "0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)",
-        md: "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
-        lg: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
-        xl: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
-        "2xl": "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
-        inner: "inset 0 2px 4px 0 rgba(0, 0, 0, 0.06)",
-        none: "none",
+      fontFamily: {
+        sans: ["var(--font-poppins)"],
       },
       keyframes: {
         "accordion-down": {
@@ -96,5 +86,5 @@ module.exports = {
       },
     },
   },
-  plugins: [],
+  plugins: [animatePlugin],
 }
