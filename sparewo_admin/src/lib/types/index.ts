@@ -3,8 +3,8 @@ export interface AdminUser {
   email: string;
   displayName: string;
   role: 'superAdmin' | 'admin' | 'viewer';
-  createdAt: any;
-  updatedAt: any;
+  createdAt: Date | string;
+  updatedAt: Date | string;
 }
 
 export interface VendorStatus {
