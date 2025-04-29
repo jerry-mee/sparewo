@@ -24,13 +24,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ProductStatusBadge } from "@/components/product/product-status-badge";
 import { DocumentData } from "firebase/firestore";
-import { formatCurrency } from "@/lib/utils";
-
-// Simple date formatting utility
-function formatDate(date: string | number | Date): string {
-  const d = new Date(date);
-  return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
-}
+import { formatCurrency, formatDate } from "@/lib/utils";
 import Link from "next/link";
 import { CheckCircle, XCircle, ChevronRight, Package, Filter, Clock } from "lucide-react";
 import { toast } from "sonner";
@@ -49,6 +43,7 @@ export default function PendingProductsPage() {
   const [rejectionReason, setRejectionReason] = useState("");
   const [showInCatalog, setShowInCatalog] = useState(false);
 
+  // Fetch pending products on component mount
   useEffect(() => {
     const fetchProducts = async () => {
       setLoading(true);
@@ -68,6 +63,7 @@ export default function PendingProductsPage() {
     fetchProducts();
   }, []);
 
+  // Load more products
   const loadMore = async () => {
     if (!lastDoc) return;
     
@@ -82,6 +78,7 @@ export default function PendingProductsPage() {
     }
   };
 
+  // Open approval dialog
   const openApproveDialog = (product: Product) => {
     setSelectedProduct(product);
     setDialogAction("approve");
@@ -89,6 +86,7 @@ export default function PendingProductsPage() {
     setDialogOpen(true);
   };
 
+  // Open rejection dialog
   const openRejectDialog = (product: Product) => {
     setSelectedProduct(product);
     setDialogAction("reject");
@@ -96,6 +94,7 @@ export default function PendingProductsPage() {
     setDialogOpen(true);
   };
 
+  // Handle dialog confirmation
   const handleConfirm = async () => {
     if (!selectedProduct) return;
     
@@ -122,69 +121,66 @@ export default function PendingProductsPage() {
   // Group products by category
   const productsByCategory: Record<string, Product[]> = {};
   products.forEach(product => {
-    const category = product.category || 'Uncategorized';
-    if (!productsByCategory[category]) {
-      productsByCategory[category] = [];
+    if (!productsByCategory[product.category]) {
+      productsByCategory[product.category] = [];
     }
-    productsByCategory[category].push(product);
+    productsByCategory[product.category].push(product);
   });
 
   return (
-    <div className="space-y-6 w-full">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold">Pending Products</h1>
-        <p className="text-gray-500 dark:text-gray-400">
+    <div className="space-y-4">
+      <div className="flex flex-col gap-1 mb-2">
+        <h1 className="text-xl md:text-2xl font-semibold">Pending Products</h1>
+        <p className="text-sm text-gray-500 dark:text-gray-400">
           Review and approve product submissions
         </p>
       </div>
       
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card>
-          <CardHeader className="py-4">
-            <CardTitle className="flex items-center gap-2 text-lg font-medium">
-              <Clock className="h-5 w-5 text-amber-500" />
-              Pending Review
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <Card className="shadow-sm">
+          <CardHeader className="py-3 px-4">
+            <CardTitle className="flex items-center gap-2 text-md font-medium">
+              <Clock className="h-4 w-4 text-amber-500" />
+              Pending
             </CardTitle>
           </CardHeader>
-          <CardContent className="pb-4">
-            <div className="text-3xl font-bold">{products.length}</div>
+          <CardContent className="pb-3 px-4">
+            <div className="text-2xl font-bold">{products.length}</div>
           </CardContent>
         </Card>
         
-        <Card>
-          <CardHeader className="py-4">
-            <CardTitle className="flex items-center gap-2 text-lg font-medium">
-              <Filter className="h-5 w-5 text-indigo-600" />
+        <Card className="shadow-sm">
+          <CardHeader className="py-3 px-4">
+            <CardTitle className="flex items-center gap-2 text-md font-medium">
+              <Filter className="h-4 w-4 text-indigo-600" />
               Categories
             </CardTitle>
           </CardHeader>
-          <CardContent className="pb-4">
-            <div className="text-3xl font-bold">{Object.keys(productsByCategory).length}</div>
+          <CardContent className="pb-3 px-4">
+            <div className="text-2xl font-bold">{Object.keys(productsByCategory).length}</div>
           </CardContent>
         </Card>
         
-        <Card>
-          <CardHeader className="py-4">
-            <CardTitle className="flex items-center gap-2 text-lg font-medium">
-              <Package className="h-5 w-5 text-purple-500" />
-              Oldest Pending
+        <Card className="shadow-sm">
+          <CardHeader className="py-3 px-4">
+            <CardTitle className="flex items-center gap-2 text-md font-medium truncate">
+              <Package className="h-4 w-4 text-purple-500 flex-shrink-0" />
+              Oldest
             </CardTitle>
           </CardHeader>
-          <CardContent className="pb-4">
-            <div className="text-sm font-medium">
-              {products.length > 0 && products[products.length - 1]?.createdAt 
-                ? formatDate(products[products.length - 1].createdAt) 
-                : 'None'}
+          <CardContent className="pb-3 px-4">
+            <div className="text-sm font-medium truncate">
+              {products.length > 0 ? formatDate(products[products.length - 1]?.createdAt) : 'None'}
             </div>
           </CardContent>
         </Card>
       </div>
       
-      <Card>
-        <CardHeader>
+      <Card className="shadow-sm">
+        <CardHeader className="py-3 px-4">
           <CardTitle>Pending Products</CardTitle>
-          <CardDescription>
-            Products awaiting your review and approval
+          <CardDescription className="text-sm">
+            Products awaiting your review
           </CardDescription>
         </CardHeader>
         
@@ -193,71 +189,63 @@ export default function PendingProductsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[25%]">Product Name</TableHead>
-                  <TableHead className="w-[20%]">Category</TableHead>
-                  <TableHead className="w-[15%]">Brand</TableHead>
-                  <TableHead className="w-[15%]">Price</TableHead>
-                  <TableHead className="w-[10%]">Status</TableHead>
-                  <TableHead className="w-[15%] text-right">Actions</TableHead>
+                  <TableHead className="whitespace-nowrap">Product</TableHead>
+                  <TableHead className="whitespace-nowrap">Category</TableHead>
+                  <TableHead className="whitespace-nowrap">Brand</TableHead>
+                  <TableHead className="whitespace-nowrap">Price</TableHead>
+                  <TableHead className="whitespace-nowrap">Status</TableHead>
+                  <TableHead className="text-right whitespace-nowrap">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-10">
+                    <TableCell colSpan={6} className="text-center py-6">
                       <div className="flex justify-center">
-                        <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                        <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
                       </div>
                     </TableCell>
                   </TableRow>
                 ) : products.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-10">
-                      <div className="flex flex-col items-center gap-2">
-                        <Package className="h-8 w-8 text-gray-400" />
-                        <p className="text-gray-500">No pending products</p>
+                    <TableCell colSpan={6} className="text-center py-6">
+                      <div className="flex flex-col items-center gap-1">
+                        <Package className="h-6 w-6 text-gray-400" />
+                        <p className="text-gray-500 text-sm">No pending products</p>
                       </div>
                     </TableCell>
                   </TableRow>
                 ) : (
                   products.map((product) => (
                     <TableRow key={product.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                      <TableCell className="font-medium truncate max-w-xs">
-                        {product.name || 'Unnamed Product'}
-                      </TableCell>
-                      <TableCell className="truncate">
-                        {product.category || 'Uncategorized'}
-                      </TableCell>
-                      <TableCell className="truncate">
-                        {product.brand || 'Unknown'}
-                      </TableCell>
-                      <TableCell>
-                        {formatCurrency(product.price || 0)}
-                      </TableCell>
+                      <TableCell className="font-medium truncate max-w-[120px]">{product.name}</TableCell>
+                      <TableCell className="truncate max-w-[100px]">{product.category}</TableCell>
+                      <TableCell className="truncate max-w-[100px]">{product.brand}</TableCell>
+                      <TableCell className="whitespace-nowrap">{formatCurrency(product.price)}</TableCell>
                       <TableCell>
                         <ProductStatusBadge status={product.status} />
                       </TableCell>
-                      <TableCell className="p-0 pr-2">
-                        <div className="flex justify-end items-center gap-0.5 sm:gap-1 flex-nowrap">
+                      <TableCell className="text-right p-0 pr-2">
+                        <div className="flex justify-end items-center space-x-1">
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => openApproveDialog(product)}
-                            className="text-green-600 hover:text-green-700 hover:bg-green-50 p-1 sm:p-2"
+                            className="text-green-600 hover:text-green-700 hover:bg-green-50 h-8 w-8 p-0"
                           >
-                            <CheckCircle size={18} />
+                            <CheckCircle size={16} />
                           </Button>
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => openRejectDialog(product)}
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50 p-1 sm:p-2"
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50 h-8 w-8 p-0"
                           >
-                            <XCircle size={18} />
+                            <XCircle size={16} />
                           </Button>
                           <Link href={`/dashboard/products/${product.id}`}>
-                            <Button variant="ghost" size="sm" className="hover:bg-gray-100 dark:hover:bg-gray-700 p-1 sm:p-2">
-                              <ChevronRight size={18} />
+                            <Button variant="ghost" size="sm" className="hover:bg-gray-100 dark:hover:bg-gray-700 h-8 w-8 p-0">
+                              <ChevronRight size={16} />
                             </Button>
                           </Link>
                         </div>
@@ -270,11 +258,12 @@ export default function PendingProductsPage() {
           </div>
           
           {hasMore && (
-            <div className="flex justify-center py-4">
+            <div className="flex justify-center p-4">
               <Button
                 variant="outline"
                 onClick={loadMore}
                 disabled={loading || !hasMore}
+                size="sm"
               >
                 Load More
               </Button>
@@ -285,12 +274,12 @@ export default function PendingProductsPage() {
       
       {/* Approval/Rejection Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-md max-w-[95vw]">
+        <DialogContent className="max-w-sm mx-auto">
           <DialogHeader>
             <DialogTitle>
               {dialogAction === "approve" ? "Approve Product" : "Reject Product"}
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="text-sm">
               {dialogAction === "approve"
                 ? "Are you sure you want to approve this product?"
                 : "Please provide a reason for rejecting this product."}
@@ -320,18 +309,19 @@ export default function PendingProductsPage() {
               placeholder="Reason for rejection"
               value={rejectionReason}
               onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setRejectionReason(e.target.value)}
-              className="min-h-[100px]"
+              className="min-h-[100px] text-sm"
             />
           )}
           
           <DialogFooter className="flex flex-col sm:flex-row sm:justify-end gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>
+            <Button variant="outline" onClick={() => setDialogOpen(false)} size="sm">
               Cancel
             </Button>
             <Button
               onClick={handleConfirm}
               variant={dialogAction === "approve" ? "default" : "destructive"}
               disabled={dialogAction === "reject" && !rejectionReason.trim()}
+              size="sm"
             >
               {dialogAction === "approve" ? "Approve" : "Reject"}
             </Button>

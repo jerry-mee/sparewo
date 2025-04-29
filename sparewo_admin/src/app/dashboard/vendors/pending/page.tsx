@@ -41,6 +41,7 @@ export default function PendingVendorsPage() {
   const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
   const [rejectionReason, setRejectionReason] = useState("");
 
+  // Fetch pending vendors on component mount
   useEffect(() => {
     const fetchVendors = async () => {
       setLoading(true);
@@ -60,6 +61,7 @@ export default function PendingVendorsPage() {
     fetchVendors();
   }, []);
 
+  // Load more vendors
   const loadMore = async () => {
     if (!lastDoc) return;
     
@@ -74,12 +76,14 @@ export default function PendingVendorsPage() {
     }
   };
 
+  // Open approval dialog
   const openApproveDialog = (vendor: Vendor) => {
     setSelectedVendor(vendor);
     setDialogAction("approve");
     setDialogOpen(true);
   };
 
+  // Open rejection dialog
   const openRejectDialog = (vendor: Vendor) => {
     setSelectedVendor(vendor);
     setDialogAction("reject");
@@ -87,6 +91,7 @@ export default function PendingVendorsPage() {
     setDialogOpen(true);
   };
 
+  // Handle dialog confirmation
   const handleConfirm = async () => {
     if (!selectedVendor) return;
     
@@ -113,69 +118,66 @@ export default function PendingVendorsPage() {
   // Group vendors by businessType
   const vendorsByType: Record<string, Vendor[]> = {};
   vendors.forEach(vendor => {
-    const type = vendor.businessType || 'Unknown';
-    if (!vendorsByType[type]) {
-      vendorsByType[type] = [];
+    if (!vendorsByType[vendor.businessType]) {
+      vendorsByType[vendor.businessType] = [];
     }
-    vendorsByType[type].push(vendor);
+    vendorsByType[vendor.businessType].push(vendor);
   });
 
   return (
-    <div className="space-y-6 w-full">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold">Pending Vendors</h1>
-        <p className="text-gray-500 dark:text-gray-400">
+    <div className="space-y-4">
+      <div className="flex flex-col gap-1 mb-2">
+        <h1 className="text-xl md:text-2xl font-semibold">Pending Vendors</h1>
+        <p className="text-sm text-gray-500 dark:text-gray-400">
           Review and approve vendor registration requests
         </p>
       </div>
       
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card>
-          <CardHeader className="py-4">
-            <CardTitle className="flex items-center gap-2 text-lg font-medium">
-              <Clock className="h-5 w-5 text-amber-500" />
-              Pending Approvals
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <Card className="shadow-sm">
+          <CardHeader className="py-3 px-4">
+            <CardTitle className="flex items-center gap-2 text-md font-medium">
+              <Clock className="h-4 w-4 text-amber-500" />
+              Pending
             </CardTitle>
           </CardHeader>
-          <CardContent className="pb-4">
-            <div className="text-3xl font-bold">{vendors.length}</div>
+          <CardContent className="pb-3 px-4">
+            <div className="text-2xl font-bold">{vendors.length}</div>
           </CardContent>
         </Card>
         
-        <Card>
-          <CardHeader className="py-4">
-            <CardTitle className="flex items-center gap-2 text-lg font-medium">
-              <Building className="h-5 w-5 text-indigo-600" />
-              Business Types
+        <Card className="shadow-sm">
+          <CardHeader className="py-3 px-4">
+            <CardTitle className="flex items-center gap-2 text-md font-medium">
+              <Building className="h-4 w-4 text-indigo-600" />
+              Types
             </CardTitle>
           </CardHeader>
-          <CardContent className="pb-4">
-            <div className="text-3xl font-bold">{Object.keys(vendorsByType).length}</div>
+          <CardContent className="pb-3 px-4">
+            <div className="text-2xl font-bold">{Object.keys(vendorsByType).length}</div>
           </CardContent>
         </Card>
         
-        <Card>
-          <CardHeader className="py-4">
-            <CardTitle className="flex items-center gap-2 text-lg font-medium">
-              <Users className="h-5 w-5 text-purple-500" />
-              Oldest Request
+        <Card className="shadow-sm">
+          <CardHeader className="py-3 px-4">
+            <CardTitle className="flex items-center gap-2 text-md font-medium truncate">
+              <Users className="h-4 w-4 text-purple-500 flex-shrink-0" />
+              Oldest
             </CardTitle>
           </CardHeader>
-          <CardContent className="pb-4">
-            <div className="text-sm font-medium">
-              {vendors.length > 0 && vendors[vendors.length - 1]?.createdAt
-                ? formatDate(vendors[vendors.length - 1].createdAt)
-                : 'None'}
+          <CardContent className="pb-3 px-4">
+            <div className="text-sm font-medium truncate">
+              {vendors.length > 0 ? formatDate(vendors[vendors.length - 1]?.createdAt) : 'None'}
             </div>
           </CardContent>
         </Card>
       </div>
       
-      <Card>
-        <CardHeader>
+      <Card className="shadow-sm">
+        <CardHeader className="py-3 px-4">
           <CardTitle>Pending Vendors</CardTitle>
-          <CardDescription>
-            Vendors awaiting your review and approval
+          <CardDescription className="text-sm">
+            Vendors awaiting your review
           </CardDescription>
         </CardHeader>
         
@@ -184,71 +186,63 @@ export default function PendingVendorsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[20%]">Vendor Name</TableHead>
-                  <TableHead className="w-[25%]">Business Name</TableHead>
-                  <TableHead className="w-[25%]">Email</TableHead>
-                  <TableHead className="w-[15%]">Date Joined</TableHead>
-                  <TableHead className="w-[10%]">Status</TableHead>
-                  <TableHead className="w-[10%] text-right">Actions</TableHead>
+                  <TableHead className="whitespace-nowrap">Vendor Name</TableHead>
+                  <TableHead className="whitespace-nowrap">Business</TableHead>
+                  <TableHead className="whitespace-nowrap">Email</TableHead>
+                  <TableHead className="whitespace-nowrap">Joined</TableHead>
+                  <TableHead className="whitespace-nowrap">Status</TableHead>
+                  <TableHead className="text-right whitespace-nowrap">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-10">
+                    <TableCell colSpan={6} className="text-center py-6">
                       <div className="flex justify-center">
-                        <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                        <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
                       </div>
                     </TableCell>
                   </TableRow>
                 ) : vendors.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-10">
-                      <div className="flex flex-col items-center gap-2">
-                        <Users className="h-8 w-8 text-gray-400" />
-                        <p className="text-gray-500">No pending vendors</p>
+                    <TableCell colSpan={6} className="text-center py-6">
+                      <div className="flex flex-col items-center gap-1">
+                        <Users className="h-6 w-6 text-gray-400" />
+                        <p className="text-gray-500 text-sm">No pending vendors</p>
                       </div>
                     </TableCell>
                   </TableRow>
                 ) : (
                   vendors.map((vendor) => (
                     <TableRow key={vendor.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                      <TableCell className="font-medium truncate">
-                        {vendor.name || 'Unnamed'}
-                      </TableCell>
-                      <TableCell className="truncate">
-                        {vendor.businessName || 'No business name'}
-                      </TableCell>
-                      <TableCell className="truncate">
-                        {vendor.email || 'No email'}
-                      </TableCell>
-                      <TableCell>
-                        {vendor.createdAt ? formatDate(vendor.createdAt) : 'Unknown date'}
-                      </TableCell>
+                      <TableCell className="font-medium truncate max-w-[120px]">{vendor.name}</TableCell>
+                      <TableCell className="truncate max-w-[120px]">{vendor.businessName}</TableCell>
+                      <TableCell className="truncate max-w-[120px]">{vendor.email}</TableCell>
+                      <TableCell className="whitespace-nowrap">{formatDate(vendor.createdAt)}</TableCell>
                       <TableCell>
                         <VendorStatusBadge status={vendor.status} />
                       </TableCell>
-                      <TableCell className="p-0 pr-2">
-                        <div className="flex justify-end items-center gap-0.5 sm:gap-1 flex-nowrap">
+                      <TableCell className="text-right p-0 pr-2">
+                        <div className="flex justify-end items-center space-x-1">
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => openApproveDialog(vendor)}
-                            className="text-green-600 hover:text-green-700 hover:bg-green-50 p-1 sm:p-2"
+                            className="text-green-600 hover:text-green-700 hover:bg-green-50 h-8 w-8 p-0"
                           >
-                            <CheckCircle size={18} />
+                            <CheckCircle size={16} />
                           </Button>
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => openRejectDialog(vendor)}
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50 p-1 sm:p-2"
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50 h-8 w-8 p-0"
                           >
-                            <XCircle size={18} />
+                            <XCircle size={16} />
                           </Button>
                           <Link href={`/dashboard/vendors/${vendor.id}`}>
-                            <Button variant="ghost" size="sm" className="hover:bg-gray-100 dark:hover:bg-gray-700 p-1 sm:p-2">
-                              <ChevronRight size={18} />
+                            <Button variant="ghost" size="sm" className="hover:bg-gray-100 dark:hover:bg-gray-700 h-8 w-8 p-0">
+                              <ChevronRight size={16} />
                             </Button>
                           </Link>
                         </div>
@@ -261,11 +255,12 @@ export default function PendingVendorsPage() {
           </div>
           
           {hasMore && (
-            <div className="flex justify-center py-4">
+            <div className="flex justify-center p-4">
               <Button
                 variant="outline"
                 onClick={loadMore}
                 disabled={loading || !hasMore}
+                size="sm"
               >
                 Load More
               </Button>
@@ -276,12 +271,12 @@ export default function PendingVendorsPage() {
       
       {/* Approval/Rejection Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-md max-w-[95vw]">
+        <DialogContent className="max-w-sm mx-auto">
           <DialogHeader>
             <DialogTitle>
               {dialogAction === "approve" ? "Approve Vendor" : "Reject Vendor"}
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="text-sm">
               {dialogAction === "approve"
                 ? "Are you sure you want to approve this vendor? They will be able to upload products to the marketplace."
                 : "Please provide a reason for rejecting this vendor."}
@@ -293,18 +288,19 @@ export default function PendingVendorsPage() {
               placeholder="Reason for rejection"
               value={rejectionReason}
               onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setRejectionReason(e.target.value)}
-              className="min-h-[100px]"
+              className="min-h-[100px] text-sm"
             />
           )}
           
           <DialogFooter className="flex flex-col sm:flex-row sm:justify-end gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>
+            <Button variant="outline" onClick={() => setDialogOpen(false)} size="sm">
               Cancel
             </Button>
             <Button
               onClick={handleConfirm}
               variant={dialogAction === "approve" ? "default" : "destructive"}
               disabled={dialogAction === "reject" && !rejectionReason.trim()}
+              size="sm"
             >
               {dialogAction === "approve" ? "Approve" : "Reject"}
             </Button>
