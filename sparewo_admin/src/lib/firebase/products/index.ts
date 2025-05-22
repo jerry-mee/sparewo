@@ -56,8 +56,10 @@ export const getProducts = async (
       const product: Product = {
         id: doc.id,
         name: data.name || data.partName || 'Unnamed Product', // Handle both name formats
+        partName: data.partName || data.name, // Include partName field
         description: data.description || '',
         price: data.price || data.unitPrice || 0, // Handle both price formats
+        unitPrice: data.unitPrice || data.price, // Include unitPrice field
         category: data.category || '',
         subcategory: data.subcategory || '',
         brand: data.brand || '',
@@ -65,12 +67,22 @@ export const getProducts = async (
         year: data.year || '',
         condition: (data.condition as 'new' | 'used' | 'refurbished') || 'new',
         quantity: data.quantity || data.stockQuantity || 0, // Handle both quantity formats
+        stockQuantity: data.stockQuantity || data.quantity, // Include stockQuantity field
         status: (data.status as 'pending' | 'approved' | 'rejected') || 'pending',
         rejectionReason: data.rejectionReason || '',
         showInCatalog: data.showInCatalog || false,
-        imageUrls: data.imageUrls || [],
+        // Handle both images and imageUrls fields, prioritizing images
+        images: data.images || data.imageUrls || [],
+        imageUrls: data.imageUrls || data.images || [], // Keep for backward compatibility
         specifications: data.specifications || {},
         vendorId: data.vendorId || '',
+        vendorName: data.vendorName || '',
+        partNumber: data.partNumber || '',
+        qualityGrade: data.qualityGrade || '',
+        wholesalePrice: data.wholesalePrice || 0,
+        searchKeywords: data.searchKeywords || [],
+        compatibility: data.compatibility || null,
+        reviewNotes: data.reviewNotes || '',
         createdAt: data.createdAt,
         updatedAt: data.updatedAt,
         approvedAt: data.approvedAt || null,
@@ -100,8 +112,10 @@ export const getProductById = async (id: string): Promise<Product | null> => {
       const product: Product = {
         id: docSnap.id,
         name: data.name || data.partName || 'Unnamed Product',
+        partName: data.partName || data.name,
         description: data.description || '',
         price: data.price || data.unitPrice || 0,
+        unitPrice: data.unitPrice || data.price,
         category: data.category || '',
         subcategory: data.subcategory || '',
         brand: data.brand || '',
@@ -109,12 +123,22 @@ export const getProductById = async (id: string): Promise<Product | null> => {
         year: data.year || '',
         condition: (data.condition as 'new' | 'used' | 'refurbished') || 'new',
         quantity: data.quantity || data.stockQuantity || 0,
+        stockQuantity: data.stockQuantity || data.quantity,
         status: (data.status as 'pending' | 'approved' | 'rejected') || 'pending',
         rejectionReason: data.rejectionReason || '',
         showInCatalog: data.showInCatalog || false,
-        imageUrls: data.imageUrls || [],
+        // Handle both images and imageUrls fields, prioritizing images
+        images: data.images || data.imageUrls || [],
+        imageUrls: data.imageUrls || data.images || [], // Keep for backward compatibility
         specifications: data.specifications || {},
         vendorId: data.vendorId || '',
+        vendorName: data.vendorName || '',
+        partNumber: data.partNumber || '',
+        qualityGrade: data.qualityGrade || '',
+        wholesalePrice: data.wholesalePrice || 0,
+        searchKeywords: data.searchKeywords || [],
+        compatibility: data.compatibility || null,
+        reviewNotes: data.reviewNotes || '',
         createdAt: data.createdAt,
         updatedAt: data.updatedAt,
         approvedAt: data.approvedAt || null,
@@ -149,6 +173,7 @@ export const updateProductStatus = async (
   try {
     const docRef = doc(db, 'vendor_products', id);
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const updateData: any = {
       status,
       showInCatalog: status === 'approved' ? showInCatalog : false,

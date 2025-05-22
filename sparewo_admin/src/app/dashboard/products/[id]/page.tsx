@@ -22,10 +22,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea"; // Fixed import
+import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ProductStatusBadge } from "@/components/product/product-status-badge";
-import { VendorStatusBadge } from "@/components/vendor/vendor-status-badge"; // Added missing import
+import { VendorStatusBadge } from "@/components/vendor/vendor-status-badge";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
 import Link from "next/link";
 import { CheckCircle, XCircle, ArrowLeft } from "lucide-react";
@@ -53,8 +53,12 @@ export default function ProductDetailPage() {
         const productData = await getProductById(id as string);
         setProduct(productData);
         
-        if (productData && productData.imageUrls.length > 0) {
-          setActiveImage(productData.imageUrls[0]);
+        // Handle both images and imageUrls fields, prioritizing images
+        if (productData) {
+          const productImages = productData.images || productData.imageUrls || [];
+          if (productImages.length > 0) {
+            setActiveImage(productImages[0]);
+          }
         }
         
         if (productData && productData.vendorId) {
@@ -95,7 +99,7 @@ export default function ProductDetailPage() {
       if (dialogAction === "approve") {
         await updateProductStatus(product.id, "approved", showInCatalog);
         setProduct({ ...product, status: "approved", showInCatalog });
-        toast.success(`Product ${product.name} has been approved`);
+        toast.success(`Product ${product.name || product.partName} has been approved`);
       } else {
         await updateProductStatus(product.id, "rejected", false, rejectionReason);
         setProduct({ 
@@ -104,7 +108,7 @@ export default function ProductDetailPage() {
           showInCatalog: false,
           rejectionReason 
         });
-        toast.success(`Product ${product.name} has been rejected`);
+        toast.success(`Product ${product.name || product.partName} has been rejected`);
       }
     } catch (error) {
       console.error(`Error ${dialogAction}ing product:`, error);
@@ -139,6 +143,12 @@ export default function ProductDetailPage() {
     );
   }
 
+  // Get product images from either images or imageUrls field
+  const productImages = product.images || product.imageUrls || [];
+  const productName = product.name || product.partName || 'Unnamed Product';
+  const productPrice = product.price || product.unitPrice || 0;
+  const productQuantity = product.quantity || product.stockQuantity || 0;
+
   // Create specifications array from object
   const specifications = product.specifications
     ? Object.entries(product.specifications).map(([key, value]) => ({
@@ -157,7 +167,7 @@ export default function ProductDetailPage() {
             </Button>
           </Link>
           <div>
-            <h1 className="text-2xl font-semibold">{product.name}</h1>
+            <h1 className="text-2xl font-semibold">{productName}</h1>
             <p className="text-gray-500 dark:text-gray-400">
               {product.brand} | {product.category}
             </p>
@@ -208,7 +218,7 @@ export default function ProductDetailPage() {
                       <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">
                         Product Name
                       </h3>
-                      <p>{product.name}</p>
+                      <p>{productName}</p>
                     </div>
                     <div>
                       <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">
@@ -246,7 +256,7 @@ export default function ProductDetailPage() {
                       <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">
                         Price
                       </h3>
-                      <p>{formatCurrency(product.price)}</p>
+                      <p>{formatCurrency(productPrice)}</p>
                     </div>
                     {product.discountPrice !== undefined && (
                       <div>
@@ -266,8 +276,24 @@ export default function ProductDetailPage() {
                       <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">
                         Quantity
                       </h3>
-                      <p>{product.quantity}</p>
+                      <p>{productQuantity}</p>
                     </div>
+                    {product.partNumber && (
+                      <div>
+                        <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                          Part Number
+                        </h3>
+                        <p>{product.partNumber}</p>
+                      </div>
+                    )}
+                    {product.qualityGrade && (
+                      <div>
+                        <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                          Quality Grade
+                        </h3>
+                        <p>{product.qualityGrade}</p>
+                      </div>
+                    )}
                   </div>
                   
                   <div>
@@ -276,6 +302,22 @@ export default function ProductDetailPage() {
                     </h3>
                     <p className="text-sm whitespace-pre-line">{product.description}</p>
                   </div>
+                  
+                  {product.compatibility && (
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
+                        Vehicle Compatibility
+                      </h3>
+                      <div className="space-y-2">
+                        {product.compatibility.vehicles.map((vehicle, index) => (
+                          <div key={index} className="flex items-center space-x-2 text-sm">
+                            <span className="font-medium">{vehicle.make} {vehicle.model}</span>
+                            <span className="text-gray-500">({vehicle.years.join(', ')})</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   
                   {vendor && (
                     <div>
@@ -303,7 +345,7 @@ export default function ProductDetailPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {!product.imageUrls || product.imageUrls.length === 0 ? (
+                  {!productImages || productImages.length === 0 ? (
                     <p className="text-center py-8 text-gray-500">
                       No images have been uploaded for this product.
                     </p>
@@ -313,15 +355,19 @@ export default function ProductDetailPage() {
                         {activeImage && (
                           <Image 
                             src={activeImage} 
-                            alt={product.name}
+                            alt={productName}
                             fill
                             className="object-contain"
+                            onError={() => {
+                              console.error('Image failed to load:', activeImage);
+                              // You can set a placeholder image here if needed
+                            }}
                           />
                         )}
                       </div>
                       
                       <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
-                        {product.imageUrls.map((url, index) => (
+                        {productImages.map((url, index) => (
                           <div 
                             key={index} 
                             className={`
@@ -332,9 +378,12 @@ export default function ProductDetailPage() {
                           >
                             <Image 
                               src={url} 
-                              alt={`${product.name} - Image ${index + 1}`}
+                              alt={`${productName} - Image ${index + 1}`}
                               fill
                               className="object-cover"
+                              onError={() => {
+                                console.error('Thumbnail failed to load:', url);
+                              }}
                             />
                           </div>
                         ))}
