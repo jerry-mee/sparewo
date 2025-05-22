@@ -144,16 +144,17 @@ export default function ProductDetailPage() {
   }
 
   // Get product images from either images or imageUrls field
-  const productImages = product.images || product.imageUrls || [];
+  const productImages = Array.isArray(product.images) ? product.images : 
+                        Array.isArray(product.imageUrls) ? product.imageUrls : [];
   const productName = product.name || product.partName || 'Unnamed Product';
   const productPrice = product.price || product.unitPrice || 0;
   const productQuantity = product.quantity || product.stockQuantity || 0;
 
   // Create specifications array from object
-  const specifications = product.specifications
+  const specifications = product.specifications && typeof product.specifications === 'object'
     ? Object.entries(product.specifications).map(([key, value]) => ({
         key,
-        value,
+        value: value || '',
       }))
     : [];
 
@@ -303,7 +304,7 @@ export default function ProductDetailPage() {
                     <p className="text-sm whitespace-pre-line">{product.description}</p>
                   </div>
                   
-                  {product.compatibility && (
+                  {product.compatibility && product.compatibility.vehicles && product.compatibility.vehicles.length > 0 && (
                     <div>
                       <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
                         Vehicle Compatibility
@@ -312,7 +313,7 @@ export default function ProductDetailPage() {
                         {product.compatibility.vehicles.map((vehicle, index) => (
                           <div key={index} className="flex items-center space-x-2 text-sm">
                             <span className="font-medium">{vehicle.make} {vehicle.model}</span>
-                            <span className="text-gray-500">({vehicle.years.join(', ')})</span>
+                            <span className="text-gray-500">({vehicle.years?.join(', ') || 'N/A'})</span>
                           </div>
                         ))}
                       </div>
@@ -367,7 +368,7 @@ export default function ProductDetailPage() {
                       </div>
                       
                       <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
-                        {productImages.map((url, index) => (
+                        {productImages && productImages.length > 0 && productImages.map((url, index) => (
                           <div 
                             key={index} 
                             className={`
