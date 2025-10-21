@@ -22,12 +22,10 @@ import {
 import { db } from '../config';
 import { Product } from '@/lib/types/product';
 
-// Type for Firebase update operations
 type FirebaseUpdateData = {
   [key: string]: string | number | boolean | Date | FieldValue | Timestamp | null | undefined;
 };
 
-// Type definitions
 interface CatalogProduct {
   id: string;
   partName: string;
@@ -81,7 +79,6 @@ interface CatalogSettings {
   availability?: 'in_stock' | 'out_of_stock' | 'limited';
 }
 
-// Get all vendor products with pagination
 export const getProducts = async (
   status: string | null = null,
   vendorId: string | null = null,
@@ -89,7 +86,6 @@ export const getProducts = async (
   lastDoc?: DocumentData
 ): Promise<{ products: Product[], lastDoc: DocumentData | undefined }> => {
   try {
-    // Build query constraints
     const constraints: QueryConstraint[] = [orderBy('createdAt', 'desc')];
     
     if (status) {
@@ -117,7 +113,6 @@ export const getProducts = async (
     
     querySnapshot.forEach((doc) => {
       const data = doc.data();
-      // Ensure all required fields exist to prevent undefined errors
       const product: Product = {
         id: doc.id,
         name: data.name || data.partName || 'Unnamed Product',
@@ -165,7 +160,6 @@ export const getProducts = async (
   }
 };
 
-// Get product by ID
 export const getProductById = async (id: string): Promise<Product | null> => {
   try {
     const docRef = doc(db, 'vendor_products', id);
@@ -219,7 +213,6 @@ export const getProductById = async (id: string): Promise<Product | null> => {
   }
 };
 
-// Get pending products
 export const getPendingProducts = async (
   pageSize: number = 10,
   lastDoc?: DocumentData
@@ -227,7 +220,6 @@ export const getPendingProducts = async (
   return getProducts('pending', null, pageSize, lastDoc);
 };
 
-// Update product status (old method - kept for backward compatibility)
 export const updateProductStatus = async (
   id: string,
   status: 'pending' | 'approved' | 'rejected',
@@ -259,15 +251,12 @@ export const updateProductStatus = async (
   }
 };
 
-// NEW: Approve product and create catalog entry
 export const approveProductAndCreateCatalog = async (
   productId: string,
   catalogSettings: CatalogSettings
 ): Promise<void> => {
   try {
-    // Use transaction to ensure atomicity
     await runTransaction(db, async (transaction) => {
-      // 1. Get the vendor product
       const vendorProductRef = doc(db, 'vendor_products', productId);
       const vendorProductSnap = await transaction.get(vendorProductRef);
       
@@ -277,58 +266,34 @@ export const approveProductAndCreateCatalog = async (
       
       const vendorProduct = vendorProductSnap.data();
       
-      // 2. Create catalog product (remove vendor-specific info)
       const catalogProduct = {
-        partName: vendorProduct.partName || vendorProduct.name,
-        partNumber: vendorProduct.partNumber || '',
-        brand: vendorProduct.brand || '',
+        partName: vendorProduct.partName || vendorProduct.name || 'N/A',
         description: vendorProduct.description || '',
-        images: vendorProduct.images || vendorProduct.imageUrls || [],
-        compatibility: vendorProduct.compatibility || null,
-        category: vendorProduct.category || '',
-        subcategory: vendorProduct.subcategory || '',
-        condition: vendorProduct.condition || 'new',
-        retailPrice: catalogSettings.retailPrice,
-        currency: 'UGX',
-        availability: catalogSettings.availability || 'in_stock',
-        featured: catalogSettings.featured || false,
-        categories: catalogSettings.categories || [vendorProduct.category],
-        searchKeywords: vendorProduct.searchKeywords || [],
-        specifications: vendorProduct.specifications || {},
+        brand: vendorProduct.brand || 'N/A',
+        unitPrice: catalogSettings.retailPrice,
+        stockQuantity: vendorProduct.stockQuantity || vendorProduct.quantity || 0,
+        imageUrls: vendorProduct.images || vendorProduct.imageUrls || [],
+        partNumber: vendorProduct.partNumber || null,
+        condition: vendorProduct.condition || 'New',
+        category: vendorProduct.category || 'Uncategorized',
+        categories: Array.isArray(vendorProduct.categories) 
+          ? vendorProduct.categories 
+          : [vendorProduct.category || 'Uncategorized'],
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         isActive: true,
+        isFeatured: catalogSettings.featured || false,
       };
       
-      // 3. Add catalog product
-      const catalogRef = await addDoc(collection(db, 'catalog_products'), catalogProduct);
+      const catalogRef = doc(collection(db, 'catalog_products'));
+      transaction.set(catalogRef, catalogProduct);
       
-      // 4. Create product mapping
-      const productMapping = {
-        catalogProductId: catalogRef.id,
-        vendorProductId: productId,
-        vendorId: vendorProduct.vendorId,
-        vendorName: vendorProduct.vendorName || '',
-        qualityScore: 85, // Default score
-        priceScore: 90, // Default score
-        reliabilityScore: 85, // Default score
-        isPreferred: true, // First vendor is preferred by default
-        isActive: true,
-        vendorPrice: vendorProduct.unitPrice || vendorProduct.price || 0,
-        lastPriceUpdate: serverTimestamp(),
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      };
-      
-      await addDoc(collection(db, 'product_mappings'), productMapping);
-      
-      // 5. Update vendor product status
       transaction.update(vendorProductRef, {
         status: 'approved',
         showInCatalog: true,
         approvedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-        catalogProductId: catalogRef.id, // Reference to catalog
+        catalogProductId: catalogRef.id,
       });
     });
     
@@ -339,7 +304,6 @@ export const approveProductAndCreateCatalog = async (
   }
 };
 
-// NEW: Get catalog products
 export const getCatalogProducts = async (
   filters?: {
     category?: string;
@@ -394,7 +358,6 @@ export const getCatalogProducts = async (
   }
 };
 
-// NEW: Get product mappings for a catalog product
 export const getProductMappings = async (
   catalogProductId: string
 ): Promise<ProductMapping[]> => {
@@ -420,7 +383,6 @@ export const getProductMappings = async (
   }
 };
 
-// NEW: Get product mappings by vendor
 export const getProductMappingsByVendor = async (
   vendorId: string,
   pageSize: number = 10,
@@ -455,7 +417,6 @@ export const getProductMappingsByVendor = async (
   }
 };
 
-// NEW: Create product mapping
 export const createProductMapping = async (
   catalogProductId: string,
   vendorProductId: string,
@@ -472,7 +433,7 @@ export const createProductMapping = async (
       qualityScore: 85,
       priceScore: 90,
       reliabilityScore: 85,
-      isPreferred: false, // New vendors not preferred by default
+      isPreferred: false,
       isActive: true,
       vendorPrice,
       lastPriceUpdate: serverTimestamp(),
@@ -488,7 +449,6 @@ export const createProductMapping = async (
   }
 };
 
-// Count products by status
 export const countProductsByStatus = async (status: string): Promise<number> => {
   try {
     const q = query(
@@ -504,7 +464,6 @@ export const countProductsByStatus = async (status: string): Promise<number> => 
   }
 };
 
-// Get total product count
 export const getTotalProductCount = async (): Promise<number> => {
   try {
     const querySnapshot = await getDocs(collection(db, 'vendor_products'));
@@ -515,7 +474,6 @@ export const getTotalProductCount = async (): Promise<number> => {
   }
 };
 
-// Get products by vendor ID
 export const getProductsByVendorId = async (
   vendorId: string,
   pageSize: number = 10,
@@ -524,7 +482,6 @@ export const getProductsByVendorId = async (
   return getProducts(null, vendorId, pageSize, lastDoc);
 };
 
-// NEW: Update catalog product
 export const updateCatalogProduct = async (
   catalogProductId: string,
   updates: Partial<{
@@ -547,12 +504,10 @@ export const updateCatalogProduct = async (
   }
 };
 
-// NEW: Bulk create catalog products from approved vendor products
 export const bulkCreateCatalogFromApproved = async (
   markupPercentage: number = 25
 ): Promise<{ created: number; failed: number }> => {
   try {
-    // Get all approved vendor products without catalog entries
     const q = query(
       collection(db, 'vendor_products'),
       where('status', '==', 'approved'),
@@ -563,7 +518,6 @@ export const bulkCreateCatalogFromApproved = async (
     let created = 0;
     let failed = 0;
     
-    // Process in batches
     const batch = writeBatch(db);
     const batchSize = 500;
     let operationCount = 0;
@@ -574,7 +528,6 @@ export const bulkCreateCatalogFromApproved = async (
         const vendorPrice = vendorProduct.unitPrice || vendorProduct.price || 0;
         const retailPrice = Math.round(vendorPrice * (1 + markupPercentage / 100));
         
-        // Create catalog product
         const catalogProduct = {
           partName: vendorProduct.partName || vendorProduct.name,
           partNumber: vendorProduct.partNumber || '',
@@ -600,7 +553,6 @@ export const bulkCreateCatalogFromApproved = async (
         const catalogRef = doc(collection(db, 'catalog_products'));
         batch.set(catalogRef, catalogProduct);
         
-        // Create product mapping
         const mappingRef = doc(collection(db, 'product_mappings'));
         batch.set(mappingRef, {
           catalogProductId: catalogRef.id,
@@ -618,16 +570,14 @@ export const bulkCreateCatalogFromApproved = async (
           updatedAt: serverTimestamp(),
         });
         
-        // Update vendor product with catalog reference
         batch.update(doc(db, 'vendor_products', docSnap.id), {
           catalogProductId: catalogRef.id,
           updatedAt: serverTimestamp(),
         });
         
-        operationCount += 3; // 3 operations per product
+        operationCount += 3;
         created++;
         
-        // Commit batch if near limit
         if (operationCount >= batchSize - 3) {
           await batch.commit();
           operationCount = 0;
@@ -638,7 +588,6 @@ export const bulkCreateCatalogFromApproved = async (
       }
     }
     
-    // Commit remaining operations
     if (operationCount > 0) {
       await batch.commit();
     }

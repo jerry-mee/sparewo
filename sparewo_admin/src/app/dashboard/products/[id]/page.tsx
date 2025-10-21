@@ -1,8 +1,10 @@
+// src/app/dashboard/products/[id]/page.tsx
+
 "use client";
 
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
-import { getProductById, updateProductStatus } from "@/lib/firebase/products";
+import { getProductById, approveProductAndCreateCatalog, updateProductStatus } from "@/lib/firebase/products";
 import { getVendorById } from "@/lib/firebase/vendors";
 import { Product } from "@/lib/types/product";
 import { Vendor } from "@/lib/types/vendor";
@@ -23,6 +25,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ProductStatusBadge } from "@/components/product/product-status-badge";
 import { VendorStatusBadge } from "@/components/vendor/vendor-status-badge";
@@ -39,13 +42,11 @@ export default function ProductDetailPage() {
   const [loading, setLoading] = useState(true);
   const [activeImage, setActiveImage] = useState<string | null>(null);
   
-  // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogAction, setDialogAction] = useState<"approve" | "reject">("approve");
   const [rejectionReason, setRejectionReason] = useState("");
-  const [showInCatalog, setShowInCatalog] = useState(false);
+  const [retailPrice, setRetailPrice] = useState<number | string>("");
 
-  // Fetch product and vendor
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
@@ -53,12 +54,12 @@ export default function ProductDetailPage() {
         const productData = await getProductById(id as string);
         setProduct(productData);
         
-        // Handle both images and imageUrls fields, prioritizing images
         if (productData) {
           const productImages = productData.images || productData.imageUrls || [];
           if (productImages.length > 0) {
             setActiveImage(productImages[0]);
           }
+          setRetailPrice(productData.price || productData.unitPrice || "");
         }
         
         if (productData && productData.vendorId) {
@@ -76,30 +77,34 @@ export default function ProductDetailPage() {
     fetchData();
   }, [id]);
 
-  // Open approval dialog
   const openApproveDialog = () => {
     if (!product) return;
     setDialogAction("approve");
-    setShowInCatalog(product.showInCatalog);
+    setRetailPrice(product.price || product.unitPrice || "");
     setDialogOpen(true);
   };
 
-  // Open rejection dialog
   const openRejectDialog = () => {
     setDialogAction("reject");
     setRejectionReason("");
     setDialogOpen(true);
   };
 
-  // Handle dialog confirmation
   const handleConfirm = async () => {
     if (!product) return;
     
     try {
       if (dialogAction === "approve") {
-        await updateProductStatus(product.id, "approved", showInCatalog);
-        setProduct({ ...product, status: "approved", showInCatalog });
-        toast.success(`Product ${product.name || product.partName} has been approved`);
+        const price = Number(retailPrice);
+        if (isNaN(price) || price <= 0) {
+          toast.error("Please enter a valid retail price.");
+          return;
+        }
+
+        await approveProductAndCreateCatalog(product.id, { retailPrice: price });
+        
+        setProduct({ ...product, status: "approved", showInCatalog: true });
+        toast.success(`Product ${product.name || product.partName} approved and added to catalog`);
       } else {
         await updateProductStatus(product.id, "rejected", false, rejectionReason);
         setProduct({ 
@@ -143,14 +148,12 @@ export default function ProductDetailPage() {
     );
   }
 
-  // Get product images from either images or imageUrls field
   const productImages = Array.isArray(product.images) ? product.images : 
                         Array.isArray(product.imageUrls) ? product.imageUrls : [];
   const productName = product.name || product.partName || 'Unnamed Product';
   const productPrice = product.price || product.unitPrice || 0;
   const productQuantity = product.quantity || product.stockQuantity || 0;
 
-  // Create specifications array from object
   const specifications = product.specifications && typeof product.specifications === 'object'
     ? Object.entries(product.specifications).map(([key, value]) => ({
         key,
@@ -361,7 +364,6 @@ export default function ProductDetailPage() {
                             className="object-contain"
                             onError={() => {
                               console.error('Image failed to load:', activeImage);
-                              // You can set a placeholder image here if needed
                             }}
                           />
                         )}
@@ -586,7 +588,6 @@ export default function ProductDetailPage() {
         </div>
       </div>
       
-      {/* Approval/Rejection Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -595,35 +596,35 @@ export default function ProductDetailPage() {
             </DialogTitle>
             <DialogDescription>
               {dialogAction === "approve"
-                ? "Are you sure you want to approve this product?"
+                ? "Set the final retail price for the client catalog. This will make the product visible to customers."
                 : "Please provide a reason for rejecting this product."}
             </DialogDescription>
           </DialogHeader>
           
           {dialogAction === "approve" && (
-            <div className="flex items-center space-x-2 mt-2">
-              <Checkbox
-                id="show-in-catalog"
-                checked={showInCatalog}
-                onCheckedChange={(checked: boolean) => 
-                  setShowInCatalog(checked)
-                }
-              />
-              <label
-                htmlFor="show-in-catalog"
-                className="text-sm font-medium leading-none cursor-pointer"
-              >
-                Show in client-facing catalog
-              </label>
+            <div className="space-y-4 mt-2">
+              <div>
+                <label htmlFor="retail-price" className="text-sm font-medium">
+                  Client Retail Price (UGX)
+                </label>
+                <Input
+                  id="retail-price"
+                  type="number"
+                  placeholder="e.g., 350000"
+                  value={retailPrice}
+                  onChange={(e) => setRetailPrice(e.target.value)}
+                  className="mt-1"
+                />
+              </div>
             </div>
           )}
           
           {dialogAction === "reject" && (
             <Textarea
-              placeholder="Reason for rejection"
+              placeholder="Reason for rejection (e.g., poor image quality, incorrect details)"
               value={rejectionReason}
               onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setRejectionReason(e.target.value)}
-              className="min-h-[100px]"
+              className="min-h-[100px] mt-2"
             />
           )}
           
@@ -634,9 +635,9 @@ export default function ProductDetailPage() {
             <Button
               onClick={handleConfirm}
               variant={dialogAction === "approve" ? "default" : "destructive"}
-              disabled={dialogAction === "reject" && !rejectionReason.trim()}
+              disabled={(dialogAction === "reject" && !rejectionReason.trim()) || (dialogAction === "approve" && !retailPrice)}
             >
-              {dialogAction === "approve" ? "Approve" : "Reject"}
+              {dialogAction === "approve" ? "Approve & Add to Catalog" : "Confirm Rejection"}
             </Button>
           </DialogFooter>
         </DialogContent>
