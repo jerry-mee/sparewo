@@ -52,14 +52,14 @@ const FAQ: React.FC = () => {
 
     return (
         <div className="bg-dark min-h-screen">
-            <section className="py-24 px-6 md:px-12 lg:px-24">
+            <section className="pt-4 pb-16 lg:pt-16 lg:pb-24 px-6">
                 <div className="max-w-3xl mx-auto">
                     <div className="text-center mb-16">
-                        <h1 className="font-display font-extrabold text-4xl lg:text-5xl text-white mb-6">
-                            Frequently Asked Questions
+                        <h1 className="font-display font-extrabold text-[2rem] lg:text-[3rem] leading-[1.1] text-white tracking-tight mb-6">
+                            Frequently Asked <br className="hidden md:block" /> Questions
                         </h1>
                         <p className="text-neutral-400 text-lg">
-                            Short answers to common questions.
+                            Everything you need to know about using SpareWo.
                         </p>
                     </div>
 

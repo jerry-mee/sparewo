@@ -8,16 +8,16 @@ const Footer: React.FC = () => {
             <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-6">
 
                 {/* Copyright */}
-                <div className="text-neutral-500 font-medium text-sm">
+                <div className="text-white font-medium text-sm">
                     © {currentYear} SpareWo (U) Ltd
                 </div>
 
                 {/* Links */}
                 <div className="flex flex-wrap justify-center gap-8">
-                    <a href="/privacy-policy" className="text-neutral-400 hover:text-white transition-colors text-sm font-medium">Privacy Policy</a>
-                    <a href="/support" className="text-neutral-400 hover:text-white transition-colors text-sm font-medium">Support</a>
-                    <a href="#" className="text-neutral-400 hover:text-white transition-colors text-sm font-medium">App Store</a>
-                    <a href="#" className="text-neutral-400 hover:text-white transition-colors text-sm font-medium">Google Play</a>
+                    <a href="/privacy-policy" className="text-white hover:text-primary transition-colors text-sm font-medium">Privacy Policy</a>
+                    <a href="/support" className="text-white hover:text-primary transition-colors text-sm font-medium">Support</a>
+                    <a href="#" className="text-white hover:text-primary transition-colors text-sm font-medium">App Store</a>
+                    <a href="#" className="text-white hover:text-primary transition-colors text-sm font-medium">Google Play</a>
                 </div>
 
             </div>

@@ -26,25 +26,22 @@ const Hero: React.FC = () => {
 
           {/* Visual Side (First on Mobile) */}
           <div className="lg:col-span-5 relative order-first lg:order-last">
-            <div className="relative rounded-3xl overflow-hidden shadow-2xl bg-card max-h-[40vh] lg:max-h-none">
-              <div className="aspect-video lg:aspect-[4/5] relative">
-                <img
-                  src="/banner_home.png"
-                  alt="SpareWo Hero Banner"
-                  className="w-full h-full object-cover opacity-80"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-dark via-transparent to-transparent"></div>
-              </div>
+            <div className="relative rounded-3xl overflow-hidden shadow-2xl bg-card">
+              <img
+                src="/banner1.png"
+                alt="SpareWo Hero Banner"
+                className="w-full h-auto block"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-dark/20 via-transparent to-transparent"></div>
             </div>
 
             {/* Global Sourcing Info (Below Image) */}
-            <div className="mt-6 bg-white/5 border border-white/5 p-4 lg:p-6 rounded-2xl backdrop-blur-sm">
+            <div className="mt-6 bg-white/5 border border-white/5 p-4 lg:p-6 rounded-2xl backdrop-blur-sm mx-auto lg:mx-0 max-w-sm lg:max-w-none">
               <div className="flex items-center gap-4">
                 <div className="w-10 h-10 lg:w-12 lg:h-12 bg-primary rounded-xl flex items-center justify-center text-white shrink-0">
-                  <Globe size={20} className="lg:hidden" weight="fill" />
-                  <Globe size={24} className="hidden lg:block" weight="fill" />
+                  <Globe size={24} weight="fill" />
                 </div>
-                <div>
+                <div className="text-left">
                   <p className="text-white font-bold font-display text-sm lg:text-base">Global Sourcing</p>
                   <p className="text-neutral-400 text-xs lg:text-sm">Parts from Japan, UK & Germany</p>
                 </div>
@@ -58,7 +55,7 @@ const Hero: React.FC = () => {
           {/* Main Text Area */}
           <div className="lg:col-span-7 text-center lg:text-left">
 
-            <h1 className="font-display font-extrabold text-[2rem] lg:text-[2.5rem] leading-[1.1] text-white tracking-tight mb-4 lg:mb-8">
+            <h1 className="font-display font-extrabold text-[2rem] lg:text-[3rem] leading-[1.1] text-white tracking-tight mb-4 lg:mb-8">
               Spare parts, fitting, <br />
               and <span className="text-primary">car care.</span> <br />
               All sorted.

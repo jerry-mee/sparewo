@@ -28,12 +28,11 @@ const HowItWorks: React.FC = () => {
       <div className="max-w-7xl mx-auto px-6">
         <div className="mb-12 text-center">
           <h2 className="font-display font-bold text-3xl md:text-4xl text-white mb-4">How It Works</h2>
-          <p className="text-neutral-400">Straightforward and reassuring.</p>
         </div>
         <div className="grid lg:grid-cols-3 gap-8">
           {steps.map((step, index) => (
-            <div key={index} className="relative p-10 bg-white/5 rounded-3xl hover:bg-white/10 transition-colors group">
-              <div className="mb-8 flex justify-between items-start">
+            <div key={index} className="relative p-10 bg-white/5 rounded-3xl hover:bg-white/10 transition-colors group flex flex-col items-center text-center lg:items-start lg:text-left">
+              <div className="mb-8 flex justify-between items-start w-full">
                 <step.icon size={48} className="text-primary" weight="duotone" />
                 <span className="font-display font-bold text-3xl text-white/10">
                   {step.id}
