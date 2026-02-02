@@ -8,6 +8,7 @@ import TheApp from '@/components/TheApp';
 import FAQ from '@/components/FAQ';
 import Support from '@/components/Support';
 import PrivacyPolicy from '@/components/PrivacyPolicy';
+import TermsOfService from '@/components/TermsOfService';
 import HowItWorks from '@/components/HowItWorks';
 import WhatYouCanDo from '@/components/WhatYouCanDo';
 
@@ -43,6 +44,7 @@ const App: React.FC = () => {
             <Route path="/faq" element={<FAQ />} />
             <Route path="/support" element={<Support />} />
             <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+            <Route path="/terms-of-service" element={<TermsOfService />} />
             <Route path="/how-it-works" element={<HowItWorks />} />
             {/* Fallback route to catch any mismatches */}
             <Route path="*" element={<HomePage />} />
