@@ -24,14 +24,18 @@ const WhatYouCanDo: React.FC = () => {
         <section className="py-20 bg-dark">
             <div className="max-w-7xl mx-auto px-6">
                 <div className="mb-16 text-center md:text-left">
-                    <h2 className="font-display font-bold text-3xl md:text-4xl text-white mb-6">
+                    <h2 className="font-display font-bold text-2xl lg:text-[2.25rem] text-white mb-6">
                         What you can do with SpareWo
                     </h2>
                 </div>
 
                 <div className="grid md:grid-cols-3 gap-8">
                     {features.map((feature, idx) => (
-                        <div key={idx} className="bg-white/5 border border-white/5 rounded-3xl p-8 hover:bg-white/10 transition-all group flex flex-col items-center text-center md:items-start md:text-left">
+                        <div
+                            key={idx}
+                            className="bg-white/5 border border-white/5 rounded-3xl p-8 hover:bg-white/10 transition-all group flex flex-col items-center text-center md:items-start md:text-left animate-fade-in"
+                            style={{ animationDelay: `${idx * 0.1}s` }}
+                        >
                             <div className="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center text-primary mb-6 group-hover:scale-110 transition-transform">
                                 <feature.icon size={32} weight="fill" />
                             </div>

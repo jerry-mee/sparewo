@@ -1,5 +1,5 @@
 import React from 'react';
-import { EnvelopeSimple, ChatCircle } from '@phosphor-icons/react';
+import { EnvelopeSimple, ChatCircle, Phone } from '@phosphor-icons/react';
 
 const Support: React.FC = () => {
     return (
@@ -32,9 +32,7 @@ const Support: React.FC = () => {
                             href="tel:+256700000000"
                             className="bg-white/5 border border-white/5 p-8 rounded-3xl hover:bg-white/10 transition-all hover:-translate-y-1 group"
                         >
-                            <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary mb-4 mx-auto group-hover:scale-110 transition-transform">
-                                <span className="font-bold text-xs">TEL</span>
-                            </div>
+                            <Phone size={32} className="text-primary mb-4 mx-auto group-hover:scale-110 transition-transform" />
                             <p className="font-bold text-white mb-1">Call Us</p>
                             <p className="text-sm text-neutral-400">+256 700 000 000</p>
                         </a>

@@ -8,12 +8,12 @@ const TheApp: React.FC = () => {
                 <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-16 items-start">
 
                     {/* Left Column: Content */}
-                    <div className="text-center lg:text-left">
+                    <div className="text-center lg:text-left animate-fade-in">
                         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 text-primary font-medium text-xs mb-8 mx-auto lg:mx-0">
                             <DeviceMobile size={16} weight="fill" />
                             Mobile App
                         </div>
-                        <h1 className="font-display font-extrabold text-[2.5rem] lg:text-[3.5rem] leading-[1.1] text-white tracking-tight mb-6">
+                        <h1 className="font-display font-extrabold text-[2rem] lg:text-[3rem] leading-[1.1] text-white tracking-tight mb-6">
                             More than buying parts.
                         </h1>
                         <p className="text-base lg:text-xl text-neutral-400 mb-10 leading-relaxed max-w-2xl mx-auto lg:mx-0">

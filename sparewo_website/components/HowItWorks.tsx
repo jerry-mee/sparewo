@@ -27,7 +27,7 @@ const HowItWorks: React.FC = () => {
     <section className="bg-secondary py-20">
       <div className="max-w-7xl mx-auto px-6">
         <div className="mb-12 text-center">
-          <h2 className="font-display font-bold text-3xl md:text-4xl text-white mb-4">How It Works</h2>
+          <h2 className="font-display font-bold text-2xl lg:text-[2.25rem] text-white mb-4">How It Works</h2>
         </div>
         <div className="grid lg:grid-cols-3 gap-8">
           {steps.map((step, index) => (

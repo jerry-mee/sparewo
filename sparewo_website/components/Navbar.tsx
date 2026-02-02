@@ -70,7 +70,7 @@ const Navbar: React.FC = () => {
               key={link.name}
               to={link.path}
               onClick={() => setIsOpen(false)}
-              className="text-2xl font-display font-bold text-white hover:text-primary py-2 text-center transition-colors"
+              className="text-3xl font-display font-extrabold text-white hover:text-primary py-3 text-center transition-all hover:scale-105 active:scale-95"
             >
               {link.name}
             </Link>
