@@ -1,0 +1,44 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+    background-color: #1d2041;
+    color: #F3F4F6;
+}
+
+/* Hide scrollbar for clean look */
+::-webkit-scrollbar {
+    width: 6px;
+    background: #1d2041;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #374151;
+}
+
+html {
+    scroll-behavior: smooth;
+}
+
+/* User requested overrides */
+.text-neutral-500 {
+    color: #f5843a;
+}
+
+/* Smooth page transitions */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.animate-fade-in {
+    animation: fadeIn 0.5s ease-out forwards;
+}
