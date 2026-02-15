@@ -1,0 +1,168 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isRateLimited() {
+      return request.time < resource.data.lastAccess + duration.value(1, 's');
+    }
+    
+    function isAdmin() {
+      return isSignedIn() && 
+        exists(/databases/$(database)/documents/user_roles/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/user_roles/$(request.auth.uid)).data.isAdmin == true;
+    }
+    
+    function isVendor() {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/vendors/$(request.auth.uid)) || 
+        isAdmin()
+      );
+    }
+    
+    function isVerifiedVendor() {
+      return isSignedIn() && (
+        (exists(/databases/$(database)/documents/vendors/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/vendors/$(request.auth.uid)).data.isEmailVerified == true) ||
+        isAdmin()
+      );
+    }
+    
+    function getVendorId() {
+      return request.auth.uid;
+    }
+    
+    // Base rule - deny by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+    
+    // User Roles collection
+    match /user_roles/{userId} {
+      allow read: if true;
+      // Allow creation during signup
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      // Admin can write to any user role
+      allow write: if isAdmin();
+    }
+    
+    // Users collection (if you have one separate from vendors)
+    match /users/{userId} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow write: if isAdmin() || (isSignedIn() && request.auth.uid == userId);
+    }
+    
+    // Vendors collection
+    match /vendors/{vendorId} {
+      allow read: if true;
+      // KEY FIX: Allow vendor creation without requiring prior authentication
+      // This is critical for the signup flow
+      allow create: if request.resource.data.keys().hasAll(['email', 'name', 'phone', 'businessName', 'businessAddress']) &&
+                    (request.auth == null || request.auth.uid == vendorId || isAdmin());
+      allow update: if isSignedIn() && 
+        (request.auth.uid == vendorId || isAdmin());
+      allow delete: if isAdmin();
+    }
+    
+    // Product drafts collection
+    match /product_drafts/{draftId} {
+      allow read: if isSignedIn() && 
+        (resource.data.vendorId == request.auth.uid || isAdmin());
+      
+      allow create, update: if isSignedIn() && 
+        (request.resource.data.vendorId == request.auth.uid || isAdmin());
+        
+      allow delete: if isSignedIn() && 
+        (resource.data.vendorId == request.auth.uid || isAdmin());
+    }
+    
+    // Products collection (vendor_products)
+    match /vendor_products/{productId} {
+      allow read: if true;
+      
+      allow create: if isVendor() &&
+        request.resource.data.keys().hasAll([
+          'vendorId',
+          'partName',
+          'description',
+          'brand',
+          'condition',
+          'stockQuantity',
+          'unitPrice'
+        ]) &&
+        (request.resource.data.vendorId == request.auth.uid || isAdmin());
+      
+      allow update: if isVendor() &&
+        (resource.data.vendorId == request.auth.uid || isAdmin());
+      
+      allow delete: if isVendor() &&
+        (resource.data.vendorId == request.auth.uid || isAdmin());
+    }
+    
+    // Orders collection
+    match /orders/{orderId} {
+      allow read: if isSignedIn() && (
+        resource.data.vendorId == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && (
+        resource.data.vendorId == request.auth.uid ||
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+    
+    // Verification Codes collection
+    match /verification_codes/{email} {
+      // Allow anyone to create, read, update, and delete verification codes
+      allow create, read, update, delete: if true;
+    }
+    
+    // Car Brand collection
+    match /car_brand/{brandId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    // Car Models collection
+    match /car_models/{modelId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    // Settings collection
+    match /settings/{userId} {
+      allow read, write: if request.auth.uid == userId || isAdmin();
+    }
+    
+    // Notifications collection
+    match /notifications/{notificationId} {
+      allow read: if isSignedIn() && (
+        isAdmin() || 
+        resource.data.vendorId == request.auth.uid ||
+        resource.data.target == 'all' || 
+        resource.data.target == request.auth.uid ||
+        (isVendor() && resource.data.target == 'vendors')
+      );
+      allow write: if isAdmin();
+      // Allow users to mark their notifications as read
+      allow update: if isSignedIn() && 
+        (resource.data.vendorId == request.auth.uid ||
+         resource.data.target == 'all' || 
+         resource.data.target == request.auth.uid ||
+         (isVendor() && resource.data.target == 'vendors')) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+    }
+    
+    // Dashboard Stats Collection - FIX: Add explicit read permission for vendors
+    match /dashboard_stats/{vendorId} {
+      allow read: if isSignedIn() && (request.auth.uid == vendorId || isAdmin());
+      allow write: if isAdmin();
+    }
+  }
+}

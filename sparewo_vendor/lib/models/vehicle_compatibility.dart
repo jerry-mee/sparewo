@@ -1,96 +1,71 @@
-import 'package:freezed_annotation/freezed_annotation.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+// lib/models/vehicle_compatibility.dart
 
-part 'vehicle_compatibility.freezed.dart';
-part 'vehicle_compatibility.g.dart';
+class VehicleCompatibility {
+  final String brand;
+  final String model;
+  final List<int> compatibleYears;
 
-@freezed
-class VehicleCompatibility with _$VehicleCompatibility {
-  const factory VehicleCompatibility({
-    required String brand,
-    required String model,
-    required List<int> compatibleYears,
-  }) = _VehicleCompatibility;
+  const VehicleCompatibility({
+    required this.brand,
+    required this.model,
+    required this.compatibleYears,
+  });
 
-  factory VehicleCompatibility.fromJson(Map<String, dynamic> json) =>
-      _$VehicleCompatibilityFromJson(json);
-}
-
-@freezed
-class CarPart with _$CarPart {
-  const factory CarPart({
-    required String id,
-    required String vendorId,
-    required String name,
-    required String description,
-    required double price,
-    required int quantity,
-    required String condition,
-    required List<String> images,
-    required List<VehicleCompatibility> compatibleVehicles,
-    required DateTime createdAt,
-    required DateTime updatedAt,
-    @Default(ProductStatus.pending) ProductStatus status,
-    @Default(0) int views,
-    @Default(0) int orders,
-  }) = _CarPart;
-
-  const CarPart._();
-
-  factory CarPart.fromJson(Map<String, dynamic> json) =>
-      _$CarPartFromJson(json);
-
-  factory CarPart.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
-    return CarPart.fromJson({
-      'id': doc.id,
-      ...data,
-      'createdAt': (data['createdAt'] as Timestamp).toDate().toIso8601String(),
-      'updatedAt': (data['updatedAt'] as Timestamp).toDate().toIso8601String(),
-    });
+  VehicleCompatibility copyWith({
+    String? brand,
+    String? model,
+    List<int>? compatibleYears,
+  }) {
+    return VehicleCompatibility(
+      brand: brand ?? this.brand,
+      model: model ?? this.model,
+      compatibleYears: compatibleYears ?? this.compatibleYears,
+    );
   }
 
-  Map<String, dynamic> toFirestore() {
-    final json = toJson();
-    json.remove('id');
+  Map<String, dynamic> toJson() {
     return {
-      ...json,
-      'createdAt': Timestamp.fromDate(createdAt),
-      'updatedAt': Timestamp.fromDate(updatedAt),
+      'brand': brand,
+      'model': model,
+      'compatibleYears': compatibleYears,
     };
   }
 
-  bool get isOutOfStock => quantity <= 0;
-  bool get isNew => condition.toLowerCase() == 'new';
-  bool get isActive => status == ProductStatus.approved && !isOutOfStock;
-  bool get isPending => status == ProductStatus.pending;
-}
+  factory VehicleCompatibility.fromJson(Map<String, dynamic> json) {
+    return VehicleCompatibility(
+      brand: json['brand'],
+      model: json['model'],
+      compatibleYears: List<int>.from(json['compatibleYears']),
+    );
+  }
 
-enum ProductStatus {
-  @JsonValue('pending')
-  pending,
-  @JsonValue('approved')
-  approved,
-  @JsonValue('rejected')
-  rejected,
-  @JsonValue('suspended')
-  suspended,
-}
+  bool isYearCompatible(int year) {
+    return compatibleYears.contains(year);
+  }
 
-enum PartCondition {
-  @JsonValue('new')
-  new_,
-  @JsonValue('used')
-  used
-}
+  String get yearDisplay {
+    if (compatibleYears.isEmpty) return 'No years specified';
 
-extension PartConditionExt on PartCondition {
-  String get displayName {
-    switch (this) {
-      case PartCondition.new_:
-        return 'New';
-      case PartCondition.used:
-        return 'Used';
+    final sorted = List<int>.from(compatibleYears)..sort();
+
+    if (sorted.length > 5) {
+      return '${sorted.take(3).join(', ')}... (+${sorted.length - 3} more)';
     }
+
+    return sorted.join(', ');
+  }
+
+  String get yearRangeDisplay {
+    if (compatibleYears.isEmpty) return 'No years specified';
+
+    final sorted = List<int>.from(compatibleYears)..sort();
+    return '${sorted.first}-${sorted.last}';
+  }
+
+  bool matchesSearch(String query) {
+    final lowerQuery = query.toLowerCase();
+    return brand.toLowerCase().contains(lowerQuery) ||
+        model.toLowerCase().contains(lowerQuery) ||
+        compatibleYears.any((year) => year.toString().contains(query));
   }
 }

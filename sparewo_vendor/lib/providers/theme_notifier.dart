@@ -2,7 +2,7 @@
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/settings_service.dart';
-import 'service_providers.dart';
+import 'providers.dart';
 
 class ThemeNotifier extends StateNotifier<bool> {
   final SettingsService _settingsService;
@@ -22,22 +22,11 @@ class ThemeNotifier extends StateNotifier<bool> {
   }
 }
 
-// -------------------------------------------
-// Updated Provider Definition Section
-// -------------------------------------------
-
 final themeNotifierProvider = StateNotifierProvider<ThemeNotifier, bool>((ref) {
   final settingsService = ref.watch(settingsServiceProvider);
   return ThemeNotifier(settingsService);
 });
 
-// -------------------------------------------
-// Rest of the theme_notifier.dart remains unchanged
-// -------------------------------------------
-
-// Derived Providers Section
-
-// Example of a derived provider to get the current theme mode
 final isDarkModeProvider = Provider<bool>((ref) {
   return ref.watch(themeNotifierProvider);
 });

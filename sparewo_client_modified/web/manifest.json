@@ -1,0 +1,35 @@
+{
+    "name": "SpareWo | Spare Parts, Fitting & Car Care",
+    "short_name": "SpareWo",
+    "start_url": ".",
+    "display": "standalone",
+    "background_color": "#0F1235",
+    "theme_color": "#F47D20",
+    "description": "SpareWo helps you buy genuine spare parts, get them fitted correctly, and manage car care services, all in one app.",
+    "orientation": "portrait-primary",
+    "prefer_related_applications": false,
+    "icons": [
+        {
+            "src": "icons/Icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/Icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/Icon-maskable-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "maskable"
+        },
+        {
+            "src": "icons/Icon-maskable-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "maskable"
+        }
+    ]
+}

@@ -1,0 +1,2 @@
+/Users/jeremy/Development/sparewo/sparewo_vendor/android/app/.cxx/RelWithDebInfo/1i2g2j5e/x86_64/CMakeFiles/edit_cache.dir
+/Users/jeremy/Development/sparewo/sparewo_vendor/android/app/.cxx/RelWithDebInfo/1i2g2j5e/x86_64/CMakeFiles/rebuild_cache.dir

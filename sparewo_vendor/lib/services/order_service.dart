@@ -1,28 +1,59 @@
+// lib/services/order_service.dart
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:sparewo_vendor/models/vendor_product.dart';
 import '../models/order.dart';
 import '../constants/enums.dart';
 import '../exceptions/api_exceptions.dart';
+import '../services/logger_service.dart';
 
 class OrderService {
   final FirebaseFirestore _firestore;
+  final LoggerService _logger = LoggerService.instance;
 
-  OrderService({FirebaseFirestore? firestore})
-      : _firestore = firestore ?? FirebaseFirestore.instance;
+  OrderService({required FirebaseFirestore firestore}) : _firestore = firestore;
 
   CollectionReference<Map<String, dynamic>> get _ordersRef =>
       _firestore.collection('orders');
 
+  CollectionReference<Map<String, dynamic>> get _fulfillmentsRef =>
+      _firestore.collection('order_fulfillments');
+
   Future<List<VendorOrder>> getVendorOrders(String vendorId) async {
     try {
-      final querySnapshot = await _ordersRef
+      // Vendors access orders through order_fulfillments collection
+      final fulfillmentSnapshot = await _fulfillmentsRef
           .where('vendorId', isEqualTo: vendorId)
           .orderBy('createdAt', descending: true)
           .get();
 
-      return querySnapshot.docs
-          .map((doc) => VendorOrder.fromFirestore(doc))
-          .toList();
+      final List<VendorOrder> orders = [];
+
+      // For each fulfillment, get the corresponding order
+      for (final fulfillmentDoc in fulfillmentSnapshot.docs) {
+        final fulfillmentData = fulfillmentDoc.data();
+        final orderId = fulfillmentData['orderId'] as String?;
+
+        if (orderId != null) {
+          try {
+            final orderDoc = await _ordersRef.doc(orderId).get();
+            if (orderDoc.exists) {
+              // Merge fulfillment data with order data
+              final orderData = orderDoc.data()!;
+              orderData['fulfillmentId'] = fulfillmentDoc.id;
+              orderData['fulfillmentStatus'] = fulfillmentData['status'];
+
+              orders.add(VendorOrder.fromFirestore(orderDoc));
+            }
+          } catch (e) {
+            _logger.error('Failed to fetch order $orderId', error: e);
+          }
+        }
+      }
+
+      return orders;
     } catch (e) {
+      _logger.error('Failed to fetch vendor orders', error: e);
       throw ApiException(
         message: 'Failed to fetch orders: ${e.toString()}',
         statusCode: 500,
@@ -31,25 +62,61 @@ class OrderService {
   }
 
   Stream<List<VendorOrder>> watchVendorOrders(String vendorId) {
-    return _ordersRef
+    // Watch fulfillments for this vendor
+    return _fulfillmentsRef
         .where('vendorId', isEqualTo: vendorId)
         .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => VendorOrder.fromFirestore(doc))
-            .toList());
+        .asyncMap((fulfillmentSnapshot) async {
+      final List<VendorOrder> orders = [];
+
+      for (final fulfillmentDoc in fulfillmentSnapshot.docs) {
+        final fulfillmentData = fulfillmentDoc.data();
+        final orderId = fulfillmentData['orderId'] as String?;
+
+        if (orderId != null) {
+          try {
+            final orderDoc = await _ordersRef.doc(orderId).get();
+            if (orderDoc.exists) {
+              // Merge fulfillment data with order data
+              final orderData = orderDoc.data()!;
+              orderData['fulfillmentId'] = fulfillmentDoc.id;
+              orderData['fulfillmentStatus'] = fulfillmentData['status'];
+
+              orders.add(VendorOrder.fromFirestore(orderDoc));
+            }
+          } catch (e) {
+            _logger.error('Failed to fetch order $orderId in stream', error: e);
+          }
+        }
+      }
+
+      return orders;
+    });
   }
 
   Future<void> updateOrderStatus(String orderId, OrderStatus newStatus) async {
     try {
       final batch = _firestore.batch();
-      final orderRef = _ordersRef.doc(orderId);
+
+      // Get the fulfillment document for this order
+      final fulfillmentQuery = await _fulfillmentsRef
+          .where('orderId', isEqualTo: orderId)
+          .limit(1)
+          .get();
+
+      if (fulfillmentQuery.docs.isEmpty) {
+        throw Exception("No fulfillment found for order $orderId");
+      }
+
+      final fulfillmentRef = fulfillmentQuery.docs.first.reference;
 
       final statusUpdate = {
         'status': newStatus.name,
         'updatedAt': FieldValue.serverTimestamp(),
       };
 
+      // Add timestamps for specific statuses
       switch (newStatus) {
         case OrderStatus.accepted:
           statusUpdate['acceptedAt'] = FieldValue.serverTimestamp();
@@ -72,34 +139,47 @@ class OrderService {
           break;
       }
 
-      batch.update(orderRef, statusUpdate);
+      // Update the fulfillment status
+      batch.update(fulfillmentRef, statusUpdate);
 
+      // Get order data for stock management
+      final orderSnap = await _ordersRef.doc(orderId).get();
+      if (!orderSnap.exists) {
+        throw Exception("Order not found during status update.");
+      }
+      final orderData = VendorOrder.fromFirestore(orderSnap);
+
+      // Adjust stock based on the new status
       if (newStatus == OrderStatus.accepted) {
-        final order = await orderRef.get();
-        final data = order.data()!;
-
-        // Update product stock
+        // Decrement stock when order is accepted
         final productRef =
-            _firestore.collection('products').doc(data['productId'] as String);
+            _firestore.collection('vendor_products').doc(orderData.productId);
         batch.update(productRef, {
-          'stockQuantity': FieldValue.increment(-(data['quantity'] as int)),
-          'orders': FieldValue.increment(1),
-          'updatedAt': FieldValue.serverTimestamp(),
+          'stockQuantity': FieldValue.increment(-orderData.quantity),
         });
-
-        // Update vendor stats
+      } else if (newStatus == OrderStatus.delivered) {
+        // Increment completed orders for the vendor on delivery
         final vendorRef =
-            _firestore.collection('vendors').doc(data['vendorId'] as String);
-        if (newStatus == OrderStatus.delivered) {
-          batch.update(vendorRef, {
-            'completedOrders': FieldValue.increment(1),
-            'updatedAt': FieldValue.serverTimestamp(),
+            _firestore.collection('vendors').doc(orderData.vendorId);
+        batch.update(vendorRef, {
+          'completedOrders': FieldValue.increment(1),
+        });
+      } else if (newStatus == OrderStatus.cancelled ||
+          newStatus == OrderStatus.rejected) {
+        // If an accepted order is cancelled, restore the stock
+        if (orderData.status == OrderStatus.accepted ||
+            orderData.status == OrderStatus.processing) {
+          final productRef =
+              _firestore.collection('vendor_products').doc(orderData.productId);
+          batch.update(productRef, {
+            'stockQuantity': FieldValue.increment(orderData.quantity),
           });
         }
       }
 
       await batch.commit();
     } catch (e) {
+      _logger.error('Failed to update order status', error: e);
       throw ApiException(
         message: 'Failed to update order status: ${e.toString()}',
         statusCode: 500,
@@ -117,6 +197,19 @@ class OrderService {
 
   Future<VendorOrder> getOrder(String orderId) async {
     try {
+      // First check if this vendor has access to this order through fulfillments
+      final fulfillmentQuery = await _fulfillmentsRef
+          .where('orderId', isEqualTo: orderId)
+          .limit(1)
+          .get();
+
+      if (fulfillmentQuery.docs.isEmpty) {
+        throw const ApiException(
+          message: 'Order not found or access denied',
+          statusCode: 404,
+        );
+      }
+
       final doc = await _ordersRef.doc(orderId).get();
       if (!doc.exists) {
         throw const ApiException(
@@ -124,8 +217,17 @@ class OrderService {
           statusCode: 404,
         );
       }
+
+      // Add fulfillment data
+      final orderData = doc.data()!;
+      orderData['fulfillmentId'] = fulfillmentQuery.docs.first.id;
+      orderData['fulfillmentStatus'] =
+          fulfillmentQuery.docs.first.data()['status'];
+
       return VendorOrder.fromFirestore(doc);
     } catch (e) {
+      if (e is ApiException) rethrow;
+      _logger.error('Failed to fetch order', error: e);
       throw ApiException(
         message: 'Failed to fetch order: ${e.toString()}',
         statusCode: 500,
@@ -134,23 +236,78 @@ class OrderService {
   }
 
   Stream<VendorOrder> watchOrder(String orderId) {
-    return _ordersRef.doc(orderId).snapshots().map(VendorOrder.fromFirestore);
+    return _fulfillmentsRef
+        .where('orderId', isEqualTo: orderId)
+        .limit(1)
+        .snapshots()
+        .asyncMap((fulfillmentSnapshot) async {
+      if (fulfillmentSnapshot.docs.isEmpty) {
+        throw const ApiException(
+          message: 'Order not found or access denied',
+          statusCode: 404,
+        );
+      }
+
+      final orderDoc = await _ordersRef.doc(orderId).get();
+      if (!orderDoc.exists) {
+        throw const ApiException(
+          message: 'Order not found',
+          statusCode: 404,
+        );
+      }
+
+      // Add fulfillment data
+      final orderData = orderDoc.data()!;
+      orderData['fulfillmentId'] = fulfillmentSnapshot.docs.first.id;
+      orderData['fulfillmentStatus'] =
+          fulfillmentSnapshot.docs.first.data()['status'];
+
+      return VendorOrder.fromFirestore(orderDoc);
+    });
   }
 
   Future<List<VendorOrder>> searchOrders(String vendorId, String query) async {
     try {
-      // Search by customer name or order ID
-      final querySnapshot = await _ordersRef
-          .where('vendorId', isEqualTo: vendorId)
-          .where('customerName', isGreaterThanOrEqualTo: query.toLowerCase())
-          .where('customerName',
-              isLessThanOrEqualTo: '${query.toLowerCase()}\uf8ff')
-          .get();
+      // Get all fulfillments for this vendor
+      final fulfillmentSnapshot =
+          await _fulfillmentsRef.where('vendorId', isEqualTo: vendorId).get();
 
-      return querySnapshot.docs
-          .map((doc) => VendorOrder.fromFirestore(doc))
-          .toList();
+      final List<VendorOrder> allOrders = [];
+
+      for (final fulfillmentDoc in fulfillmentSnapshot.docs) {
+        final fulfillmentData = fulfillmentDoc.data();
+        final orderId = fulfillmentData['orderId'] as String?;
+
+        if (orderId != null) {
+          try {
+            final orderDoc = await _ordersRef.doc(orderId).get();
+            if (orderDoc.exists) {
+              final orderData = orderDoc.data()!;
+
+              // Check if this order matches the search query
+              final customerName =
+                  (orderData['customerName'] ?? '').toString().toLowerCase();
+              final orderIdLower = orderId.toLowerCase();
+              final queryLower = query.toLowerCase();
+
+              if (customerName.contains(queryLower) ||
+                  orderIdLower.contains(queryLower)) {
+                orderData['fulfillmentId'] = fulfillmentDoc.id;
+                orderData['fulfillmentStatus'] = fulfillmentData['status'];
+
+                allOrders.add(VendorOrder.fromFirestore(orderDoc));
+              }
+            }
+          } catch (e) {
+            _logger.error('Failed to fetch order $orderId during search',
+                error: e);
+          }
+        }
+      }
+
+      return allOrders;
     } catch (e) {
+      _logger.error('Failed to search orders', error: e);
       throw ApiException(
         message: 'Failed to search orders: ${e.toString()}',
         statusCode: 500,
@@ -166,32 +323,63 @@ class OrderService {
     DateTime? endDate,
   }) async {
     try {
+      // Start with fulfillments for this vendor
       Query<Map<String, dynamic>> query =
-          _ordersRef.where('vendorId', isEqualTo: vendorId);
+          _fulfillmentsRef.where('vendorId', isEqualTo: vendorId);
 
       if (status != null) {
         query = query.where('status', isEqualTo: status.name);
       }
 
-      if (isPaid != null) {
-        query = query.where('isPaid', isEqualTo: isPaid);
+      final fulfillmentSnapshot = await query.get();
+      final List<VendorOrder> filteredOrders = [];
+
+      for (final fulfillmentDoc in fulfillmentSnapshot.docs) {
+        final fulfillmentData = fulfillmentDoc.data();
+        final orderId = fulfillmentData['orderId'] as String?;
+
+        if (orderId != null) {
+          try {
+            final orderDoc = await _ordersRef.doc(orderId).get();
+            if (orderDoc.exists) {
+              final orderData = orderDoc.data()!;
+              final order = VendorOrder.fromFirestore(orderDoc);
+
+              // Apply additional filters
+              bool includeOrder = true;
+
+              if (isPaid != null && order.isPaid != isPaid) {
+                includeOrder = false;
+              }
+
+              if (startDate != null && order.createdAt.isBefore(startDate)) {
+                includeOrder = false;
+              }
+
+              if (endDate != null && order.createdAt.isAfter(endDate)) {
+                includeOrder = false;
+              }
+
+              if (includeOrder) {
+                orderData['fulfillmentId'] = fulfillmentDoc.id;
+                orderData['fulfillmentStatus'] = fulfillmentData['status'];
+
+                filteredOrders.add(VendorOrder.fromFirestore(orderDoc));
+              }
+            }
+          } catch (e) {
+            _logger.error('Failed to fetch order $orderId during filter',
+                error: e);
+          }
+        }
       }
 
-      if (startDate != null) {
-        query = query.where('createdAt', isGreaterThanOrEqualTo: startDate);
-      }
+      // Sort by createdAt descending
+      filteredOrders.sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
-      if (endDate != null) {
-        query = query.where('createdAt', isLessThanOrEqualTo: endDate);
-      }
-
-      final querySnapshot =
-          await query.orderBy('createdAt', descending: true).get();
-
-      return querySnapshot.docs
-          .map((doc) => VendorOrder.fromFirestore(doc))
-          .toList();
+      return filteredOrders;
     } catch (e) {
+      _logger.error('Failed to filter orders', error: e);
       throw ApiException(
         message: 'Failed to filter orders: ${e.toString()}',
         statusCode: 500,
@@ -201,11 +389,22 @@ class OrderService {
 
   Future<void> updateOrderNotes(String orderId, String notes) async {
     try {
-      await _ordersRef.doc(orderId).update({
+      // Get the fulfillment document for this order
+      final fulfillmentQuery = await _fulfillmentsRef
+          .where('orderId', isEqualTo: orderId)
+          .limit(1)
+          .get();
+
+      if (fulfillmentQuery.docs.isEmpty) {
+        throw Exception("No fulfillment found for order $orderId");
+      }
+
+      await fulfillmentQuery.docs.first.reference.update({
         'notes': notes,
         'updatedAt': FieldValue.serverTimestamp(),
       });
     } catch (e) {
+      _logger.error('Failed to update order notes', error: e);
       throw ApiException(
         message: 'Failed to update order notes: ${e.toString()}',
         statusCode: 500,
@@ -215,8 +414,9 @@ class OrderService {
 
   Future<Map<String, dynamic>> getOrderStats(String vendorId) async {
     try {
-      final querySnapshot =
-          await _ordersRef.where('vendorId', isEqualTo: vendorId).get();
+      // Get all fulfillments for this vendor
+      final fulfillmentSnapshot =
+          await _fulfillmentsRef.where('vendorId', isEqualTo: vendorId).get();
 
       int totalOrders = 0;
       int pendingOrders = 0;
@@ -224,21 +424,40 @@ class OrderService {
       int cancelledOrders = 0;
       double totalRevenue = 0;
 
-      for (var doc in querySnapshot.docs) {
-        final data = doc.data();
+      for (var fulfillmentDoc in fulfillmentSnapshot.docs) {
+        final data = fulfillmentDoc.data();
         totalOrders++;
 
-        switch (data['status']) {
-          case 'pending':
+        final status = OrderStatus.values.byName(data['status'] ?? 'pending');
+
+        switch (status) {
+          case OrderStatus.pending:
             pendingOrders++;
             break;
-          case 'delivered':
+          case OrderStatus.delivered:
             completedOrders++;
-            totalRevenue += (data['totalAmount'] as num).toDouble();
+            // Get order details for revenue
+            final orderId = data['orderId'] as String?;
+            if (orderId != null) {
+              try {
+                final orderDoc = await _ordersRef.doc(orderId).get();
+                if (orderDoc.exists) {
+                  final orderData = orderDoc.data()!;
+                  totalRevenue +=
+                      (orderData['totalAmount'] as num?)?.toDouble() ?? 0;
+                }
+              } catch (e) {
+                _logger.error('Failed to fetch order $orderId for stats',
+                    error: e);
+              }
+            }
             break;
-          case 'cancelled':
-          case 'rejected':
+          case OrderStatus.cancelled:
+          case OrderStatus.rejected:
             cancelledOrders++;
+            break;
+          default:
+            // Handle other active statuses if needed
             break;
         }
       }
@@ -251,6 +470,7 @@ class OrderService {
         'totalRevenue': totalRevenue,
       };
     } catch (e) {
+      _logger.error('Failed to get order stats', error: e);
       throw ApiException(
         message: 'Failed to get order stats: ${e.toString()}',
         statusCode: 500,

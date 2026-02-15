@@ -1,9 +1,13 @@
+// lib/screens/orders/orders_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../constants/enums.dart';
-import '../../providers/order_provider.dart';
+import '../../models/order.dart';
 import '../../theme.dart';
 import '../../utils/string_extensions.dart';
+import '../../providers/providers.dart';
+import '../../routes/app_router.dart';
+import 'widgets/order_list_item.dart';
 
 class OrdersScreen extends ConsumerStatefulWidget {
   const OrdersScreen({super.key});
@@ -24,7 +28,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final ordersAsync = ref.watch(ordersAsyncProvider);
+    final ordersAsync = ref.watch(orderNotifierProvider).orders;
 
     return Scaffold(
       appBar: AppBar(
@@ -34,96 +38,88 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
           child: Column(
             children: [
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: TextField(
                   decoration: InputDecoration(
-                    hintText: 'Search orders...',
+                    hintText: 'Search by Customer or Order ID...',
                     prefixIcon: const Icon(Icons.search),
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
+                        borderRadius: BorderRadius.circular(8)),
                     filled: true,
-                    fillColor: Colors.white,
+                    fillColor: Theme.of(context).scaffoldBackgroundColor,
                   ),
                   onChanged: _filterOrders,
                 ),
               ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _StatusFilterChip(
-                    label: 'All',
-                    isSelected: _selectedStatus == null,
-                    onSelected: () => setState(() => _selectedStatus = null),
-                  ),
-                  const SizedBox(width: 8),
-                  _StatusFilterChip(
-                    label: 'Pending',
-                    isSelected: _selectedStatus == OrderStatus.pending,
-                    onSelected: () =>
-                        setState(() => _selectedStatus = OrderStatus.pending),
-                  ),
-                  const SizedBox(width: 8),
-                  _StatusFilterChip(
-                    label: 'Processing',
-                    isSelected: _selectedStatus == OrderStatus.processing,
-                    onSelected: () => setState(
-                        () => _selectedStatus = OrderStatus.processing),
-                  ),
-                  const SizedBox(width: 8),
-                  _StatusFilterChip(
-                    label: 'Delivered',
-                    isSelected: _selectedStatus == OrderStatus.delivered,
-                    onSelected: () =>
-                        setState(() => _selectedStatus = OrderStatus.delivered),
-                  ),
-                ],
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Row(
+                  children: [
+                    _StatusFilterChip(
+                      label: 'All',
+                      isSelected: _selectedStatus == null,
+                      onSelected: () => setState(() => _selectedStatus = null),
+                    ),
+                    ...OrderStatus.values.map((status) => _StatusFilterChip(
+                          // FIX: Use the correct .name property, not .displayName
+                          label: status.name.capitalize(),
+                          isSelected: _selectedStatus == status,
+                          onSelected: () =>
+                              setState(() => _selectedStatus = status),
+                        )),
+                  ],
+                ),
               ),
             ],
           ),
         ),
       ),
-      body: ordersAsync.when(
-        data: (orders) {
-          final filteredOrders = orders.where((order) {
-            final matchesStatus =
-                _selectedStatus == null || order.status == _selectedStatus;
-            final matchesSearch =
-                order.customerName.toLowerCase().contains(_searchQuery) ||
-                    order.id.toLowerCase().contains(_searchQuery);
-            return matchesStatus && matchesSearch;
-          }).toList();
+      body: RefreshIndicator(
+        onRefresh: () async => ref.refresh(orderNotifierProvider),
+        child: ordersAsync.when(
+          data: (orders) {
+            final filteredOrders = orders.where((order) {
+              final matchesStatus =
+                  _selectedStatus == null || order.status == _selectedStatus;
+              final matchesSearch = _searchQuery.isEmpty ||
+                  order.customerName.toLowerCase().contains(_searchQuery) ||
+                  order.id.toLowerCase().contains(_searchQuery);
+              return matchesStatus && matchesSearch;
+            }).toList();
 
-          if (filteredOrders.isEmpty) {
-            return const Center(
-              child: Text('No orders found.', style: TextStyle(fontSize: 16)),
-            );
-          }
-
-          return ListView.builder(
-            itemCount: filteredOrders.length,
-            itemBuilder: (context, index) {
-              final order = filteredOrders[index];
-              return ListTile(
-                title: Text(order.customerName),
-                subtitle: Text('UGX ${order.totalAmount.toStringAsFixed(2)}'),
-                trailing: Text(order.status.name.capitalize()),
-                onTap: () {
-                  Navigator.pushNamed(
-                    context,
-                    '/orders/detail',
-                    arguments: order,
-                  );
-                },
+            if (filteredOrders.isEmpty) {
+              return const Center(
+                child: Text('No orders found.', style: TextStyle(fontSize: 16)),
               );
-            },
-          );
-        },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stackTrace) => Center(
-          child: Text(
-            'Error loading orders: $error',
-            style: TextStyle(color: VendorColors.error, fontSize: 16),
+            }
+
+            return ListView.builder(
+              padding: const EdgeInsets.all(8),
+              itemCount: filteredOrders.length,
+              itemBuilder: (context, index) {
+                final order = filteredOrders[index];
+                return OrderListItem(
+                  order: order,
+                  onTap: () {
+                    Navigator.pushNamed(
+                      context,
+                      AppRouter.orderDetails,
+                      arguments: order,
+                    );
+                  },
+                );
+              },
+            );
+          },
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, stackTrace) => Center(
+            child: Text(
+              'Error loading orders: $error',
+              style: TextStyle(
+                  color: Theme.of(context).colorScheme.error, fontSize: 16),
+            ),
           ),
         ),
       ),
@@ -144,13 +140,18 @@ class _StatusFilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FilterChip(
-      label: Text(label),
-      selected: isSelected,
-      onSelected: (_) => onSelected(),
-      selectedColor: VendorColors.primary.withOpacity(0.2),
-      labelStyle: TextStyle(
-        color: isSelected ? VendorColors.primary : VendorColors.text,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4.0),
+      child: FilterChip(
+        label: Text(label),
+        selected: isSelected,
+        onSelected: (_) => onSelected(),
+        selectedColor: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+        labelStyle: TextStyle(
+          color: isSelected
+              ? Theme.of(context).colorScheme.primary
+              : Theme.of(context).colorScheme.onSurface,
+        ),
       ),
     );
   }

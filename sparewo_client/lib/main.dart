@@ -1,97 +1,92 @@
+// lib/main.dart
+
+import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:provider/provider.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:flutter_native_splash/flutter_native_splash.dart';
 
+import 'package:sparewo_client/core/router/app_router.dart';
+import 'package:sparewo_client/core/theme/app_theme.dart';
+import 'package:sparewo_client/core/theme/theme_mode_provider.dart';
+import 'package:sparewo_client/features/auth/application/auth_provider.dart';
+import 'package:sparewo_client/core/logging/app_logger.dart';
+import 'package:sparewo_client/features/shared/services/notification_service.dart';
 import 'firebase_options.dart';
-import 'providers/data_provider.dart';
-import 'providers/auth_provider.dart';
-import 'services/api/api_service.dart';
-import 'services/storage/storage_service.dart';
-import 'services/feedback_service.dart';
-import 'services/navigation_service.dart';
-import 'constants/theme.dart';
-import 'utils/error_handler.dart';
-import 'routes/app_router.dart';
+
+// Global Key to allow showing SnackBars from anywhere (Aesthetic In-App Notifications)
+final GlobalKey<ScaffoldMessengerState> rootScaffoldMessengerKey =
+    GlobalKey<ScaffoldMessengerState>();
 
 Future<void> main() async {
-  try {
-    // Preserve splash screen while initializing
-    final widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
-    FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
+  WidgetsFlutterBinding.ensureInitialized();
 
-    // Initialize services
-    final AppServices services = await _initializeApp();
+  // Load environment variables
+  await dotenv.load(fileName: ".env");
 
-    // Launch app
-    runApp(MyApp(services: services));
-
-    // Remove splash screen
-    FlutterNativeSplash.remove();
-  } catch (e, stackTrace) {
-    ErrorHandler.handleCriticalError(e, stackTrace);
-    _runErrorApp(e.toString());
-  }
-}
-
-Future<AppServices> _initializeApp() async {
-  try {
-    // Configure system UI
-    await _configureSystemUI();
-
-    // Initialize core services
-    final apiService = ApiService();
-    final storageService = StorageService();
-    await storageService.init();
-
-    // Get Google Client ID
-    final googleClientId = _getGoogleClientId();
-
-    // Configure loading indicator
-    _configureEasyLoading();
-
-    return AppServices(
-      apiService: apiService,
-      storageService: storageService,
-      googleClientId: googleClientId,
-      navigationService: NavigationService(),
+  // Global Flutter error handler
+  FlutterError.onError = (FlutterErrorDetails details) {
+    FlutterError.presentError(details);
+    AppLogger.error(
+      'FlutterError',
+      details.exceptionAsString(),
+      stackTrace: details.stack,
+      extra: {
+        'library': details.library,
+        'context': details.context?.toDescription(),
+      },
     );
-  } catch (e, stackTrace) {
-    ErrorHandler.handleCriticalError(e, stackTrace);
-    rethrow;
-  }
-}
+  };
 
-Future<void> _configureSystemUI() async {
-  try {
-    await SystemChrome.setPreferredOrientations([
-      DeviceOrientation.portraitUp,
-      DeviceOrientation.portraitDown,
-    ]);
+  // Catch uncaught platform / isolate errors
+  PlatformDispatcher.instance.onError = (error, stack) {
+    AppLogger.error('PlatformError', error.toString(), stackTrace: stack);
+    return true;
+  };
 
-    SystemChrome.setSystemUIOverlayStyle(
-      const SystemUiOverlayStyle(
-        statusBarColor: Colors.transparent,
-        statusBarBrightness: Brightness.light,
-        statusBarIconBrightness: Brightness.light,
-        systemNavigationBarColor: Color(0xFF1A1B4B),
-        systemNavigationBarIconBrightness: Brightness.light,
-        systemNavigationBarDividerColor: Colors.transparent,
-      ),
-    );
-  } catch (e) {
-    debugPrint('Warning: System UI configuration failed: $e');
-  }
-}
+  runZonedGuarded<Future<void>>(
+    () async {
+      // Initialize Logger (Logs to file)
+      await AppLogger.init();
 
-String _getGoogleClientId() {
-  final options = DefaultFirebaseOptions.currentPlatform;
-  if (options.appId.isEmpty) {
-    throw Exception('Firebase configuration is missing required App ID');
-  }
-  return options.appId;
+      try {
+        Firebase.app();
+      } on Exception {
+        try {
+          await Firebase.initializeApp(
+            options: DefaultFirebaseOptions.currentPlatform,
+          );
+          AppLogger.info('Firebase', 'Initialized successfully');
+        } on FirebaseException catch (e) {
+          if (e.code == 'duplicate-app') {
+            Firebase.app();
+          } else {
+            AppLogger.error('FirebaseInitError', e.toString());
+            rethrow;
+          }
+        }
+      }
+
+      if (kReleaseMode) {
+        await FirebaseAppCheck.instance.activate(
+          androidProvider: AndroidProvider.playIntegrity,
+          appleProvider: AppleProvider.deviceCheck,
+        );
+      }
+
+      _configureEasyLoading();
+
+      runApp(const ProviderScope(child: MyApp()));
+    },
+    (error, stack) {
+      AppLogger.error('UncaughtZoneError', error.toString(), stackTrace: stack);
+    },
+  );
 }
 
 void _configureEasyLoading() {
@@ -110,107 +105,147 @@ void _configureEasyLoading() {
     ..dismissOnTap = false;
 }
 
-void _runErrorApp(String error) {
-  runApp(MaterialApp(
-    debugShowCheckedModeBanner: false,
-    home: Scaffold(
-      backgroundColor: Colors.white,
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.error_outline, size: 64, color: Colors.red),
-              const SizedBox(height: 16),
-              const Text(
-                'Application Error',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+class MyApp extends ConsumerStatefulWidget {
+  const MyApp({super.key});
+
+  @override
+  ConsumerState<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends ConsumerState<MyApp> {
+  StreamSubscription? _notificationSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _initServices();
+  }
+
+  Future<void> _initServices() async {
+    try {
+      final notifService = ref.read(notificationServiceProvider);
+      await notifService.init();
+
+      // Wire up the Foreground Stream to the Aesthetic UI
+      _notificationSubscription = notifService.foregroundStream.listen((
+        message,
+      ) {
+        if (message.notification != null) {
+          _showAestheticInAppNotification(message);
+        }
+      });
+
+      // Handle App Opening from Notification
+      final router = ref.read(routerProvider);
+      await notifService.setupInteractedMessage(router);
+
+      AppLogger.info('MyApp', 'Services wired up');
+    } catch (e, st) {
+      AppLogger.error('MyApp', 'Service Init Failed', error: e, stackTrace: st);
+    }
+  }
+
+  /// Shows a custom styled SnackBar that matches the app aesthetic
+  void _showAestheticInAppNotification(RemoteMessage message) {
+    final title = message.notification?.title ?? 'Notification';
+    final body = message.notification?.body ?? '';
+
+    rootScaffoldMessengerKey.currentState?.showSnackBar(
+      SnackBar(
+        elevation: 6,
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: AppColors.secondary, // Navy Brand Color
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        margin: const EdgeInsets.all(16),
+        duration: const Duration(seconds: 4),
+        content: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withOpacity(0.2), // Orange tint
+                shape: BoxShape.circle,
               ),
-              const SizedBox(height: 8),
-              Text(
-                error,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.grey),
+              child: const Icon(
+                Icons.notifications_active,
+                color: AppColors.primary,
+                size: 20,
               ),
-            ],
-          ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      fontSize: 14,
+                    ),
+                  ),
+                  if (body.isNotEmpty)
+                    Text(
+                      body,
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.8),
+                        fontSize: 12,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        action: SnackBarAction(
+          label: 'VIEW',
+          textColor: AppColors.primary,
+          onPressed: () {
+            // Handle simple foreground tap if needed
+            // For complex routing, using the stream data is better
+          },
         ),
       ),
-    ),
-  ));
-}
+    );
+  }
 
-class AppServices {
-  final ApiService apiService;
-  final StorageService storageService;
-  final String googleClientId;
-  final NavigationService navigationService;
-
-  const AppServices({
-    required this.apiService,
-    required this.storageService,
-    required this.googleClientId,
-    required this.navigationService,
-  });
-}
-
-class MyApp extends StatelessWidget {
-  final AppServices services;
-
-  const MyApp({
-    super.key,
-    required this.services,
-  });
+  @override
+  void dispose() {
+    _notificationSubscription?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    // Dismiss loading on auth change
+    ref.listen(authStateChangesProvider, (prev, next) {
+      if (!next.isLoading) {
+        EasyLoading.dismiss();
+      }
+    });
+
+    final router = ref.watch(routerProvider);
+    final themeMode = ref.watch(themeModeProvider);
+
     return ScreenUtilInit(
       designSize: const Size(375, 812),
       minTextAdapt: true,
       splitScreenMode: true,
-      builder: (context, child) {
-        return MultiProvider(
-          providers: [
-            // Services
-            Provider.value(value: services.apiService),
-            Provider.value(value: services.storageService),
-            Provider.value(value: services.navigationService),
-            Provider(create: (_) => FeedbackService()),
-
-            // State Management
-            ChangeNotifierProvider(
-              create: (context) => AuthProvider(
-                apiService: services.apiService,
-                storageService: services.storageService,
-                googleClientId: services.googleClientId,
-              )..init(),
-            ),
-            ChangeNotifierProvider(
-              create: (context) => DataProvider(
-                apiService: services.apiService,
-              ),
-            ),
-          ],
-          child: Consumer<AuthProvider>(
-            builder: (context, authProvider, _) {
-              return MaterialApp(
-                title: 'SpareWo',
-                debugShowCheckedModeBanner: false,
-                theme: AppTheme.light,
-                navigatorKey: services.navigationService.navigatorKey,
-                scaffoldMessengerKey: services.navigationService.scaffoldKey,
-                builder: (context, child) {
-                  child = EasyLoading.init()(context, child);
-                  return child ?? const SizedBox.shrink();
-                },
-                onGenerateRoute: AppRouter.onGenerateRoute,
-                initialRoute: AppRouter.splash,
-              );
-            },
-          ),
-        );
-      },
+      builder: (context, _) => MaterialApp.router(
+        scaffoldMessengerKey:
+            rootScaffoldMessengerKey, // Global Key for Notifications
+        title: 'SpareWo Client',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.light,
+        darkTheme: AppTheme.dark,
+        themeMode: themeMode,
+        routerConfig: router,
+        builder: EasyLoading.init(),
+      ),
     );
   }
 }

@@ -1,3 +1,5 @@
+// lib/exceptions/auth_exceptions.dart
+
 class AuthException implements Exception {
   final String message;
   final String? code;
@@ -22,6 +24,13 @@ class AuthException implements Exception {
   bool get isWeakPassword => code == 'weak-password';
   bool get isTokenExpired => code == 'token-expired';
   bool get isNetworkError => code == 'network-error';
+
+  // --- ADDED STATIC CODES FOR VERIFICATION (NO REMOVALS) ---
+  static const String verificationFailed = 'verification-failed';
+  static const String verificationNotFound = 'verification-not-found';
+  static const String tooManyAttempts = 'too-many-attempts';
+  static const String verificationExpired = 'verification-expired';
+  static const String invalidVerificationCode = 'invalid-verification-code';
 }
 
 class GoogleAuthException implements Exception {
@@ -127,5 +136,20 @@ class SessionException extends AuthException {
     this.lastActivity,
     this.deviceId,
     super.metadata,
+  });
+}
+
+// --- ADDED VERIFICATIONEXCEPTION CLASS TO FIX ERRORS (NO REMOVALS) ---
+class VerificationException extends AuthException {
+  final DateTime? expiresAt;
+  final int? attempts;
+  final bool wasCodeGenerated;
+
+  const VerificationException({
+    required super.message,
+    super.code,
+    this.expiresAt,
+    this.attempts,
+    this.wasCodeGenerated = false,
   });
 }

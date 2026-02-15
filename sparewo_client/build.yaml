@@ -1,0 +1,9 @@
+targets:
+  $default:
+    builders:
+      riverpod_generator:
+        options:
+          part_of_file: true
+      json_serializable:
+        options:
+          explicit_to_json: true

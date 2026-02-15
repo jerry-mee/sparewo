@@ -1,3 +1,5 @@
+// lib/utils/validators.dart
+
 class Validators {
   static String? email(String? value) {
     if (value == null || value.isEmpty) {
@@ -19,7 +21,8 @@ class Validators {
     return null;
   }
 
-  static String? required(String? value, String field) {
+  // FIX: Renamed 'required' to 'notEmpty' to match usage in the UI files.
+  static String? notEmpty(String? value, String field) {
     if (value == null || value.isEmpty) {
       return '$field is required';
     }
@@ -36,11 +39,12 @@ class Validators {
     return null;
   }
 
-  static String? number(String? value, String field) {
+  // FIX: Fixed the signature of the 'number' validator.
+  static String? number(String? value) {
     if (value == null || value.isEmpty) {
-      return '$field is required';
+      return 'A number is required';
     }
-    if (!RegExp(r'^[0-9]+$').hasMatch(value)) {
+    if (double.tryParse(value) == null) {
       return 'Please enter a valid number';
     }
     return null;
@@ -50,18 +54,14 @@ class Validators {
     if (value == null || value.isEmpty) {
       return 'Price is required';
     }
-    if (!RegExp(r'^\d+\.?\d{0,2}$').hasMatch(value)) {
+    // Remove commas for validation
+    final cleanValue = value.replaceAll(',', '');
+    if (!RegExp(r'^\d+$').hasMatch(cleanValue)) {
       return 'Please enter a valid price';
     }
-    return null;
-  }
-
-  static String? quantity(String? value) {
-    if (value == null || value.isEmpty) {
-      return 'Quantity is required';
-    }
-    if (!RegExp(r'^[0-9]+$').hasMatch(value)) {
-      return 'Please enter a valid quantity';
+    final numValue = int.tryParse(cleanValue);
+    if (numValue == null || numValue <= 0) {
+      return 'Price must be greater than 0';
     }
     return null;
   }

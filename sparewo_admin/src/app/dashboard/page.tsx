@@ -1,73 +1,64 @@
+// src/app/dashboard/page.tsx
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { 
-  Users, 
-  Package, 
-  ShoppingCart, 
-  Clock, 
-  CheckCircle, 
-  AlertCircle, 
-  PlusCircle, 
-  Truck 
+import {
+  Users,
+  Package,
+  CheckCircle,
+  AlertCircle,
+  Wrench,
+  Store,
+  Truck
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatCard } from "@/components/ui/stat-card";
-import { getTotalVendorCount, countVendorsByStatus } from "@/lib/firebase/vendors";
-import { getTotalProductCount, countProductsByStatus } from "@/lib/firebase/products";
+import { getTotalVendorCount } from "@/lib/firebase/vendors";
+import { getTotalProductCount } from "@/lib/firebase/products";
+import { getTotalClientCount } from "@/lib/firebase/clients";
+import { getTotalBookingCount } from "@/lib/firebase/autohub";
 import Link from "next/link";
 
 export default function Dashboard() {
-  // Stats state
   const [stats, setStats] = useState({
     vendors: 0,
-    vendorChange: "+0%",
     products: 0,
-    productChange: "+0%",
-    pendingApprovals: 0,
-    orders: 0,
-    orderChange: "+0%"
+    clients: 0,
+    activeBookings: 0,
   });
 
-  // Fetch stats on component mount
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const totalVendors = await getTotalVendorCount();
-        const pendingVendors = await countVendorsByStatus('pending');
-        const totalProducts = await getTotalProductCount();
-        const pendingProducts = await countProductsByStatus('pending');
-        
-        // Calculate total pending approvals
-        const totalPending = pendingVendors + pendingProducts;
-        
+        // Fetch all counts in parallel
+        const [
+          totalVendors, 
+          totalProducts,
+          totalClients,
+          activeBookings
+        ] = await Promise.all([
+          getTotalVendorCount(),
+          getTotalProductCount(),
+          getTotalClientCount(),
+          getTotalBookingCount("pending") // Count only pending bookings for "Active Requests"
+        ]);
+
         setStats({
           vendors: totalVendors,
-          vendorChange: "+12%", // Example - would need historical data for real value
           products: totalProducts,
-          productChange: "+8%", // Example - would need historical data for real value
-          pendingApprovals: totalPending,
-          orders: 0, // Would need order data
-          orderChange: "+0%"
+          clients: totalClients, 
+          activeBookings: activeBookings,
         });
       } catch (error) {
         console.error('Error fetching dashboard stats:', error);
       }
     };
-    
+
     fetchStats();
   }, []);
 
-  // Sample activity feed
-  const recentActivity: {
-    id: string;
-    icon: React.ReactNode;
-    title: string;
-    description: string;
-    time: string;
-    status: 'success' | 'warning' | 'danger';
-  }[] = [
+  const recentActivity = [
     {
       id: '1',
       icon: <Users size={16} />,
@@ -94,13 +85,13 @@ export default function Dashboard() {
     },
     {
       id: '4',
-      icon: <ShoppingCart size={16} />,
-      title: 'New order received',
-      description: 'Order #10234 needs to be assigned to a vendor',
+      icon: <Wrench size={16} />,
+      title: 'New Service Request',
+      description: 'Service booking #BK-2024-001 needs assignment',
       time: 'Yesterday',
       status: 'warning',
     },
-  ];
+  ] as const;
 
   return (
     <div className="space-y-6">
@@ -110,39 +101,39 @@ export default function Dashboard() {
           Welcome back, here&apos;s what&apos;s happening with your platform today.
         </p>
       </div>
-      
+
       {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard 
-          title="Total Vendors" 
-          value={stats.vendors} 
-          change={stats.vendorChange} 
-          icon={<Users className="h-6 w-6 text-white" />} 
+        <StatCard
+          title="Total Clients"
+          value={stats.clients}
+          change="+5%"
+          icon={<Users className="h-6 w-6 text-white" />}
+          color="bg-blue-600"
+        />
+        <StatCard
+          title="Active Requests"
+          value={stats.activeBookings}
+          change="+2"
+          icon={<Wrench className="h-6 w-6 text-white" />}
+          color="bg-purple-600"
+        />
+        <StatCard
+          title="Total Vendors"
+          value={stats.vendors}
+          change="+12%"
+          icon={<Store className="h-6 w-6 text-white" />}
           color="bg-indigo-600"
         />
-        <StatCard 
-          title="Products" 
-          value={stats.products} 
-          change={stats.productChange} 
-          icon={<Package className="h-6 w-6 text-white" />} 
+        <StatCard
+          title="Products"
+          value={stats.products}
+          change="+8%"
+          icon={<Package className="h-6 w-6 text-white" />}
           color="bg-orange-500"
         />
-        <StatCard 
-          title="Pending Approvals" 
-          value={stats.pendingApprovals} 
-          change="-"
-          icon={<Clock className="h-6 w-6 text-white" />} 
-          color="bg-amber-500"
-        />
-        <StatCard 
-          title="Total Orders" 
-          value={stats.orders} 
-          change={stats.orderChange} 
-          icon={<ShoppingCart className="h-6 w-6 text-white" />} 
-          color="bg-green-600"
-        />
       </div>
-      
+
       {/* Main Content */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Quick Actions */}
@@ -151,45 +142,33 @@ export default function Dashboard() {
             <CardTitle>Quick Actions</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
+            <Link href="/dashboard/autohub">
+              <Button variant="outline" className="flex items-center w-full justify-start">
+                <Wrench size={18} className="mr-2" />
+                Manage AutoHub
+              </Button>
+            </Link>
+            <Link href="/dashboard/clients">
+              <Button variant="outline" className="flex items-center w-full justify-start">
+                <Users size={18} className="mr-2" />
+                View Clients
+              </Button>
+            </Link>
             <Link href="/dashboard/vendors/pending">
-              <Button 
-                variant="outline" 
-                className="flex items-center w-full justify-start"
-              >
+              <Button variant="outline" className="flex items-center w-full justify-start">
                 <CheckCircle size={18} className="mr-2" />
                 Approve Vendors
               </Button>
             </Link>
-            <Link href="/dashboard/products/pending">
-              <Button 
-                variant="outline" 
-                className="flex items-center w-full justify-start"
-              >
-                <Package size={18} className="mr-2" />
-                Review Products
-              </Button>
-            </Link>
             <Link href="/dashboard/orders">
-              <Button 
-                variant="outline" 
-                className="flex items-center w-full justify-start"
-              >
+              <Button variant="outline" className="flex items-center w-full justify-start">
                 <Truck size={18} className="mr-2" />
                 Process Orders
               </Button>
             </Link>
-            <Link href="/dashboard/vendors">
-              <Button 
-                variant="outline" 
-                className="flex items-center w-full justify-start"
-              >
-                <PlusCircle size={18} className="mr-2" />
-                Manage Vendors
-              </Button>
-            </Link>
           </CardContent>
         </Card>
-        
+
         {/* Recent Activity */}
         <Card className="lg:col-span-2">
           <CardHeader>
@@ -198,7 +177,7 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             {recentActivity.map((activity) => (
-              <ActivityItem 
+              <ActivityItem
                 key={activity.id}
                 icon={activity.icon}
                 title={activity.title}
@@ -229,7 +208,7 @@ const ActivityItem = ({ icon, title, description, time, status }: ActivityItemPr
     warning: 'bg-amber-500',
     danger: 'bg-red-500'
   };
-  
+
   return (
     <div className="flex items-start mb-4 pb-4 border-b border-gray-200 dark:border-gray-700 last:border-0">
       <div className={`${statusColors[status]} p-2 rounded-full mr-4 text-white flex-shrink-0`}>

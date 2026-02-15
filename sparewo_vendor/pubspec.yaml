@@ -1,7 +1,7 @@
-name: sparewo
-description: SpareWo - Car Parts and Service App
+name: sparewo_vendor
+description: SpareWo Vendor - Car Parts Management App
 publish_to: 'none'
-version: 1.0.0+1
+version: 3.8.0+38
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -9,95 +9,97 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-
-  # Firebase
-  firebase_core: ^3.8.0
-  firebase_auth: ^5.3.3
-  cloud_firestore: ^5.5.0
-  firebase_storage: ^12.3.6
-
+  
+  # Firebase - Latest stable versions (June 2025)
+  firebase_core: ^3.14.0
+  firebase_auth: ^5.6.0
+  cloud_firestore: ^5.6.9
+  firebase_storage: ^12.4.7
+  firebase_app_check: ^0.3.2+7
+  
+  # State Management - Latest compatible versions
+  flutter_riverpod: ^2.6.1
+  
+  # Env and Secure Storage
+  flutter_dotenv: ^5.2.1
+  flutter_secure_storage: ^9.2.4
+  
   # Core Functionality
-  vibration: ^2.0.1
-  fluttertoast: ^8.2.8
-  collection: ^1.18.0
-  intl: ^0.19.0
-  json_annotation: ^4.8.1
-
+  vibration: ^3.1.3
+  fluttertoast: ^8.2.12
+  collection: ^1.19.1
+  intl: ^0.20.2
+  
   # UI and Design
-  cupertino_icons: ^1.0.6
-  google_fonts: ^6.1.0
-  flutter_svg: ^2.0.15
+  cupertino_icons: ^1.0.8
+  google_fonts: ^6.2.1
+  flutter_svg: ^2.2.0
   cached_network_image: ^3.4.1
   shimmer: ^3.0.0
-  flutter_screenutil: ^5.9.0
-  font_awesome_flutter: ^10.6.0
+  flutter_screenutil: ^5.9.3
+  font_awesome_flutter: ^10.8.0
   dropdown_button2: ^2.3.9
-  carousel_slider: ^5.0.0
+  carousel_slider: ^5.1.1
   pull_to_refresh: ^2.0.0
-  flutter_form_builder: ^9.1.1
-  form_builder_validators: ^11.0.0
-
+  flutter_form_builder: ^10.0.1
+  form_builder_validators: ^11.2.0
+  
   # Animation and Transitions
-  flutter_animate: ^4.5.1
-  animations: ^2.0.8
+  flutter_animate: ^4.5.2
+  animations: ^2.0.11
   flutter_easyloading: ^3.0.5
-  lottie: ^3.1.3
-
-  # State Management
-  provider: ^6.1.1
-  flutter_riverpod: ^2.4.9
-
+  lottie: ^3.3.1
+  
   # Authentication and Storage
-  google_sign_in: ^6.2.2
-  shared_preferences: ^2.3.3
-  flutter_secure_storage: ^9.0.0
-
+  google_sign_in: ^6.3.0
+  shared_preferences: ^2.5.3
+  
   # Networking
-  http: ^1.2.2
-  dio: ^5.4.0
-  connectivity_plus: ^6.1.0
-
+  http: ^1.4.0
+  dio: ^5.8.0+1
+  connectivity_plus: ^6.1.4
+  
   # Date and Time
-  flutter_datetime_picker_plus: ^2.1.0
-
+  flutter_datetime_picker_plus: ^2.2.0
+  
   # Utils and Tools
-  url_launcher: ^6.2.2
-  package_info_plus: ^8.1.1
-  device_info_plus: ^11.1.1
-  path_provider: ^2.1.1
-  permission_handler: ^11.0.1
+  url_launcher: ^6.3.1
+  package_info_plus: ^8.3.0
+  device_info_plus: ^11.5.0
+  path_provider: ^2.1.5
+  permission_handler: ^12.0.0+1
+  image_picker: ^1.1.2
+  timeago: ^3.7.1
+  logger: ^2.6.0
+  path: ^1.9.1
+  uuid: ^4.5.1
+  file_picker: ^10.2.0
+  photo_view: ^0.15.0
+  hive_flutter: ^1.1.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   integration_test:
     sdk: flutter
-
-  # Development Tools
-  flutter_lints: ^5.0.0
-  build_runner: ^2.4.7
-  json_serializable: ^6.9.0
-  flutter_gen_runner: ^5.3.2
-  flutter_launcher_icons: ^0.14.1
-  flutter_native_splash: ^2.4.3
-  mockito: ^5.4.4
+  flutter_lints: ^6.0.0
+  build_runner: ^2.5.4
+  flutter_gen_runner: ^5.10.0
+  flutter_launcher_icons: ^0.14.4
+  flutter_native_splash: ^2.4.6
+  mockito: ^5.4.6
 
 flutter:
   uses-material-design: true
-
+  
   assets:
     - assets/logo/
     - assets/images/
     - assets/icons/
     - assets/fonts/
     - assets/animations/
-    - assets/logo/logo.png
-    - assets/logo/splash_logo.png
-    - assets/logo/splash_logo_dark.png
-    - assets/logo/branding.png
-    - assets/logo/branding_dark.png
-    - assets/logo/app_icon.png
-
+    - .env
+  
   fonts:
     - family: Poppins
       fonts:
@@ -137,26 +139,16 @@ flutter_native_splash:
   color_dark: "#1A1B4B"
   image_dark: assets/logo/splash_logo.png
   branding_dark: assets/logo/branding.png
-
   android_12:
     color: "#1A1B4B"
     image: assets/logo/splash_logo.png
     icon_background_color: "#1A1B4B"
     image_dark: assets/logo/splash_logo.png
     icon_background_color_dark: "#1A1B4B"
-
   android: true
   ios: true
   web: true
-
   fullscreen: true
   android_gravity: center
   ios_content_mode: center
   web_image_mode: center
-  web_width: "100%"
-  web_height: "100%"
-  web_responsive: true
-
-  info_plist_files:
-    - 'ios/Runner/Info-Debug.plist'
-    - 'ios/Runner/Info-Release.plist'

@@ -1,3 +1,4 @@
+// src/app/dashboard/vendors/[id]/page.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -30,10 +31,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea"; // Use Textarea here
+import { Textarea } from "@/components/ui/textarea"; 
 import { VendorStatusBadge } from "@/components/vendor/vendor-status-badge";
 import { ProductStatusBadge } from "@/components/product/product-status-badge";
-import { formatDate, formatDateTime } from "@/lib/utils";
+import { formatDateTime } from "@/lib/utils";
 import Link from "next/link";
 import { ChevronRight, CheckCircle, XCircle, ArrowLeft, ExternalLink } from "lucide-react";
 import { toast } from "sonner";

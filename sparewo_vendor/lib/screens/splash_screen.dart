@@ -1,12 +1,14 @@
+// lib/screens/splash_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:sparewo_vendor/constants/enums.dart';
-import '../providers/auth_provider.dart';
+import 'package:sparewo_vendor/routes/app_router.dart';
+import '../constants/enums.dart';
+import '../providers/providers.dart';
 import '../theme.dart';
+import 'dart:async';
 
 class SplashScreen extends ConsumerStatefulWidget {
-  const SplashScreen({super.key});
+  const SplashScreen({Key? key}) : super(key: key);
 
   @override
   ConsumerState<SplashScreen> createState() => _SplashScreenState();
@@ -16,48 +18,64 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    _checkFirstRun();
-  }
-
-  Future<void> _checkFirstRun() async {
-    final prefs = await SharedPreferences.getInstance();
-    final isFirstRun = prefs.getBool('is_first_run') ?? true;
-
-    // Simulate a delay for splash screen
-    await Future.delayed(const Duration(seconds: 2));
-
-    if (!mounted) return;
-
-    if (isFirstRun) {
-      await prefs.setBool('is_first_run', false);
-      Navigator.pushReplacementNamed(context, '/onboarding');
-    } else {
-      final authState = ref.read(authStateNotifierProvider);
-      if (authState.status == AuthStatus.authenticated) {
-        Navigator.pushReplacementNamed(context, '/dashboard');
-      } else {
-        Navigator.pushReplacementNamed(context, '/login');
+    // Delay the auth check to ensure providers are ready
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (mounted) {
+        ref.read(authNotifierProvider.notifier).checkCurrentUser();
       }
-    }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<AuthStatus>(authNotifierProvider.select((s) => s.status),
+        (previous, next) {
+      // Avoid duplicate navigation
+      if (previous == next ||
+          next == AuthStatus.initial ||
+          next == AuthStatus.loading) return;
+
+      Timer(const Duration(milliseconds: 200), () {
+        if (!mounted) return;
+
+        String? routeName;
+        switch (next) {
+          case AuthStatus.authenticated:
+            routeName = AppRouter.dashboard;
+            break;
+          case AuthStatus.unverified:
+            routeName = AppRouter.emailVerification;
+            break;
+          case AuthStatus.unauthenticated:
+          case AuthStatus.onboardingRequired:
+          case AuthStatus.error:
+          case AuthStatus.needsReauthentication:
+            routeName = AppRouter.login;
+            break;
+          default:
+            break;
+        }
+
+        if (routeName != null) {
+          Navigator.pushNamedAndRemoveUntil(
+              context, routeName, (route) => false);
+        }
+      });
+    });
+
     return Scaffold(
-      backgroundColor: VendorColors.secondary,
+      backgroundColor: Theme.of(context).colorScheme.secondary,
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Image.asset(
-              'assets/logo/splash_logo.png',
-              width: 150,
-              height: 150,
-            ),
+            Image.asset('assets/logo/splash_logo.png',
+                width: 150,
+                errorBuilder: (_, __, ___) => const Icon(Icons.car_repair,
+                    size: 100, color: Colors.white)),
             const SizedBox(height: 32),
             const CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-            ),
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.white)),
           ],
         ),
       ),

@@ -1,4 +1,6 @@
-import 'package:freezed_annotation/freezed_annotation.dart';
+// lib/constants/enums.dart
+
+// --- Core App & Authentication Enums ---
 
 enum AuthStatus {
   initial,
@@ -6,7 +8,19 @@ enum AuthStatus {
   unauthenticated,
   loading,
   error,
+  unverified,
+  needsReauthentication,
+  onboardingRequired,
 }
+
+enum LoadingStatus {
+  initial,
+  loading,
+  success,
+  error,
+}
+
+// --- Vendor & Product Enums ---
 
 enum VendorStatus {
   pending,
@@ -14,6 +28,82 @@ enum VendorStatus {
   suspended,
   rejected,
 }
+
+extension VendorStatusExt on VendorStatus {
+  String get displayName {
+    switch (this) {
+      case VendorStatus.pending:
+        return 'Pending';
+      case VendorStatus.approved:
+        return 'Approved';
+      case VendorStatus.suspended:
+        return 'Suspended';
+      case VendorStatus.rejected:
+        return 'Rejected';
+    }
+  }
+}
+
+enum ProductStatus { pending, approved, rejected, suspended }
+
+extension ProductStatusExt on ProductStatus {
+  String get displayName {
+    switch (this) {
+      case ProductStatus.pending:
+        return 'Pending';
+      case ProductStatus.approved:
+        return 'Approved';
+      case ProductStatus.rejected:
+        return 'Rejected';
+      case ProductStatus.suspended:
+        return 'Suspended';
+    }
+  }
+}
+
+enum PartCondition { new_, used }
+
+extension PartConditionExt on PartCondition {
+  String get displayName {
+    switch (this) {
+      case PartCondition.new_:
+        return 'New';
+      case PartCondition.used:
+        return 'Used';
+    }
+  }
+}
+
+// Product Category Enum
+enum ProductCategory {
+  tyres,
+  bodyKits,
+  engine,
+  electrical,
+  chassis,
+  accessories,
+}
+
+extension ProductCategoryExt on ProductCategory {
+  String get displayName {
+    switch (this) {
+      case ProductCategory.tyres:
+        return 'Tyres';
+      case ProductCategory.bodyKits:
+        return 'Body Kits';
+      case ProductCategory.engine:
+        return 'Engine';
+      case ProductCategory.electrical:
+        return 'Electrical';
+      case ProductCategory.chassis:
+        return 'Chassis';
+      case ProductCategory.accessories:
+        return 'Accessories';
+    }
+  }
+}
+
+// --- Order & Payment Enums ---
 
 enum OrderStatus {
   pending,
@@ -32,53 +122,35 @@ enum PaymentStatus {
   refunded,
 }
 
-enum LoadingStatus {
-  initial,
-  loading,
-  success,
-  error,
+// --- Notification Enums ---
+
+enum NotificationType {
+  order,
+  orderUpdate,
+  productUpdate,
+  stockAlert,
+  promotion,
+  general,
+  newMessage,
 }
 
-enum ProductStatus {
-  @JsonValue('pending')
-  pending,
-  @JsonValue('approved')
-  approved,
-  @JsonValue('rejected')
-  rejected,
-  @JsonValue('suspended')
-  suspended
-}
-
-enum PartCondition {
-  @JsonValue('new')
-  new_,
-  @JsonValue('used')
-  used
-}
-
-extension PartConditionExt on PartCondition {
+extension NotificationTypeExt on NotificationType {
   String get displayName {
     switch (this) {
-      case PartCondition.new_:
-        return 'New';
-      case PartCondition.used:
-        return 'Used';
-    }
-  }
-}
-
-extension ProductStatusExt on ProductStatus {
-  String get displayName {
-    switch (this) {
-      case ProductStatus.pending:
-        return 'Pending';
-      case ProductStatus.approved:
-        return 'Approved';
-      case ProductStatus.rejected:
-        return 'Rejected';
-      case ProductStatus.suspended:
-        return 'Suspended';
+      case NotificationType.order:
+        return 'New Order';
+      case NotificationType.orderUpdate:
+        return 'Order Update';
+      case NotificationType.productUpdate:
+        return 'Product Update';
+      case NotificationType.stockAlert:
+        return 'Stock Alert';
+      case NotificationType.promotion:
+        return 'Promotion';
+      case NotificationType.general:
+        return 'General';
+      case NotificationType.newMessage:
+        return 'New Message';
     }
   }
 }

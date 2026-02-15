@@ -1,29 +1,88 @@
-import 'package:freezed_annotation/freezed_annotation.dart';
+// lib/models/notification.dart
+
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../constants/notification_types.dart';
+import '../constants/enums.dart';
 
-part 'notification.freezed.dart';
-part 'notification.g.dart';
+class VendorNotification {
+  final String id;
+  final String vendorId;
+  final String title;
+  final String message;
+  final NotificationType type;
+  final Map<String, dynamic> data;
+  final bool isRead;
+  final String? imageUrl;
+  final DateTime createdAt;
+  final DateTime? readAt;
 
-@freezed
-class VendorNotification with _$VendorNotification {
-  const factory VendorNotification({
-    required String id,
-    required String vendorId,
-    required String title,
-    required String message,
-    required NotificationType type,
-    required Map<String, dynamic> data,
-    @Default(false) bool isRead,
+  const VendorNotification({
+    required this.id,
+    required this.vendorId,
+    required this.title,
+    required this.message,
+    required this.type,
+    required this.data,
+    this.isRead = false,
+    this.imageUrl,
+    required this.createdAt,
+    this.readAt,
+  });
+
+  VendorNotification copyWith({
+    String? id,
+    String? vendorId,
+    String? title,
+    String? message,
+    NotificationType? type,
+    Map<String, dynamic>? data,
+    bool? isRead,
     String? imageUrl,
-    required DateTime createdAt,
+    DateTime? createdAt,
     DateTime? readAt,
-  }) = _VendorNotification;
+  }) {
+    return VendorNotification(
+      id: id ?? this.id,
+      vendorId: vendorId ?? this.vendorId,
+      title: title ?? this.title,
+      message: message ?? this.message,
+      type: type ?? this.type,
+      data: data ?? this.data,
+      isRead: isRead ?? this.isRead,
+      imageUrl: imageUrl ?? this.imageUrl,
+      createdAt: createdAt ?? this.createdAt,
+      readAt: readAt ?? this.readAt,
+    );
+  }
 
-  const VendorNotification._();
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'vendorId': vendorId,
+      'title': title,
+      'message': message,
+      'type': type.name,
+      'data': data,
+      'isRead': isRead,
+      'imageUrl': imageUrl,
+      'createdAt': createdAt.toIso8601String(),
+      'readAt': readAt?.toIso8601String(),
+    };
+  }
 
-  factory VendorNotification.fromJson(Map<String, dynamic> json) =>
-      _$VendorNotificationFromJson(json);
+  factory VendorNotification.fromJson(Map<String, dynamic> json) {
+    return VendorNotification(
+      id: json['id'],
+      vendorId: json['vendorId'],
+      title: json['title'],
+      message: json['message'],
+      type: NotificationType.values.byName(json['type']),
+      data: json['data'],
+      isRead: json['isRead'] ?? false,
+      imageUrl: json['imageUrl'],
+      createdAt: DateTime.parse(json['createdAt']),
+      readAt: json['readAt'] != null ? DateTime.parse(json['readAt']) : null,
+    );
+  }
 
   factory VendorNotification.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;

@@ -1,0 +1,106 @@
+{
+  "project_info": {
+    "project_number": "858998050859",
+    "project_id": "sparewoapp",
+    "storage_bucket": "sparewoapp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:858998050859:android:5bbf99e694b73574071a6e",
+        "android_client_info": {
+          "package_name": "com.sparewo.client"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "858998050859-ee25e1r04ce8h889hurughn9ej92u709.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.sparewo.client",
+            "certificate_hash": "68abc0b8ad641b32fe6a5116da7b44d527d205cb"
+          }
+        },
+        {
+          "client_id": "858998050859-ql7ri8eea645sjt656s29247rg6b7qe2.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.sparewo.client",
+            "certificate_hash": "a9531623ea81957e12eeb4773f143f0570297504"
+          }
+        },
+        {
+          "client_id": "858998050859-97m3damgptfrnmkvnhrghjdeub6ilmdp.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDwaPqmEV0UPdPPMV351GXPycDvjgoF5UE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "858998050859-97m3damgptfrnmkvnhrghjdeub6ilmdp.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "858998050859-jjdnmhju8g6l7f51qv1og683a7u4f9b7.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.sparewo.vendor"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:858998050859:android:bc7c8857ea7699eb071a6e",
+        "android_client_info": {
+          "package_name": "com.sparewo.vendor"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "858998050859-0gr6qk1ap6laoj9k3rnou8l73g2hlnam.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.sparewo.vendor",
+            "certificate_hash": "02ca62b13645dc4f7c9467486b217ca2bda1cd6b"
+          }
+        },
+        {
+          "client_id": "858998050859-97m3damgptfrnmkvnhrghjdeub6ilmdp.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDwaPqmEV0UPdPPMV351GXPycDvjgoF5UE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "858998050859-97m3damgptfrnmkvnhrghjdeub6ilmdp.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "858998050859-jjdnmhju8g6l7f51qv1og683a7u4f9b7.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.sparewo.vendor"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,278 +1,185 @@
-// lib/screens/dashboard/widgets/dashboard_stats.dart
-
+// File: lib/screens/dashboard/widgets/dashboard_stats.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:sparewo_vendor/routes/app_router.dart';
+import '../../../providers/stats_provider.dart';
 import '../../../theme.dart';
 import '../../../models/dashboard_stats.dart' as models;
-import '../../../providers/stats_provider.dart';
 
 class DashboardStats extends ConsumerWidget {
   const DashboardStats({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final statsAsync = ref.watch(statsAsyncProvider);
+    final statsAsync = ref.watch(statsStreamProvider);
 
-    return statsAsync.when(
-      data: (models.DashboardStats stats) => StatsGrid(stats: stats),
-      loading: () => const LoadingStats(),
-      error: (error, stackTrace) =>
-          ErrorStats(error: error.toString(), ref: ref),
-    );
-  }
-}
-
-class StatsGrid extends StatelessWidget {
-  final models.DashboardStats stats;
-
-  const StatsGrid({
-    super.key,
-    required this.stats,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: GridView.count(
-        crossAxisCount: 2,
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        childAspectRatio: 1.5,
-        mainAxisSpacing: 16,
-        crossAxisSpacing: 16,
-        children: [
-          StatCard(
-            title: 'Total Sales',
-            value: 'UGX ${stats.totalSales.toStringAsFixed(2)}',
-            icon: Icons.monetization_on,
-            color: VendorColors.primary,
-          ),
-          StatCard(
-            title: 'Today\'s Sales',
-            value: 'UGX ${stats.todaySales.toStringAsFixed(2)}',
-            icon: Icons.today,
-            color: VendorColors.success,
-          ),
-          StatCard(
-            title: 'Active Orders',
-            value: stats.activeOrders.toString(),
-            icon: Icons.pending_actions,
-            color: VendorColors.pending,
-          ),
-          StatCard(
-            title: 'Completed Orders',
-            value: stats.completedOrders.toString(),
-            icon: Icons.check_circle,
-            color: VendorColors.approved,
-          ),
-          StatCard(
-            title: 'Total Products',
-            value: stats.totalProducts.toString(),
-            icon: Icons.inventory,
-            color: VendorColors.primary,
-          ),
-          StatCard(
-            title: 'Out of Stock',
-            value: stats.outOfStockProducts.toString(),
-            icon: Icons.warning,
-            color: VendorColors.error,
-            isWarning: true,
-          ),
-          StatCard(
-            title: 'Average Rating',
-            value: '${stats.averageRating.toStringAsFixed(1)} ⭐',
-            icon: Icons.star,
-            color: Colors.amber,
-          ),
-          StatCard(
-            title: 'Total Reviews',
-            value: stats.totalReviews.toString(),
-            icon: Icons.rate_review,
-            color: VendorColors.secondary,
-          ),
-        ],
+    return Card(
+      elevation: 4,
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        constraints: const BoxConstraints(minHeight: 220),
+        child: statsAsync.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (err, stack) => _buildEmptyState(context),
+          data: (stats) {
+            if (stats.totalProducts == 0 && stats.totalSales == 0) {
+              return _buildEmptyState(context);
+            }
+            return _buildStatsGrid(context, stats);
+          },
+        ),
       ),
     );
   }
-}
 
-class StatCard extends StatelessWidget {
-  final String title;
-  final String value;
-  final IconData icon;
-  final Color color;
-  final bool isWarning;
+  Widget _buildEmptyState(BuildContext context) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(Icons.bar_chart_rounded,
+            size: 48,
+            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6)),
+        const SizedBox(height: 16),
+        Text('Your Store Stats Appear Here',
+            style: Theme.of(context).textTheme.displaySmall,
+            textAlign: TextAlign.center),
+        const SizedBox(height: 8),
+        Text(
+            'Add your first product to start selling and see your performance grow!',
+            style: Theme.of(context).textTheme.bodyMedium,
+            textAlign: TextAlign.center),
+        const SizedBox(height: 20),
+        ElevatedButton.icon(
+          onPressed: () =>
+              Navigator.pushNamed(context, AppRouter.addEditProduct),
+          icon: const Icon(Icons.add_shopping_cart_rounded),
+          label: const Text('Add Your First Product'),
+          style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 20, vertical: 12)),
+        )
+      ],
+    );
+  }
 
-  const StatCard({
-    super.key,
-    required this.title,
-    required this.value,
-    required this.icon,
-    required this.color,
-    this.isWarning = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  Widget _buildStatsGrid(BuildContext context, models.DashboardStats stats) {
+    return Column(
+      children: [
+        Row(
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Icon(
-                  icon,
-                  size: 24,
-                  color: color,
-                ),
-                if (isWarning &&
-                    int.tryParse(value) != null &&
-                    int.parse(value) > 0)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: VendorColors.error.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      'Alert',
-                      style: VendorTextStyles.caption.copyWith(
-                        color: VendorColors.error,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              title,
-              style: VendorTextStyles.body2.copyWith(
-                color: VendorColors.textLight,
+            Expanded(
+              child: _buildStatCard(
+                context: context,
+                icon: Icons.inventory_2_outlined,
+                label: 'Total Products',
+                value: stats.totalProducts.toString(),
+                color: Theme.of(context).colorScheme.primary,
+                subLabel: '${stats.activeProducts} active',
               ),
             ),
-            const SizedBox(height: 4),
-            Text(
-              value,
-              style: VendorTextStyles.heading3.copyWith(
-                color: VendorColors.text,
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildStatCard(
+                context: context,
+                icon: Icons.shopping_bag_outlined,
+                label: 'Total Orders',
+                value: stats.totalOrders.toString(),
+                color: Theme.of(context).colorScheme.secondary,
+                subLabel: '${stats.activeOrders} active',
               ),
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class LoadingStats extends StatelessWidget {
-  const LoadingStats({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: GridView.count(
-        crossAxisCount: 2,
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        childAspectRatio: 1.5,
-        mainAxisSpacing: 16,
-        crossAxisSpacing: 16,
-        children: List.generate(
-          8,
-          (index) => Card(
-            elevation: 2,
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Container(
-                    width: 24,
-                    height: 24,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[300],
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                  ),
-                  Container(
-                    width: 80,
-                    height: 16,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[300],
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                  ),
-                  Container(
-                    width: 120,
-                    height: 24,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[300],
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                  ),
-                ],
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _buildStatCard(
+                context: context,
+                icon: Icons.monetization_on_outlined,
+                label: 'Total Sales',
+                value: 'UGX ${stats.totalSales.toStringAsFixed(0)}',
+                color:
+                    Theme.of(context).extension<AppColorsExtension>()!.success,
+                subLabel: 'Today: ${stats.todaySales.toStringAsFixed(0)}',
+                isRevenue: true,
               ),
             ),
-          ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildStatCard(
+                context: context,
+                icon: Icons.star_outline,
+                label: 'Avg Rating',
+                value: stats.averageRating.toStringAsFixed(1),
+                color:
+                    Theme.of(context).extension<AppColorsExtension>()!.pending,
+                subLabel: '${stats.totalReviews} reviews',
+              ),
+            ),
+          ],
         ),
-      ),
+      ],
     );
   }
-}
 
-class ErrorStats extends ConsumerWidget {
-  final String error;
-  final WidgetRef ref;
-
-  const ErrorStats({
-    super.key,
-    required this.error,
-    required this.ref,
-  });
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Padding(
+  Widget _buildStatCard({
+    required BuildContext context,
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color color,
+    String? subLabel,
+    bool isRevenue = false,
+  }) {
+    return Container(
       padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.2)),
+      ),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(
-            Icons.error_outline,
-            size: 48,
-            color: VendorColors.error,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [Icon(icon, color: color, size: 24)],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           Text(
-            'Failed to load statistics',
-            style: VendorTextStyles.heading3.copyWith(
-              color: VendorColors.error,
+            value,
+            style: Theme.of(context).textTheme.displaySmall!.copyWith(
+                  color: color,
+                  fontSize: isRevenue ? 16 : 20,
+                ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.bodySmall!.copyWith(
+                  color: Theme.of(context).textTheme.bodyMedium!.color,
+                ),
+          ),
+          if (subLabel != null) ...[
+            const SizedBox(height: 2),
+            Text(
+              subLabel,
+              style: Theme.of(context).textTheme.bodySmall!.copyWith(
+                    color: Theme.of(context)
+                        .textTheme
+                        .bodyMedium!
+                        .color!
+                        .withOpacity(0.8),
+                    fontSize: 10,
+                  ),
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            error,
-            style: VendorTextStyles.body2,
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 16),
-          ElevatedButton.icon(
-            onPressed: () => ref.refresh(statsProvider.notifier).loadStats(),
-            icon: const Icon(Icons.refresh),
-            label: const Text('Retry'),
-          ),
+          ],
         ],
       ),
     );

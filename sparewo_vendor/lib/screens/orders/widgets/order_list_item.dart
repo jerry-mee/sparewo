@@ -1,3 +1,4 @@
+// lib/screens/orders/widgets/order_list_item.dart
 import 'package:flutter/material.dart';
 import '../../../models/order.dart';
 import '../../../theme.dart';
@@ -13,21 +14,22 @@ class OrderListItem extends StatelessWidget {
     required this.onTap,
   });
 
-  Color _getStatusColor(OrderStatus status) {
+  // FIXED: Pass context to helper method
+  Color _getStatusColor(BuildContext context, OrderStatus status) {
+    final colors = Theme.of(context).extension<AppColorsExtension>()!;
     switch (status) {
       case OrderStatus.pending:
-        return VendorColors.pending;
+        return colors.pending;
       case OrderStatus.accepted:
-        return VendorColors.primary;
       case OrderStatus.processing:
-        return VendorColors.primary;
+        return Theme.of(context).colorScheme.primary;
       case OrderStatus.readyForDelivery:
-        return VendorColors.approved;
+        return colors.approved;
       case OrderStatus.delivered:
-        return VendorColors.success;
+        return colors.success;
       case OrderStatus.cancelled:
       case OrderStatus.rejected:
-        return VendorColors.error;
+        return Theme.of(context).colorScheme.error;
     }
   }
 
@@ -42,26 +44,23 @@ class OrderListItem extends StatelessWidget {
           children: [
             Text(
               'Order #${order.id}',
-              style: VendorTextStyles.body1.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+              style: Theme.of(context).textTheme.bodyLarge!.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
             ),
             const SizedBox(width: 8),
             Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 8,
-                vertical: 4,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: _getStatusColor(order.status),
+                color: _getStatusColor(context, order.status), // Pass context
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Text(
                 order.status.name.toUpperCase(),
-                style: VendorTextStyles.caption.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: Theme.of(context).textTheme.bodySmall!.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
               ),
             ),
           ],
@@ -72,20 +71,20 @@ class OrderListItem extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               order.customerName,
-              style: VendorTextStyles.body2,
+              style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: 4),
             Text(
               order.productName,
-              style: VendorTextStyles.body2,
+              style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: 4),
             Text(
               'UGX ${order.totalAmount.toStringAsFixed(2)}',
-              style: VendorTextStyles.body2.copyWith(
-                color: VendorColors.primary,
-                fontWeight: FontWeight.bold,
-              ),
+              style: Theme.of(context).textTheme.bodyMedium!.copyWith(
+                    color: Theme.of(context).colorScheme.primary,
+                    fontWeight: FontWeight.bold,
+                  ),
             ),
           ],
         ),

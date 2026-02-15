@@ -1,0 +1,8 @@
+[
+    {
+      "origin": ["*"],
+      "method": ["GET", "POST", "PUT", "DELETE", "HEAD"],
+      "responseHeader": ["Content-Type", "Content-Length", "Content-Disposition", "Content-Encoding", "Content-Range", "Content-MD5", "Cache-Control", "ETag", "Last-Modified", "Access-Control-Allow-Origin"],
+      "maxAgeSeconds": 3600
+    }
+  ]

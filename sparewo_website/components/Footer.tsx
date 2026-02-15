@@ -15,6 +15,7 @@ const Footer: React.FC = () => {
                 {/* Links */}
                 <div className="flex flex-wrap justify-center gap-8">
                     <a href="/privacy-policy" className="text-white hover:text-primary transition-colors text-sm font-medium">Privacy Policy</a>
+                    <a href="/data-privacy" className="text-white hover:text-primary transition-colors text-sm font-medium">Data Deletion</a>
                     <a href="/terms-of-service" className="text-white hover:text-primary transition-colors text-sm font-medium">Terms of Service</a>
                     <a href="/support" className="text-white hover:text-primary transition-colors text-sm font-medium">Support</a>
                     <a href="#" className="text-white hover:text-primary transition-colors text-sm font-medium">App Store</a>

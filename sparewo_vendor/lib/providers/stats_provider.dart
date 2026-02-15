@@ -1,10 +1,9 @@
 // lib/providers/stats_provider.dart
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/stats_service.dart';
 import '../models/dashboard_stats.dart';
 import '../constants/enums.dart';
-import 'service_providers.dart';
+import 'providers.dart';
 
 class StatsState {
   final DashboardStats? stats;
@@ -42,7 +41,8 @@ class StatsState {
 }
 
 class StatsNotifier extends StateNotifier<StatsState> {
-  final StatsService _statsService;
+  // FIX: Make the service nullable to support the empty state.
+  final StatsService? _statsService;
   final String? _vendorId;
 
   StatsNotifier(this._statsService, this._vendorId)
@@ -52,13 +52,22 @@ class StatsNotifier extends StateNotifier<StatsState> {
     }
   }
 
+  // FIX: Add the .empty() factory constructor.
+  // This creates an instance of the notifier that does nothing,
+  // which is safe for when a user is logged out.
+  factory StatsNotifier.empty() {
+    return StatsNotifier(null, null);
+  }
+
   Future<void> loadStats() async {
-    if (state.isLoading || _vendorId == null) return;
+    // FIX: Add guards to prevent execution if the notifier is empty.
+    if (state.isLoading || _vendorId == null || _statsService == null) return;
 
     state = state.copyWith(isLoading: true, error: null);
 
     try {
-      final stats = await _statsService.getDashboardStats(_vendorId!);
+      // FIX: Use the null-check operator (!) because we've guarded against null above.
+      final stats = await _statsService!.getDashboardStats(_vendorId!);
       state = state.copyWith(
         stats: stats,
         status: LoadingStatus.success,
@@ -74,28 +83,27 @@ class StatsNotifier extends StateNotifier<StatsState> {
   }
 
   Stream<DashboardStats> watchStats() {
-    if (_vendorId == null) {
+    // FIX: Return an empty stream if the notifier is in an empty state.
+    if (_vendorId == null || _statsService == null) {
       return Stream.value(DashboardStats.empty());
     }
-    return _statsService.watchDashboardStats(_vendorId!);
+    // FIX: Use the null-check operator (!)
+    return _statsService!.watchDashboardStats(_vendorId!);
   }
 }
 
-// -------------------------------------------
-// Updated Provider Definition Section
-// -------------------------------------------
-
+// NOTE: The providers below are correct and do not need changes.
+// They correctly use the refactored StatsNotifier.
 final statsProvider = StateNotifierProvider<StatsNotifier, StatsState>((ref) {
   final statsService = ref.watch(statsServiceProvider);
-  final vendorId = ref.watch(currentUserIdProvider);
+  final vendorId = ref.watch(currentVendorIdProvider);
+
+  if (vendorId == null) {
+    return StatsNotifier.empty();
+  }
+
   return StatsNotifier(statsService, vendorId);
 });
-
-// -------------------------------------------
-// Derived Providers Section
-// -------------------------------------------
-
-// These providers remain unchanged.
 
 final statsAsyncProvider = Provider<AsyncValue<DashboardStats>>((ref) {
   return ref.watch(statsProvider).toAsyncValue();
@@ -106,13 +114,13 @@ final statsStreamProvider = StreamProvider<DashboardStats>((ref) {
 });
 
 final statsLoadingProvider = Provider<bool>((ref) {
-  return ref.watch(statsProvider).isLoading;
+  return ref.watch(statsProvider.select((state) => state.isLoading));
 });
 
 final statsErrorProvider = Provider<String?>((ref) {
-  return ref.watch(statsProvider).error;
+  return ref.watch(statsProvider.select((state) => state.error));
 });
 
 final statsStatusProvider = Provider<LoadingStatus>((ref) {
-  return ref.watch(statsProvider).status;
+  return ref.watch(statsProvider.select((state) => state.status));
 });

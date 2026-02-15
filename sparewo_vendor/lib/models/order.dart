@@ -1,33 +1,90 @@
-import 'package:freezed_annotation/freezed_annotation.dart';
+// lib/models/order.dart
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../constants/enums.dart';
 
-part 'order.freezed.dart';
-part 'order.g.dart';
+class VendorOrder {
+  final String id;
+  final String vendorId;
+  final String customerId;
+  final String customerName;
+  final String customerEmail;
+  final String? customerPhone;
+  final String productId;
+  final String productName;
+  final String? productImage;
+  final double price;
+  final int quantity;
+  final double totalAmount;
+  final OrderStatus status;
+  final String? deliveryAddress;
+  final double? deliveryFee;
+  final String? notes;
+  final bool isPaid;
+  final String? paymentMethod;
+  final String? paymentId;
+  final DateTime createdAt;
+  final DateTime? expectedDeliveryDate;
+  final DateTime? acceptedAt;
+  final DateTime? processedAt;
+  final DateTime? readyAt;
+  final DateTime? deliveredAt;
+  final DateTime? cancelledAt;
+  final DateTime? completedAt;
+  final DateTime updatedAt;
 
-@freezed
-class VendorOrder with _$VendorOrder {
-  const factory VendorOrder({
-    required String id,
-    required String vendorId,
-    required String customerId,
-    required String customerName,
-    required String customerEmail,
+  const VendorOrder({
+    required this.id,
+    required this.vendorId,
+    required this.customerId,
+    required this.customerName,
+    required this.customerEmail,
+    this.customerPhone,
+    required this.productId,
+    required this.productName,
+    this.productImage,
+    required this.price,
+    required this.quantity,
+    required this.totalAmount,
+    required this.status,
+    this.deliveryAddress,
+    this.deliveryFee,
+    this.notes,
+    required this.isPaid,
+    this.paymentMethod,
+    this.paymentId,
+    required this.createdAt,
+    this.expectedDeliveryDate,
+    this.acceptedAt,
+    this.processedAt,
+    this.readyAt,
+    this.deliveredAt,
+    this.cancelledAt,
+    this.completedAt,
+    required this.updatedAt,
+  });
+
+  VendorOrder copyWith({
+    String? id,
+    String? vendorId,
+    String? customerId,
+    String? customerName,
+    String? customerEmail,
     String? customerPhone,
-    required String productId,
-    required String productName,
+    String? productId,
+    String? productName,
     String? productImage,
-    required double price,
-    required int quantity,
-    required double totalAmount,
-    required OrderStatus status,
+    double? price,
+    int? quantity,
+    double? totalAmount,
+    OrderStatus? status,
     String? deliveryAddress,
     double? deliveryFee,
     String? notes,
-    required bool isPaid,
+    bool? isPaid,
     String? paymentMethod,
     String? paymentId,
-    required DateTime createdAt,
+    DateTime? createdAt,
     DateTime? expectedDeliveryDate,
     DateTime? acceptedAt,
     DateTime? processedAt,
@@ -35,13 +92,119 @@ class VendorOrder with _$VendorOrder {
     DateTime? deliveredAt,
     DateTime? cancelledAt,
     DateTime? completedAt,
-    required DateTime updatedAt,
-  }) = _VendorOrder;
+    DateTime? updatedAt,
+  }) {
+    return VendorOrder(
+      id: id ?? this.id,
+      vendorId: vendorId ?? this.vendorId,
+      customerId: customerId ?? this.customerId,
+      customerName: customerName ?? this.customerName,
+      customerEmail: customerEmail ?? this.customerEmail,
+      customerPhone: customerPhone ?? this.customerPhone,
+      productId: productId ?? this.productId,
+      productName: productName ?? this.productName,
+      productImage: productImage ?? this.productImage,
+      price: price ?? this.price,
+      quantity: quantity ?? this.quantity,
+      totalAmount: totalAmount ?? this.totalAmount,
+      status: status ?? this.status,
+      deliveryAddress: deliveryAddress ?? this.deliveryAddress,
+      deliveryFee: deliveryFee ?? this.deliveryFee,
+      notes: notes ?? this.notes,
+      isPaid: isPaid ?? this.isPaid,
+      paymentMethod: paymentMethod ?? this.paymentMethod,
+      paymentId: paymentId ?? this.paymentId,
+      createdAt: createdAt ?? this.createdAt,
+      expectedDeliveryDate: expectedDeliveryDate ?? this.expectedDeliveryDate,
+      acceptedAt: acceptedAt ?? this.acceptedAt,
+      processedAt: processedAt ?? this.processedAt,
+      readyAt: readyAt ?? this.readyAt,
+      deliveredAt: deliveredAt ?? this.deliveredAt,
+      cancelledAt: cancelledAt ?? this.cancelledAt,
+      completedAt: completedAt ?? this.completedAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
 
-  const VendorOrder._();
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'vendorId': vendorId,
+      'customerId': customerId,
+      'customerName': customerName,
+      'customerEmail': customerEmail,
+      'customerPhone': customerPhone,
+      'productId': productId,
+      'productName': productName,
+      'productImage': productImage,
+      'price': price,
+      'quantity': quantity,
+      'totalAmount': totalAmount,
+      'status': status.name,
+      'deliveryAddress': deliveryAddress,
+      'deliveryFee': deliveryFee,
+      'notes': notes,
+      'isPaid': isPaid,
+      'paymentMethod': paymentMethod,
+      'paymentId': paymentId,
+      'createdAt': createdAt.toIso8601String(),
+      'expectedDeliveryDate': expectedDeliveryDate?.toIso8601String(),
+      'acceptedAt': acceptedAt?.toIso8601String(),
+      'processedAt': processedAt?.toIso8601String(),
+      'readyAt': readyAt?.toIso8601String(),
+      'deliveredAt': deliveredAt?.toIso8601String(),
+      'cancelledAt': cancelledAt?.toIso8601String(),
+      'completedAt': completedAt?.toIso8601String(),
+      'updatedAt': updatedAt.toIso8601String(),
+    };
+  }
 
-  factory VendorOrder.fromJson(Map<String, dynamic> json) =>
-      _$VendorOrderFromJson(json);
+  factory VendorOrder.fromJson(Map<String, dynamic> json) {
+    return VendorOrder(
+      id: json['id'],
+      vendorId: json['vendorId'],
+      customerId: json['customerId'],
+      customerName: json['customerName'],
+      customerEmail: json['customerEmail'],
+      customerPhone: json['customerPhone'],
+      productId: json['productId'],
+      productName: json['productName'],
+      productImage: json['productImage'],
+      price: (json['price'] as num).toDouble(),
+      quantity: json['quantity'],
+      totalAmount: (json['totalAmount'] as num).toDouble(),
+      status: OrderStatus.values.byName(json['status']),
+      deliveryAddress: json['deliveryAddress'],
+      deliveryFee: json['deliveryFee'] != null
+          ? (json['deliveryFee'] as num).toDouble()
+          : null,
+      notes: json['notes'],
+      isPaid: json['isPaid'],
+      paymentMethod: json['paymentMethod'],
+      paymentId: json['paymentId'],
+      createdAt: DateTime.parse(json['createdAt']),
+      expectedDeliveryDate: json['expectedDeliveryDate'] != null
+          ? DateTime.parse(json['expectedDeliveryDate'])
+          : null,
+      acceptedAt: json['acceptedAt'] != null
+          ? DateTime.parse(json['acceptedAt'])
+          : null,
+      processedAt: json['processedAt'] != null
+          ? DateTime.parse(json['processedAt'])
+          : null,
+      readyAt: json['readyAt'] != null ? DateTime.parse(json['readyAt']) : null,
+      deliveredAt: json['deliveredAt'] != null
+          ? DateTime.parse(json['deliveredAt'])
+          : null,
+      cancelledAt: json['cancelledAt'] != null
+          ? DateTime.parse(json['cancelledAt'])
+          : null,
+      completedAt: json['completedAt'] != null
+          ? DateTime.parse(json['completedAt'])
+          : null,
+      updatedAt: DateTime.parse(json['updatedAt']),
+    );
+  }
 
   factory VendorOrder.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;

@@ -1,0 +1,14 @@
+{
+  "projects": {
+    "default": "sparewo-vendor"
+  },
+  "targets": {
+    "sparewo-vendor": {
+      "hosting": {
+        "main": [
+          "sparewo-vendor"
+        ]
+      }
+    }
+  }
+}

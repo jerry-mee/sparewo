@@ -1,3 +1,4 @@
+// src/app/dashboard/layout.tsx
 "use client";
 
 import React, { useState, useEffect } from 'react';
@@ -8,6 +9,8 @@ import { useTheme } from 'next-themes';
 import {
   LayoutDashboard,
   Users,
+  Store,
+  Wrench,
   Package,
   ShoppingCart,
   Settings,
@@ -36,7 +39,6 @@ export default function DashboardLayout({
   const [mounted, setMounted] = useState(false);
   const { user, adminData } = useAuth();
 
-  // Check if mobile on mount and add resize listener
   useEffect(() => {
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 1024);
@@ -46,16 +48,11 @@ export default function DashboardLayout({
         setIsSidebarOpen(true);
       }
     };
-    
-    // Initial check
+
     checkMobile();
-    
-    // Add resize listener
     window.addEventListener('resize', checkMobile);
-    
-    // Fix hydration issues by only rendering after mount
     setMounted(true);
-    
+
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
@@ -66,7 +63,7 @@ export default function DashboardLayout({
   const toggleTheme = () => {
     setTheme(theme === 'dark' ? 'light' : 'dark');
   };
-  
+
   const handleLogout = async () => {
     try {
       await logOut();
@@ -75,8 +72,8 @@ export default function DashboardLayout({
       toast.error('Failed to log out');
     }
   };
-  
-  // Navigation items
+
+  // UPDATED NAVIGATION ITEMS
   const navItems = [
     {
       title: 'Dashboard',
@@ -85,9 +82,21 @@ export default function DashboardLayout({
       active: pathname === '/dashboard',
     },
     {
+      title: 'Clients',
+      href: '/dashboard/clients',
+      icon: <Users size={20} />,
+      active: pathname.startsWith('/dashboard/clients'),
+    },
+    {
+      title: 'AutoHub',
+      href: '/dashboard/autohub',
+      icon: <Wrench size={20} />,
+      active: pathname.startsWith('/dashboard/autohub'),
+    },
+    {
       title: 'Vendors',
       href: '/dashboard/vendors',
-      icon: <Users size={20} />,
+      icon: <Store size={20} />,
       active: pathname.startsWith('/dashboard/vendors'),
     },
     {
@@ -109,60 +118,51 @@ export default function DashboardLayout({
       active: pathname.startsWith('/dashboard/settings'),
     },
   ];
-  
-  // Get current page title
+
   const getCurrentPageTitle = () => {
     if (pathname === '/dashboard') return 'Dashboard';
-    
     const parts = pathname.split('/');
     const lastPart = parts[parts.length - 1];
     
     if (lastPart === 'dashboard') return 'Dashboard';
     
-    // Handle ID routes like /vendors/[id]
-    if (parts.length > 2 && parts[parts.length - 2] === 'vendors') {
-      return 'Vendor Details';
-    }
-    
-    if (parts.length > 2 && parts[parts.length - 2] === 'products') {
-      return 'Product Details';
-    }
-    
-    // Capitalize first letter
+    if (parts.includes('autohub')) return 'AutoHub Manager';
+    if (parts.includes('clients')) return 'Client Management';
+    if (parts.includes('vendors')) return 'Vendor Management';
+    if (parts.includes('products')) return 'Product Catalog';
+    if (parts.includes('orders')) return 'Orders';
+    if (parts.includes('settings')) return 'Settings';
+
     return lastPart.charAt(0).toUpperCase() + lastPart.slice(1);
   };
 
-  // Add overlay when sidebar is open on mobile
   const sidebarOverlay = isMobile && isSidebarOpen ? (
-    <div 
+    <div
       className="fixed inset-0 bg-black/50 z-20 lg:hidden"
       onClick={() => setIsSidebarOpen(false)}
     />
   ) : null;
-  
+
   return (
     <div className={`flex min-h-screen ${mounted && theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-gray-100'}`}>
-      {/* Sidebar overlay */}
       {sidebarOverlay}
-      
-      {/* Sidebar */}
+
       <div
         className={`${
           isSidebarOpen ? "w-64" : "w-0 lg:w-20"
         } ${mounted && theme === 'dark' ? 'bg-gray-800' : 'bg-indigo-900'} fixed inset-y-0 left-0 z-30 transition-all duration-300 ease-in-out flex flex-col overflow-hidden`}
       >
-        {/* Logo */}
         <div className="flex items-center justify-between h-16 px-4 border-b border-opacity-20 border-gray-600">
           <div className="flex items-center space-x-2">
-            {/* Update the path to your logo */}
             {isSidebarOpen && (
               <div className="text-lg font-semibold text-white flex items-center">
-                <Image 
-                  src="/images/logo.png" 
-                  alt="SpareWo Logo" 
-                  width={32} 
-                  height={32} 
+                <Image
+                  src="/images/logo.png"
+                  alt="SpareWo Logo"
+                  width={32}
+                  height={32}
                   className="mr-2"
+                  style={{ width: 'auto', height: 'auto' }}
                 />
                 SpareWo Admin
               </div>
@@ -172,8 +172,7 @@ export default function DashboardLayout({
             {isSidebarOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
         </div>
-        
-        {/* Navigation */}
+
         <nav className="flex-1 overflow-y-auto py-4">
           <div className="px-4 space-y-1">
             {navItems.map((item) => (
@@ -194,8 +193,7 @@ export default function DashboardLayout({
             ))}
           </div>
         </nav>
-        
-        {/* User */}
+
         <div className="p-4 border-t border-gray-600 border-opacity-20">
           <div className="flex items-center">
             <div className="flex-shrink-0">
@@ -216,14 +214,12 @@ export default function DashboardLayout({
           </div>
         </div>
       </div>
-      
-      {/* Main Content */}
+
       <div
         className={`flex-1 ${
           isSidebarOpen ? "lg:ml-64" : "lg:ml-20"
         } transition-all duration-300 ease-in-out`}
       >
-        {/* Header */}
         <header
           className={`fixed right-0 left-0 lg:left-auto ${
             isSidebarOpen ? "lg:left-64" : "lg:left-20"
@@ -232,8 +228,8 @@ export default function DashboardLayout({
           } transition-all duration-300`}
         >
           <div className="flex items-center">
-            <button 
-              onClick={toggleSidebar} 
+            <button
+              onClick={toggleSidebar}
               className="text-gray-500 dark:text-gray-300 mr-4 lg:hidden"
             >
               <Menu size={20} />
@@ -242,20 +238,20 @@ export default function DashboardLayout({
               {getCurrentPageTitle()}
             </h1>
           </div>
-          
+
           <div className="flex items-center space-x-4">
-            <button 
-              onClick={toggleTheme} 
+            <button
+              onClick={toggleTheme}
               className={`p-1 rounded-full ${theme === 'dark' ? 'text-gray-300 hover:text-white' : 'text-gray-500 hover:text-gray-700'}`}
             >
               {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
             </button>
-            
+
             <NotificationDropdown />
-            
-            <Button 
-              variant="ghost" 
-              size="icon" 
+
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={handleLogout}
               aria-label="Log out"
             >
@@ -263,8 +259,7 @@ export default function DashboardLayout({
             </Button>
           </div>
         </header>
-        
-        {/* Main content */}
+
         <main className="pt-24 px-4 md:px-6 pb-6 min-h-screen">
           <div className="max-w-7xl mx-auto">
             {children}

@@ -3,8 +3,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/settings.dart';
 import '../services/settings_service.dart';
-import 'service_providers.dart';
-import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'providers.dart';
 
 class SettingsNotifier extends StateNotifier<Settings> {
   final SettingsService _settingsService;
@@ -79,15 +78,11 @@ class SettingsNotifier extends StateNotifier<Settings> {
   }
 }
 
-// Updated Provider Definition Section
-
 final settingsProvider =
     StateNotifierProvider<SettingsNotifier, Settings>((ref) {
   final settingsService = ref.watch(settingsServiceProvider);
   return SettingsNotifier(settingsService);
 });
-
-// Derived Providers
 
 final themeProvider = Provider<bool>((ref) {
   return ref.watch(settingsProvider).isDarkMode;

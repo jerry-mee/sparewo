@@ -1,0 +1,241 @@
+/* Vendor app responsive styles */
+
+:root {
+  /* Colors */
+  --vendor-primary: #FF9800;
+  --vendor-secondary: #1A1B4B;
+  --vendor-background: #F5F5F5;
+  --vendor-text: #2D2D2D;
+  --vendor-text-light: #757575;
+  --vendor-error: #D32F2F;
+  --vendor-success: #388E3C;
+  --vendor-pending: #FFA726;
+  --vendor-approved: #66BB6A;
+  --vendor-rejected: #EF5350;
+  --vendor-card-background: #FFFFFF;
+  --vendor-divider: #E0E0E0;
+  --vendor-shadow: rgba(0, 0, 0, 0.1);
+
+  /* Base Sizes - Using rem for better scaling */
+  --base-font-size: 16px;
+  --container-width-desktop: 1280px;
+  --container-padding: 2rem;
+  --content-max-width: 800px;
+  
+  /* Transitions */
+  --transition-fast: 150ms ease;
+  --transition-normal: 300ms ease;
+  --transition-slow: 500ms ease;
+}
+
+/* Modern CSS Reset & Base Styles */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: var(--base-font-size);
+  -webkit-text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, system-ui, sans-serif;
+  background-color: var(--vendor-background);
+  color: var(--vendor-text);
+  line-height: 1.5;
+  overflow-x: hidden;
+}
+
+/* Container Classes */
+.container {
+  width: 100%;
+  max-width: var(--container-width-desktop);
+  margin: 0 auto;
+  padding: 0 var(--container-padding);
+}
+
+.content-container {
+  max-width: var(--content-max-width);
+  margin: 0 auto;
+}
+
+/* Responsive Grid System */
+.grid {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: repeat(12, 1fr);
+}
+
+/* Responsive Typography */
+h1, .h1 { font-size: clamp(2rem, 5vw, 3rem); }
+h2, .h2 { font-size: clamp(1.5rem, 4vw, 2.5rem); }
+h3, .h3 { font-size: clamp(1.25rem, 3vw, 2rem); }
+
+p, .body1 { font-size: clamp(1rem, 2vw, 1.125rem); }
+.body2 { font-size: clamp(0.875rem, 1.5vw, 1rem); }
+.caption { font-size: clamp(0.75rem, 1vw, 0.875rem); }
+
+/* Responsive Images */
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* Card Styles */
+.card {
+  background: var(--vendor-card-background);
+  border-radius: 12px;
+  box-shadow: 0 2px 8px var(--vendor-shadow);
+  transition: transform var(--transition-normal),
+              box-shadow var(--transition-normal);
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px var(--vendor-shadow);
+}
+
+/* Button Styles */
+.button {
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  font-weight: 600;
+  transition: all var(--transition-fast);
+  cursor: pointer;
+  border: none;
+  outline: none;
+}
+
+/* Animation Classes */
+.fade-in {
+  animation: fadeIn var(--transition-normal);
+}
+
+.slide-up {
+  animation: slideUp var(--transition-normal);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* Flutter-specific styles */
+.flutter-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+#loading {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--vendor-secondary);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+}
+
+.loading-indicator {
+  width: 50px;
+  height: 50px;
+  border: 3px solid var(--vendor-primary);
+  border-radius: 50%;
+  border-top-color: transparent;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Responsive Breakpoints */
+/* Mobile First Approach */
+@media screen and (min-width: 640px) {
+  .container {
+      padding: 0 2rem;
+  }
+}
+
+@media screen and (min-width: 768px) {
+  .container {
+      padding: 0 3rem;
+  }
+}
+
+@media screen and (min-width: 1024px) {
+  .container {
+      padding: 0 4rem;
+  }
+  
+  /* Desktop Grid Adjustments */
+  .grid-desktop-2 { grid-template-columns: repeat(2, 1fr); }
+  .grid-desktop-3 { grid-template-columns: repeat(3, 1fr); }
+  .grid-desktop-4 { grid-template-columns: repeat(4, 1fr); }
+}
+
+@media screen and (min-width: 1280px) {
+  .container {
+      padding: 0 5rem;
+  }
+}
+
+@media screen and (min-width: 1536px) {
+  :root {
+      --base-font-size: 18px;
+      --container-width-desktop: 1440px;
+  }
+}
+
+/* High DPI Screens */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  :root {
+      --base-font-size: 14px;
+  }
+
+  img {
+      image-rendering: -webkit-optimize-contrast;
+      image-rendering: crisp-edges;
+  }
+}
+
+/* Dark Mode Support */
+@media (prefers-color-scheme: dark) {
+  :root {
+      --vendor-background: #121212;
+      --vendor-text: #FFFFFF;
+      --vendor-text-light: #BBBBBB;
+      --vendor-card-background: #1E1E1E;
+      --vendor-shadow: rgba(0, 0, 0, 0.3);
+  }
+}
+
+/* Print Styles */
+@media print {
+  .no-print {
+      display: none;
+  }
+  
+  body {
+      background: white;
+  }
+  
+  .container {
+      max-width: none;
+      padding: 0;
+  }
+}

@@ -1,6 +1,20 @@
+// lib/constants/api_constants.dart
+
+import 'package:flutter_dotenv/flutter_dotenv.dart'; // <<< ADDED
+
 class ApiConstants {
-  // Base URL
-  static const String baseUrl = 'https://sparewo.matchstick.ug/api/vendor';
+  // --- SECURITY WARNING ---
+  // Sensitive keys have been moved to a .env file.
+  // This file is safe to commit to version control.
+
+  // >>>>> SECTION MODIFIED <<<<<
+  // Base URL updated to the new vendor domain
+  static const String baseUrl = 'https://vendor.sparewo.ug/api';
+
+  // Firebase Functions URL updated with the correct project ID
+  static final String firebaseFunctionsBaseUrl =
+      'https://us-central1-${dotenv.env['FIREBASE_PROJECT_ID']!}.cloudfunctions.net';
+  // >>>>> END OF SECTION <<<<<
 
   // Auth Endpoints
   static const String authRegister = '/auth/register';
@@ -25,10 +39,17 @@ class ApiConstants {
   static const int defaultPageSize = 20;
   static const int maxPageSize = 100;
 
-  // Firebase Config
-  static const String projectId = 'sparewovendor';
-  static const String apiKey = 'AIzaSyCwC4-PqJ3CPQq2x1DUUET6_qcDmIQD25s';
-  static const String appId = '1:900028469691:android:20ddb4a69320740517b49e';
-  static const String messagingSenderId = '900028469691';
-  static const String storageBucket = 'sparewovendor.firebasestorage.app';
+  // >>>>> SECTION MODIFIED (KEYS REMOVED) <<<<<
+  // Firebase Config (loaded from environment variables)
+  static final String projectId = dotenv.env['FIREBASE_PROJECT_ID']!;
+  static final String apiKey = dotenv.env['FIREBASE_API_KEY_ANDROID']!;
+  static final String appId = dotenv.env['FIREBASE_APP_ID_ANDROID']!;
+  static final String messagingSenderId =
+      dotenv.env['FIREBASE_MESSAGING_SENDER_ID']!;
+  static final String storageBucket = dotenv.env['FIREBASE_STORAGE_BUCKET']!;
+  // >>>>> END OF SECTION <<<<<
+
+  // --- ADDED TO FIX VERIFICATION SERVICE ERRORS (NO REMOVALS) ---
+  static const String verificationCodesCollection = 'verificationCodes';
+  static const String debugVerificationCode = '123456';
 }

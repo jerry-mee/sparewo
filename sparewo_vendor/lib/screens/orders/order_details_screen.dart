@@ -1,11 +1,12 @@
+// / File: lib/screens/orders/order_details_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../models/order.dart';
 import '../../constants/enums.dart';
 import '../../theme.dart';
-import '../../providers/order_provider.dart';
 import '../../services/feedback_service.dart';
+import '../../providers/providers.dart';
 
 class OrderDetailsScreen extends ConsumerStatefulWidget {
   final VendorOrder order;
@@ -22,42 +23,41 @@ class OrderDetailsScreen extends ConsumerStatefulWidget {
 class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
   final _feedbackService = FeedbackService();
   bool _isLoading = false;
-
   final DateFormat _dateFormatter = DateFormat('dd MMM yyyy, HH:mm');
 
-  Color _getStatusColor(OrderStatus status) {
+  // FIXED: Pass context to helper method
+  Color _getStatusColor(BuildContext context, OrderStatus status) {
+    final colors = Theme.of(context).extension<AppColorsExtension>()!;
     switch (status) {
       case OrderStatus.pending:
-        return VendorColors.pending;
+        return colors.pending;
       case OrderStatus.accepted:
-        return VendorColors.primary;
       case OrderStatus.processing:
-        return VendorColors.primary;
+        return Theme.of(context).colorScheme.primary;
       case OrderStatus.readyForDelivery:
-        return VendorColors.approved;
+        return colors.approved;
       case OrderStatus.delivered:
-        return VendorColors.success;
+        return colors.success;
       case OrderStatus.cancelled:
       case OrderStatus.rejected:
-        return VendorColors.error;
+        return Theme.of(context).colorScheme.error;
     }
   }
 
   Future<void> _updateOrderStatus(OrderStatus newStatus) async {
     if (_isLoading) return;
-
     setState(() => _isLoading = true);
 
     try {
-      await ref.read(orderProvider.notifier).updateOrderStatus(
+      await ref.read(orderNotifierProvider.notifier).updateOrderStatus(
             widget.order.id,
             newStatus,
           );
-      await _feedbackService.success();
+      _feedbackService.success();
       if (!mounted) return;
-      Navigator.pop(context);
+      Navigator.of(context).pop();
     } catch (e) {
-      await _feedbackService.error();
+      _feedbackService.error();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.toString())),
@@ -71,6 +71,15 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final ordersState = ref.watch(orderNotifierProvider).orders;
+    final currentOrder = ordersState.asData?.value.firstWhere(
+          (o) => o.id == widget.order.id,
+          orElse: () => widget.order,
+        ) ??
+        widget.order;
+
+    final textTheme = Theme.of(context).textTheme;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Order Details'),
@@ -82,26 +91,27 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildOrderHeader(),
+                  _buildOrderHeader(context, currentOrder, textTheme),
                   const SizedBox(height: 24),
-                  _buildCustomerDetails(),
+                  _buildCustomerDetails(currentOrder, textTheme),
                   const SizedBox(height: 24),
-                  _buildProductDetails(),
+                  _buildProductDetails(currentOrder, textTheme),
                   const SizedBox(height: 24),
-                  _buildOrderStatus(),
+                  _buildOrderStatus(context, currentOrder, textTheme),
                   const SizedBox(height: 24),
-                  _buildDeliveryDetails(),
+                  _buildDeliveryDetails(currentOrder, textTheme),
                   const SizedBox(height: 24),
-                  _buildPaymentDetails(),
+                  _buildPaymentDetails(context, currentOrder, textTheme),
                   const SizedBox(height: 32),
-                  _buildActionButtons(),
+                  _buildActionButtons(currentOrder),
                 ],
               ),
             ),
     );
   }
 
-  Widget _buildOrderHeader() {
+  Widget _buildOrderHeader(
+      BuildContext context, VendorOrder order, TextTheme textTheme) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -112,21 +122,20 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Order #${widget.order.id}',
-                  style: VendorTextStyles.heading3,
+                  'Order #${order.id.substring(0, 8)}',
+                  style: textTheme.headlineSmall,
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: _getStatusColor(widget.order.status),
+                    color:
+                        _getStatusColor(context, order.status), // Pass context
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
-                    widget.order.status.name.toUpperCase(),
-                    style: VendorTextStyles.caption.copyWith(
+                    order.status.name.toUpperCase(),
+                    style: textTheme.labelSmall!.copyWith(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
                     ),
@@ -136,8 +145,8 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Ordered on ${_dateFormatter.format(widget.order.createdAt)}',
-              style: VendorTextStyles.body2,
+              'Ordered on ${_dateFormatter.format(order.createdAt)}',
+              style: textTheme.bodyMedium,
             ),
           ],
         ),
@@ -145,36 +154,35 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
     );
   }
 
-  Widget _buildCustomerDetails() {
+  // ... (No changes needed for most build methods below, just pass textTheme)
+
+  Widget _buildCustomerDetails(VendorOrder order, TextTheme textTheme) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Customer Details',
-              style: VendorTextStyles.heading3,
-            ),
+            Text('Customer Details', style: textTheme.headlineSmall),
             const SizedBox(height: 16),
             _DetailRow(
-              icon: Icons.person,
-              label: 'Name',
-              value: widget.order.customerName,
-            ),
+                icon: Icons.person,
+                label: 'Name',
+                value: order.customerName,
+                textTheme: textTheme),
             const SizedBox(height: 8),
             _DetailRow(
-              icon: Icons.email,
-              label: 'Email',
-              value: widget.order.customerEmail,
-            ),
-            if (widget.order.customerPhone != null) ...[
+                icon: Icons.email,
+                label: 'Email',
+                value: order.customerEmail,
+                textTheme: textTheme),
+            if (order.customerPhone != null) ...[
               const SizedBox(height: 8),
               _DetailRow(
-                icon: Icons.phone,
-                label: 'Phone',
-                value: widget.order.customerPhone!,
-              ),
+                  icon: Icons.phone,
+                  label: 'Phone',
+                  value: order.customerPhone!,
+                  textTheme: textTheme),
             ],
           ],
         ),
@@ -182,148 +190,141 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
     );
   }
 
-  Widget _buildProductDetails() {
+  Widget _buildProductDetails(VendorOrder order, TextTheme textTheme) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Product Details',
-              style: VendorTextStyles.heading3,
-            ),
+            Text('Product Details', style: textTheme.headlineSmall),
             const SizedBox(height: 16),
-            if (widget.order.productImage != null)
+            if (order.productImage != null)
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),
                 child: Image.network(
-                  widget.order.productImage!,
+                  order.productImage!,
                   height: 120,
                   width: double.infinity,
                   fit: BoxFit.cover,
                 ),
               ),
             const SizedBox(height: 16),
-            Text(
-              widget.order.productName,
-              style: VendorTextStyles.body1.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+            Text(order.productName,
+                style:
+                    textTheme.bodyLarge!.copyWith(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             _DetailRow(
-              icon: Icons.attach_money,
-              label: 'Price',
-              value: 'UGX ${widget.order.price.toStringAsFixed(2)}',
-            ),
+                icon: Icons.attach_money,
+                label: 'Price',
+                value: 'UGX ${order.price.toStringAsFixed(0)}',
+                textTheme: textTheme),
             const SizedBox(height: 8),
             _DetailRow(
-              icon: Icons.shopping_cart,
-              label: 'Quantity',
-              value: widget.order.quantity.toString(),
-            ),
+                icon: Icons.shopping_cart,
+                label: 'Quantity',
+                value: order.quantity.toString(),
+                textTheme: textTheme),
             const SizedBox(height: 8),
             _DetailRow(
-              icon: Icons.receipt,
-              label: 'Total',
-              value: 'UGX ${widget.order.totalAmount.toStringAsFixed(2)}',
-            ),
+                icon: Icons.receipt,
+                label: 'Total',
+                value: 'UGX ${order.totalAmount.toStringAsFixed(0)}',
+                textTheme: textTheme),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildOrderStatus() {
+  Widget _buildOrderStatus(
+      BuildContext context, VendorOrder order, TextTheme textTheme) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Order Timeline',
-              style: VendorTextStyles.heading3,
-            ),
+            Text('Order Timeline', style: textTheme.headlineSmall),
             const SizedBox(height: 16),
             _TimelineItem(
-              title: 'Order Placed',
-              date: widget.order.createdAt,
-              isCompleted: true,
-            ),
-            if (widget.order.acceptedAt != null)
-              _TimelineItem(
-                title: 'Order Accepted',
-                date: widget.order.acceptedAt!,
+                context: context,
+                title: 'Order Placed',
+                date: order.createdAt,
                 isCompleted: true,
-              ),
-            if (widget.order.processedAt != null)
+                textTheme: textTheme),
+            if (order.acceptedAt != null)
               _TimelineItem(
-                title: 'Processing',
-                date: widget.order.processedAt!,
-                isCompleted: true,
-              ),
-            if (widget.order.readyAt != null)
+                  context: context,
+                  title: 'Order Accepted',
+                  date: order.acceptedAt!,
+                  isCompleted: true,
+                  textTheme: textTheme),
+            if (order.processedAt != null)
               _TimelineItem(
-                title: 'Ready for Delivery',
-                date: widget.order.readyAt!,
-                isCompleted: true,
-              ),
-            if (widget.order.deliveredAt != null)
+                  context: context,
+                  title: 'Processing',
+                  date: order.processedAt!,
+                  isCompleted: true,
+                  textTheme: textTheme),
+            if (order.readyAt != null)
               _TimelineItem(
-                title: 'Delivered',
-                date: widget.order.deliveredAt!,
-                isCompleted: true,
-              ),
-            if (widget.order.cancelledAt != null)
+                  context: context,
+                  title: 'Ready for Delivery',
+                  date: order.readyAt!,
+                  isCompleted: true,
+                  textTheme: textTheme),
+            if (order.deliveredAt != null)
               _TimelineItem(
-                title: 'Cancelled',
-                date: widget.order.cancelledAt!,
-                isCompleted: true,
-                isError: true,
-              ),
+                  context: context,
+                  title: 'Delivered',
+                  date: order.deliveredAt!,
+                  isCompleted: true,
+                  textTheme: textTheme),
+            if (order.cancelledAt != null)
+              _TimelineItem(
+                  context: context,
+                  title: 'Cancelled',
+                  date: order.cancelledAt!,
+                  isCompleted: true,
+                  isError: true,
+                  textTheme: textTheme),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildDeliveryDetails() {
-    if (widget.order.deliveryAddress == null) return const SizedBox.shrink();
-
+  Widget _buildDeliveryDetails(VendorOrder order, TextTheme textTheme) {
+    if (order.deliveryAddress == null) return const SizedBox.shrink();
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Delivery Details',
-              style: VendorTextStyles.heading3,
-            ),
+            Text('Delivery Details', style: textTheme.headlineSmall),
             const SizedBox(height: 16),
             _DetailRow(
-              icon: Icons.location_on,
-              label: 'Address',
-              value: widget.order.deliveryAddress!,
-            ),
-            if (widget.order.deliveryFee != null) ...[
+                icon: Icons.location_on,
+                label: 'Address',
+                value: order.deliveryAddress!,
+                textTheme: textTheme),
+            if (order.deliveryFee != null) ...[
               const SizedBox(height: 8),
               _DetailRow(
-                icon: Icons.local_shipping,
-                label: 'Delivery Fee',
-                value: 'UGX ${widget.order.deliveryFee!.toStringAsFixed(2)}',
-              ),
+                  icon: Icons.local_shipping,
+                  label: 'Delivery Fee',
+                  value: 'UGX ${order.deliveryFee!.toStringAsFixed(0)}',
+                  textTheme: textTheme),
             ],
-            if (widget.order.expectedDeliveryDate != null) ...[
+            if (order.expectedDeliveryDate != null) ...[
               const SizedBox(height: 8),
               _DetailRow(
-                icon: Icons.event,
-                label: 'Expected Delivery',
-                value:
-                    _dateFormatter.format(widget.order.expectedDeliveryDate!),
-              ),
+                  icon: Icons.event,
+                  label: 'Expected Delivery',
+                  value: _dateFormatter.format(order.expectedDeliveryDate!),
+                  textTheme: textTheme),
             ],
           ],
         ),
@@ -331,41 +332,41 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
     );
   }
 
-  Widget _buildPaymentDetails() {
+  Widget _buildPaymentDetails(
+      BuildContext context, VendorOrder order, TextTheme textTheme) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Payment Details',
-              style: VendorTextStyles.heading3,
-            ),
+            Text('Payment Details', style: textTheme.headlineSmall),
             const SizedBox(height: 16),
             _DetailRow(
-              icon: Icons.payment,
-              label: 'Status',
-              value: widget.order.isPaid ? 'Paid' : 'Pending',
-              valueColor: widget.order.isPaid
-                  ? VendorColors.success
-                  : VendorColors.pending,
-            ),
-            if (widget.order.paymentMethod != null) ...[
+                icon: Icons.payment,
+                label: 'Status',
+                value: order.isPaid ? 'Paid' : 'Pending',
+                valueColor: order.isPaid
+                    ? Theme.of(context).extension<AppColorsExtension>()!.success
+                    : Theme.of(context)
+                        .extension<AppColorsExtension>()!
+                        .pending,
+                textTheme: textTheme),
+            if (order.paymentMethod != null) ...[
               const SizedBox(height: 8),
               _DetailRow(
-                icon: Icons.account_balance_wallet,
-                label: 'Payment Method',
-                value: widget.order.paymentMethod!,
-              ),
+                  icon: Icons.account_balance_wallet,
+                  label: 'Payment Method',
+                  value: order.paymentMethod!,
+                  textTheme: textTheme),
             ],
-            if (widget.order.paymentId != null) ...[
+            if (order.paymentId != null) ...[
               const SizedBox(height: 8),
               _DetailRow(
-                icon: Icons.receipt_long,
-                label: 'Payment ID',
-                value: widget.order.paymentId!,
-              ),
+                  icon: Icons.receipt_long,
+                  label: 'Payment ID',
+                  value: order.paymentId!,
+                  textTheme: textTheme),
             ],
           ],
         ),
@@ -373,16 +374,16 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
     );
   }
 
-  Widget _buildActionButtons() {
-    if (widget.order.status == OrderStatus.cancelled ||
-        widget.order.status == OrderStatus.delivered ||
-        widget.order.status == OrderStatus.rejected) {
+  Widget _buildActionButtons(VendorOrder order) {
+    if (order.status == OrderStatus.cancelled ||
+        order.status == OrderStatus.delivered ||
+        order.status == OrderStatus.rejected) {
       return const SizedBox.shrink();
     }
-
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (widget.order.status == OrderStatus.pending) ...[
+        if (order.status == OrderStatus.pending) ...[
           Row(
             children: [
               Expanded(
@@ -391,8 +392,9 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
                       ? null
                       : () => _updateOrderStatus(OrderStatus.rejected),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: VendorColors.error,
-                  ),
+                      foregroundColor: Theme.of(context).colorScheme.error,
+                      side: BorderSide(
+                          color: Theme.of(context).colorScheme.error)),
                   child: const Text('Reject Order'),
                 ),
               ),
@@ -407,23 +409,22 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 16),
         ],
-        if (widget.order.status == OrderStatus.accepted)
+        if (order.status == OrderStatus.accepted)
           ElevatedButton(
             onPressed: _isLoading
                 ? null
                 : () => _updateOrderStatus(OrderStatus.processing),
             child: const Text('Start Processing'),
           ),
-        if (widget.order.status == OrderStatus.processing)
+        if (order.status == OrderStatus.processing)
           ElevatedButton(
             onPressed: _isLoading
                 ? null
                 : () => _updateOrderStatus(OrderStatus.readyForDelivery),
             child: const Text('Mark as Ready'),
           ),
-        if (widget.order.status == OrderStatus.readyForDelivery)
+        if (order.status == OrderStatus.readyForDelivery)
           ElevatedButton(
             onPressed: _isLoading
                 ? null
@@ -440,54 +441,49 @@ class _DetailRow extends StatelessWidget {
   final String label;
   final String value;
   final Color? valueColor;
+  final TextTheme textTheme;
 
   const _DetailRow({
     required this.icon,
     required this.label,
     required this.value,
     this.valueColor,
+    required this.textTheme,
   });
 
   @override
   Widget build(BuildContext context) {
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(
-          icon,
-          size: 20,
-          color: VendorColors.primary,
-        ),
-        const SizedBox(width: 8),
-        Text(
-          '$label: ',
-          style: VendorTextStyles.body2.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        Icon(icon, size: 20, color: Theme.of(context).colorScheme.primary),
+        const SizedBox(width: 12),
+        Text('$label: ',
+            style: textTheme.bodyMedium!.copyWith(fontWeight: FontWeight.bold)),
+        const SizedBox(width: 4),
         Expanded(
-          child: Text(
-            value,
-            style: VendorTextStyles.body2.copyWith(
-              color: valueColor,
-            ),
-          ),
-        ),
+            child: Text(value,
+                style: textTheme.bodyMedium!.copyWith(color: valueColor))),
       ],
     );
   }
 }
 
 class _TimelineItem extends StatelessWidget {
+  final BuildContext context; // FIXED
   final String title;
   final DateTime date;
   final bool isCompleted;
   final bool isError;
+  final TextTheme textTheme;
 
   const _TimelineItem({
+    required this.context, // FIXED
     required this.title,
     required this.date,
     this.isCompleted = false,
     this.isError = false,
+    required this.textTheme,
   });
 
   @override
@@ -502,9 +498,11 @@ class _TimelineItem extends StatelessWidget {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: isError
-                  ? VendorColors.error
+                  ? Theme.of(context).colorScheme.error
                   : isCompleted
-                      ? VendorColors.success
+                      ? Theme.of(context)
+                          .extension<AppColorsExtension>()!
+                          .success
                       : Colors.grey,
             ),
             child: Icon(
@@ -522,16 +520,11 @@ class _TimelineItem extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  title,
-                  style: VendorTextStyles.body1.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Text(
-                  DateFormat('dd MMM yyyy, HH:mm').format(date),
-                  style: VendorTextStyles.body2,
-                ),
+                Text(title,
+                    style: textTheme.bodyLarge!
+                        .copyWith(fontWeight: FontWeight.bold)),
+                Text(DateFormat('dd MMM yyyy, HH:mm').format(date),
+                    style: textTheme.bodyMedium),
               ],
             ),
           ),

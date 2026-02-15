@@ -1,24 +1,90 @@
-import 'package:freezed_annotation/freezed_annotation.dart';
+// lib/models/settings.dart
 
-part 'settings.freezed.dart';
-part 'settings.g.dart';
+class Settings {
+  final bool isDarkMode;
+  final String language;
+  final bool notificationsEnabled;
+  final bool soundEnabled;
+  final bool vibrationEnabled;
+  final bool orderNotifications;
+  final bool stockAlerts;
+  final bool promotionAlerts;
+  final int maxOrderNotifications;
+  final String dateFormat;
+  final String currency;
 
-@freezed
-class Settings with _$Settings {
-  const factory Settings({
-    @Default(false) bool isDarkMode,
-    @Default('English') String language,
-    @Default(true) bool notificationsEnabled,
-    @Default(true) bool soundEnabled,
-    @Default(true) bool vibrationEnabled,
-    @Default(true) bool orderNotifications,
-    @Default(true) bool stockAlerts,
-    @Default(true) bool promotionAlerts,
-    @Default(100) int maxOrderNotifications,
-    @Default("dd/MM/yyyy") String dateFormat,
-    @Default("UGX") String currency,
-  }) = _Settings;
+  const Settings({
+    this.isDarkMode = false,
+    this.language = 'English',
+    this.notificationsEnabled = true,
+    this.soundEnabled = true,
+    this.vibrationEnabled = true,
+    this.orderNotifications = true,
+    this.stockAlerts = true,
+    this.promotionAlerts = true,
+    this.maxOrderNotifications = 100,
+    this.dateFormat = "dd/MM/yyyy",
+    this.currency = "UGX",
+  });
 
-  factory Settings.fromJson(Map<String, dynamic> json) =>
-      _$SettingsFromJson(json);
+  Settings copyWith({
+    bool? isDarkMode,
+    String? language,
+    bool? notificationsEnabled,
+    bool? soundEnabled,
+    bool? vibrationEnabled,
+    bool? orderNotifications,
+    bool? stockAlerts,
+    bool? promotionAlerts,
+    int? maxOrderNotifications,
+    String? dateFormat,
+    String? currency,
+  }) {
+    return Settings(
+      isDarkMode: isDarkMode ?? this.isDarkMode,
+      language: language ?? this.language,
+      notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
+      soundEnabled: soundEnabled ?? this.soundEnabled,
+      vibrationEnabled: vibrationEnabled ?? this.vibrationEnabled,
+      orderNotifications: orderNotifications ?? this.orderNotifications,
+      stockAlerts: stockAlerts ?? this.stockAlerts,
+      promotionAlerts: promotionAlerts ?? this.promotionAlerts,
+      maxOrderNotifications:
+          maxOrderNotifications ?? this.maxOrderNotifications,
+      dateFormat: dateFormat ?? this.dateFormat,
+      currency: currency ?? this.currency,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'isDarkMode': isDarkMode,
+      'language': language,
+      'notificationsEnabled': notificationsEnabled,
+      'soundEnabled': soundEnabled,
+      'vibrationEnabled': vibrationEnabled,
+      'orderNotifications': orderNotifications,
+      'stockAlerts': stockAlerts,
+      'promotionAlerts': promotionAlerts,
+      'maxOrderNotifications': maxOrderNotifications,
+      'dateFormat': dateFormat,
+      'currency': currency,
+    };
+  }
+
+  factory Settings.fromJson(Map<String, dynamic> json) {
+    return Settings(
+      isDarkMode: json['isDarkMode'] ?? false,
+      language: json['language'] ?? 'English',
+      notificationsEnabled: json['notificationsEnabled'] ?? true,
+      soundEnabled: json['soundEnabled'] ?? true,
+      vibrationEnabled: json['vibrationEnabled'] ?? true,
+      orderNotifications: json['orderNotifications'] ?? true,
+      stockAlerts: json['stockAlerts'] ?? true,
+      promotionAlerts: json['promotionAlerts'] ?? true,
+      maxOrderNotifications: json['maxOrderNotifications'] ?? 100,
+      dateFormat: json['dateFormat'] ?? "dd/MM/yyyy",
+      currency: json['currency'] ?? "UGX",
+    );
+  }
 }

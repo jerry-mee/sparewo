@@ -1,79 +1,48 @@
-class FirestoreException implements Exception {
-  final String message;
-  final String? code;
-  final dynamic details;
+// lib/exceptions/firebase_exceptions.dart
 
+/// A base class for custom Firebase-related exceptions.
+class FirebaseException implements Exception {
+  final String message;
+  final dynamic error;
+  final StackTrace? stackTrace;
+
+  const FirebaseException(
+    this.message, {
+    this.error,
+    this.stackTrace,
+  });
+
+  @override
+  String toString() {
+    return 'FirebaseException: $message'
+        '${error != null ? '\nOriginal error: $error' : ''}'
+        '${stackTrace != null ? '\n$stackTrace' : ''}';
+  }
+}
+
+/// Thrown when a Firebase core initialization fails.
+class FirebaseInitializationException extends FirebaseException {
+  const FirebaseInitializationException(
+    super.message, {
+    super.error,
+    super.stackTrace,
+  });
+}
+
+/// Thrown when a Firestore operation fails.
+class FirestoreException extends FirebaseException {
   const FirestoreException(
-    this.message, {
-    this.code,
-    this.details,
+    super.message, {
+    super.error,
+    super.stackTrace,
   });
-
-  @override
-  String toString() {
-    if (code != null) {
-      return '$message (Code: $code)';
-    }
-    return message;
-  }
 }
 
-class StorageException implements Exception {
-  final String message;
-  final String? code;
-  final dynamic details;
-
+/// Thrown when a Firebase Storage operation fails.
+class StorageException extends FirebaseException {
   const StorageException(
-    this.message, {
-    this.code,
-    this.details,
+    super.message, {
+    super.error,
+    super.stackTrace,
   });
-
-  @override
-  String toString() {
-    if (code != null) {
-      return '$message (Code: $code)';
-    }
-    return message;
-  }
-}
-
-class FirebaseMessagingException implements Exception {
-  final String message;
-  final String? code;
-  final dynamic details;
-
-  const FirebaseMessagingException(
-    this.message, {
-    this.code,
-    this.details,
-  });
-
-  @override
-  String toString() {
-    if (code != null) {
-      return '$message (Code: $code)';
-    }
-    return message;
-  }
-}
-
-class FirebaseAuthenticationException implements Exception {
-  final String message;
-  final String? code;
-  final dynamic details;
-
-  const FirebaseAuthenticationException(
-    this.message, {
-    this.code,
-    this.details,
-  });
-
-  @override
-  String toString() {
-    if (code != null) {
-      return '$message (Code: $code)';
-    }
-    return message;
-  }
 }

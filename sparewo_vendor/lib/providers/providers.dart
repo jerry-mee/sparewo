@@ -1,156 +1,194 @@
+// lib/providers/providers.dart
+
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import '../models/vendor.dart';
-import '../models/product.dart';
-import '../models/order.dart';
-import '../models/notification.dart';
-import '../models/settings.dart';
+import '../models/auth_result.dart';
+import '../models/settings.dart' as app_settings;
 import '../constants/enums.dart';
+import '../models/notification.dart';
+import '../models/user_roles.dart';
 import '../services/firebase_service.dart';
 import '../services/storage_service.dart';
-import '../services/api_service.dart';
-import '../services/product_service.dart';
+import '../services/verification_service.dart';
+import '../services/settings_service.dart';
+import '../services/vendor_product_service.dart';
 import '../services/order_service.dart';
 import '../services/notification_service.dart';
-import '../services/settings_service.dart';
 import '../services/stats_service.dart';
-import 'auth_provider.dart';
-import 'order_provider.dart';
-import 'product_provider.dart';
-import 'notification_provider.dart';
+import '../services/catalog_product_service.dart';
+import '../services/camera_service.dart';
+import '../services/email_service.dart';
+import 'auth_notifier.dart';
+import 'auth_state.dart';
+import 'vendor_product_provider.dart';
+import 'order_notifier.dart';
+import 'stats_provider.dart';
+import 'theme_notifier.dart';
 import 'settings_provider.dart';
+import 'firebase_providers.dart';
 
-// Service Providers
-final firebaseServiceProvider =
-    Provider<FirebaseService>((ref) => FirebaseService());
-final storageServiceProvider =
-    Provider<StorageService>((ref) => StorageService());
-final apiServiceProvider = Provider<ApiService>((ref) {
-  final storageService = ref.watch(storageServiceProvider);
-  return ApiService(storageService: storageService);
+// Re-export themeNotifierProvider
+export 'theme_notifier.dart' show themeNotifierProvider;
+
+// --- Service Providers ---
+// Changed from FutureProvider to a regular Provider with lazy initialization
+final storageServiceProvider = Provider<StorageService>((ref) {
+  final service = StorageService();
+  // The init() will be called when the service is first used
+  service.init().catchError((e) {
+    debugPrint('Failed to initialize StorageService: $e');
+  });
+  return service;
 });
 
-// Auth State Provider
-final authStateProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
+final emailServiceProvider = Provider<EmailService>((ref) {
+  return EmailService();
+});
+
+final verificationServiceProvider = Provider<VerificationService>((ref) {
+  return VerificationService(
+    firestore: ref.watch(firebaseFirestoreProvider),
+    emailService: ref.watch(emailServiceProvider),
+  );
+});
+
+final settingsServiceProvider = Provider<SettingsService>((ref) {
+  return SettingsService();
+});
+
+final orderServiceProvider = Provider.autoDispose<OrderService>((ref) {
+  return OrderService(firestore: ref.watch(firebaseFirestoreProvider));
+});
+
+final notificationServiceProvider =
+    Provider.autoDispose<NotificationService>((ref) {
+  return NotificationService(firestore: ref.watch(firebaseFirestoreProvider));
+});
+
+final statsServiceProvider = Provider.autoDispose<StatsService>((ref) {
+  return StatsService();
+});
+
+final catalogProductServiceProvider = Provider<CatalogProductService>((ref) {
+  return CatalogProductService(
+    firestore: ref.watch(firebaseFirestoreProvider),
+  );
+});
+
+final cameraServiceProvider = Provider<CameraService>((ref) {
+  return CameraService(storage: ref.watch(firebaseStorageProvider));
+});
+
+final vendorProductServiceProvider =
+    Provider.autoDispose<VendorProductService?>((ref) {
+  final vendorId = ref.watch(currentVendorIdProvider);
+  if (vendorId == null) {
+    return null;
+  }
+  return VendorProductService(
+    vendorId: vendorId,
+    isAdmin: false,
+    firestore: ref.watch(firebaseFirestoreProvider),
+    storage: ref.watch(firebaseStorageProvider),
+  );
+});
+
+// --- Auth Providers ---
+final authNotifierProvider =
+    StateNotifierProvider<AuthNotifier, AuthState>((ref) {
+  // Get the synchronously available services
   final firebaseService = ref.watch(firebaseServiceProvider);
+  final verificationService = ref.watch(verificationServiceProvider);
   final storageService = ref.watch(storageServiceProvider);
-  final apiService = ref.watch(apiServiceProvider);
+
   return AuthNotifier(
     firebaseService: firebaseService,
     storageService: storageService,
-    apiService: apiService,
+    verificationService: verificationService,
   );
 });
 
-final currentVendorProvider =
-    Provider<Vendor?>((ref) => ref.watch(authStateProvider).vendor);
-
-final currentVendorIdProvider =
-    Provider<String?>((ref) => ref.watch(currentVendorProvider)?.id);
-
-// Products Provider
-final productsProvider =
-    StateNotifierProvider<ProductsNotifier, AsyncValue<List<Product>>>((ref) {
-  final productService = ref.watch(productServiceProvider);
-  final vendorId = ref.watch(currentVendorIdProvider);
-  return ProductsNotifier(productService, vendorId);
+final authStateProvider = Provider<AuthState>((ref) {
+  return ref.watch(authNotifierProvider);
 });
 
-// Orders Provider
-final ordersProvider = StateNotifierProvider<OrderNotifier, OrderState>((ref) {
-  final orderService = ref.watch(orderServiceProvider);
-  final notificationService = ref.watch(notificationServiceProvider);
+final currentVendorProvider = Provider<Vendor?>((ref) {
+  return ref.watch(authStateProvider).vendor;
+});
+
+final currentVendorIdProvider = Provider<String?>((ref) {
+  return ref.watch(currentVendorProvider)?.id;
+});
+
+final isAuthenticatedProvider = Provider<bool>((ref) {
+  return ref.watch(authStateProvider).status == AuthStatus.authenticated;
+});
+
+final isAdminProvider = Provider<bool>((ref) {
+  return ref.watch(authStateProvider).isAdmin;
+});
+
+final authLoadingProvider = Provider<bool>((ref) {
+  return ref.watch(authNotifierProvider.select((state) => state.isLoading));
+});
+
+final authErrorProvider = Provider<String?>((ref) {
+  return ref.watch(authNotifierProvider.select((state) => state.error));
+});
+
+// --- Settings Provider ---
+final settingsNotifierProvider =
+    StateNotifierProvider<SettingsNotifier, app_settings.Settings>((ref) {
+  return SettingsNotifier(ref.watch(settingsServiceProvider));
+});
+
+// --- Order Provider ---
+final orderNotifierProvider =
+    StateNotifierProvider.autoDispose<OrderNotifier, OrderState>((ref) {
   final vendorId = ref.watch(currentVendorIdProvider);
+  if (vendorId == null) {
+    return OrderNotifier.empty();
+  }
   return OrderNotifier(
-    orderService: orderService,
-    notificationService: notificationService,
-    vendorId: vendorId,
+    ref.watch(orderServiceProvider),
+    ref.watch(notificationServiceProvider),
+    vendorId,
   );
 });
 
-// Notifications Provider
-final notificationsProvider = StateNotifierProvider<NotificationsNotifier,
-    AsyncValue<List<VendorNotification>>>((ref) {
-  final notificationService = ref.watch(notificationServiceProvider);
+// --- Notification Provider ---
+final notificationsStreamProvider =
+    StreamProvider.autoDispose<List<VendorNotification>>((ref) {
   final vendorId = ref.watch(currentVendorIdProvider);
-  return NotificationsNotifier(notificationService, vendorId);
-});
-
-// Settings Provider
-final settingsProvider =
-    StateNotifierProvider<SettingsNotifier, Settings>((ref) {
-  final settingsService = ref.watch(settingsServiceProvider);
-  return SettingsNotifier(settingsService);
-});
-
-// Stats Provider
-final statsProvider = Provider<StatsService>((ref) => StatsService());
-
-final dashboardStatsProvider = FutureProvider((ref) async {
-  final vendorId = ref.watch(currentVendorIdProvider);
-  if (vendorId == null) throw Exception('No vendor ID available');
-  final statsService = ref.read(statsProvider);
-  return statsService.getDashboardStats(vendorId);
-});
-
-// Service Export Providers
-final orderServiceProvider = Provider<OrderService>((ref) => OrderService());
-final productServiceProvider =
-    Provider<ProductService>((ref) => ProductService());
-final notificationServiceProvider =
-    Provider<NotificationService>((ref) => NotificationService());
-final settingsServiceProvider =
-    Provider<SettingsService>((ref) => SettingsService());
-
-// Filtered Providers
-final filteredProductsProvider =
-    Provider.family<List<Product>, String?>((ref, filter) {
-  final products = ref.watch(productsProvider).value ?? [];
-  if (filter == null || filter.isEmpty) return products;
-  return products
-      .where((product) =>
-          product.title.toLowerCase().contains(filter.toLowerCase()))
-      .toList();
-});
-
-final filteredOrdersProvider =
-    Provider.family<List<VendorOrder>, OrderStatus?>((ref, status) {
-  final orders =
-      ref.watch(ordersProvider.select((state) => state.orders.value ?? []));
-  if (status == null) return orders;
-  return orders.where((order) => order.status == status).toList();
-});
-
-final unreadNotificationCountProvider = Provider<int>((ref) {
+  if (vendorId == null) {
+    return Stream.value([]);
+  }
   return ref
-          .watch(notificationsProvider)
-          .value
-          ?.where((n) => !n.isRead)
-          .length ??
-      0;
+      .watch(notificationServiceProvider)
+      .watchVendorNotifications(vendorId);
 });
 
-// State Providers
-final themeProvider =
-    StateProvider<bool>((ref) => ref.watch(settingsProvider).isDarkMode);
-
-// Loading States
-final isLoadingProvider = Provider<bool>((ref) =>
-    ref.watch(authStateProvider).isLoading ||
-    ref.watch(productsProvider).isLoading ||
-    ref.watch(ordersProvider.select((state) => state.isLoading)) ||
-    ref.watch(notificationsProvider).isLoading);
-
-// Error States
-final errorProvider = Provider<String?>((ref) =>
-    ref.watch(authStateProvider).error ??
-    ref.watch(productsProvider).error?.toString() ??
-    ref.watch(ordersProvider).error ??
-    ref.watch(notificationsProvider).error?.toString());
-
-// Stream Providers
-final statsStreamProvider = StreamProvider((ref) {
+final unreadNotificationCountProvider = StreamProvider.autoDispose<int>((ref) {
   final vendorId = ref.watch(currentVendorIdProvider);
-  if (vendorId == null) throw Exception('No vendor ID available');
-  final statsService = ref.read(statsProvider);
-  return statsService.watchDashboardStats(vendorId);
+  if (vendorId == null) {
+    return Stream.value(0);
+  }
+  return ref.watch(notificationServiceProvider).watchUnreadCount(vendorId);
+});
+
+// --- Stats Provider ---
+final statsNotifierProvider =
+    StateNotifierProvider.autoDispose<StatsNotifier, StatsState>((ref) {
+  final vendorId = ref.watch(currentVendorIdProvider);
+  if (vendorId == null) {
+    return StatsNotifier.empty();
+  }
+  return StatsNotifier(
+    ref.watch(statsServiceProvider),
+    vendorId,
+  );
 });

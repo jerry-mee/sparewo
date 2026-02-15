@@ -22,10 +22,11 @@ class LoadingButton extends StatelessWidget {
     return ElevatedButton(
       onPressed: isLoading ? null : onPressed,
       style: ElevatedButton.styleFrom(
-        backgroundColor: backgroundColor ?? VendorColors.primary,
+        backgroundColor:
+            backgroundColor ?? Theme.of(context).colorScheme.primary,
         foregroundColor: textColor ?? Colors.white,
         padding: const EdgeInsets.symmetric(vertical: 16),
-        textStyle: VendorTextStyles.button,
+        textStyle: Theme.of(context).textTheme.labelLarge,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
         ),

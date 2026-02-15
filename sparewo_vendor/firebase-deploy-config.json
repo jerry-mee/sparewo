@@ -1,0 +1,10 @@
+{
+    "functions": {
+      "source": "functions",
+      "runtime_options": {
+        "memory": "512MB",
+        "timeoutSeconds": 300,
+        "minInstances": 0
+      }
+    }
+  }

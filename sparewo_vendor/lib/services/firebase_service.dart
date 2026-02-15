@@ -1,144 +1,202 @@
+// lib/services/firebase_service.dart
 import 'dart:async';
 import 'dart:io';
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
+import 'package:flutter/foundation.dart';
+import '../models/auth_result.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import '../exceptions/auth_exceptions.dart';
 import '../exceptions/firebase_exceptions.dart';
 import '../models/vendor.dart';
 import '../constants/enums.dart';
-
-class AuthResult {
-  final Vendor vendor;
-  final String token;
-  final bool isNewUser;
-
-  AuthResult({
-    required this.vendor,
-    required this.token,
-    required this.isNewUser,
-  });
-}
+import '../models/user_roles.dart';
 
 class FirebaseService {
   final firebase_auth.FirebaseAuth _auth;
   final FirebaseFirestore _firestore;
   final FirebaseStorage _storage;
 
-  FirebaseService({
-    firebase_auth.FirebaseAuth? auth,
-    FirebaseFirestore? firestore,
-    FirebaseStorage? storage,
-  })  : _auth = auth ?? firebase_auth.FirebaseAuth.instance,
-        _firestore = firestore ?? FirebaseFirestore.instance,
-        _storage = storage ?? FirebaseStorage.instance;
+  FirebaseService(this._auth, this._firestore, this._storage);
 
   Stream<firebase_auth.User?> get authStateChanges => _auth.authStateChanges();
 
   Future<AuthResult?> getCurrentUser() async {
-    final user = _auth.currentUser;
-    if (user == null) return null;
+    try {
+      final user = _auth.currentUser;
+      if (user == null) return null;
 
-    final token = await user.getIdToken();
-    final vendor = await getVendorProfile(user.uid);
+      final token = await user.getIdToken(true); // Force refresh token
+      final vendor = await getVendorProfile(user.uid);
+      final userRole = await _getUserRole(user.uid);
 
-    if (vendor == null) return null;
+      if (vendor == null) return null;
 
-    return AuthResult(
-      vendor: vendor,
-      token: token ?? '',
-      isNewUser: false,
-    );
+      return AuthResult(
+        vendor: vendor,
+        token: token ?? '',
+        isNewUser: false,
+        userRole: userRole,
+      );
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error getting current user: $e');
+      }
+      throw AuthException(
+        message: 'Failed to get current user: ${e.toString()}',
+        code: 'get-user-failed',
+      );
+    }
   }
 
   Future<AuthResult> signInWithEmailPassword({
     required String email,
     required String password,
   }) async {
+    firebase_auth.UserCredential? credential;
+    firebase_auth.User? user;
+
     try {
-      final credential = await _auth.signInWithEmailAndPassword(
+      credential = await _auth.signInWithEmailAndPassword(
         email: email.trim(),
         password: password,
       );
-
-      if (credential.user == null) {
-        throw const AuthException(
-          message: 'Sign in failed - no user returned',
-          code: 'sign-in-failed',
-        );
+      user = credential.user;
+    } on firebase_auth.FirebaseAuthException catch (e) {
+      throw handleFirebaseAuthError(e);
+    } catch (e) {
+      // Handle the PigeonUserDetails error specifically
+      if (e.toString().contains('PigeonUserDetails') ||
+          e.toString().contains("type 'List<Object?>' is not a subtype")) {
+        // Try to get the current user directly after a small delay
+        await Future.delayed(const Duration(milliseconds: 300));
+        user = _auth.currentUser;
+        if (user == null) {
+          throw const AuthException(
+            message: 'Authentication failed. Please try again.',
+            code: 'auth-failed',
+          );
+        }
+      } else {
+        throw AuthException(message: e.toString());
       }
+    }
 
-      final token = await credential.user!.getIdToken();
-      final vendor = await getVendorProfile(credential.user!.uid);
+    if (user == null) {
+      throw const AuthException(
+        message: 'Sign in failed - no user returned',
+        code: 'sign-in-failed',
+      );
+    }
 
-      if (vendor == null) {
-        throw const AuthException(
-          message: 'Vendor profile not found',
-          code: 'profile-not-found',
-        );
-      }
+    try {
+      final token = await user.getIdToken();
+      final vendor = await getVendorProfile(user.uid);
+      final userRole = await _getUserRole(user.uid);
 
       return AuthResult(
         vendor: vendor,
         token: token ?? '',
         isNewUser: false,
+        userRole: userRole,
       );
-    } on firebase_auth.FirebaseAuthException catch (e) {
-      throw _handleFirebaseAuthError(e);
     } catch (e) {
-      throw AuthException(message: e.toString());
+      if (e is AuthException) rethrow;
+      throw AuthException(
+          message: 'Failed to complete sign in: ${e.toString()}');
     }
   }
 
   Future<AuthResult> createUserWithEmailPassword({
     required String email,
     required String password,
-    required Map<String, dynamic> userData,
+    required Map<String, dynamic> vendorData,
   }) async {
+    firebase_auth.UserCredential? credential;
+    firebase_auth.User? user;
+
     try {
-      final credential = await _auth.createUserWithEmailAndPassword(
+      credential = await _auth.createUserWithEmailAndPassword(
         email: email.trim(),
         password: password,
       );
-
-      if (credential.user == null) {
-        throw const AuthException(
-          message: 'Account creation failed - no user returned',
-          code: 'creation-failed',
-        );
+      user = credential.user;
+    } on firebase_auth.FirebaseAuthException catch (e) {
+      throw handleFirebaseAuthError(e);
+    } catch (e) {
+      // Handle the PigeonUserDetails error
+      if (e.toString().contains('PigeonUserDetails') ||
+          e.toString().contains("type 'List<Object?>' is not a subtype")) {
+        await Future.delayed(const Duration(milliseconds: 300));
+        user = _auth.currentUser;
+        if (user == null) {
+          throw AuthException(
+              message: 'Account creation failed. Please try again.');
+        }
+      } else {
+        throw AuthException(message: e.toString());
       }
+    }
 
-      final token = await credential.user!.getIdToken();
+    if (user == null) {
+      throw const AuthException(
+        message: 'Account creation failed - no user returned',
+        code: 'creation-failed',
+      );
+    }
 
-      // Create vendor profile
+    try {
+      final token = await user.getIdToken();
+      final now = DateTime.now();
+
       final vendor = Vendor(
-        id: credential.user!.uid,
+        id: user.uid,
         email: email.trim(),
-        name: userData['name'] as String,
-        phone: userData['phone'] as String,
-        businessName: userData['businessName'] as String,
-        businessAddress: userData['businessAddress'] as String,
-        categories: List<String>.from(userData['categories'] as List),
+        name: vendorData['name'] as String,
+        phone: vendorData['phone'] as String,
+        businessName: vendorData['businessName'] as String,
+        businessAddress: vendorData['businessAddress'] as String,
+        categories: List<String>.from(vendorData['categories'] as List),
         status: VendorStatus.pending,
         isVerified: false,
         rating: 0.0,
         completedOrders: 0,
         totalProducts: 0,
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
+        createdAt: now,
+        updatedAt: now,
       );
 
       await _createVendorProfile(vendor);
+
+      final defaultRole = UserRoles(
+        uid: user.uid,
+        isAdmin: false,
+        role: 'vendor',
+        createdAt: now,
+        updatedAt: now,
+      );
+
+      await _setUserRole(defaultRole);
 
       return AuthResult(
         vendor: vendor,
         token: token ?? '',
         isNewUser: true,
+        userRole: defaultRole,
       );
-    } on firebase_auth.FirebaseAuthException catch (e) {
-      throw _handleFirebaseAuthError(e);
     } catch (e) {
-      throw AuthException(message: e.toString());
+      // If profile creation fails, delete the auth user
+      try {
+        await user.delete();
+      } catch (_) {}
+
+      if (e is AuthException || e is FirestoreException) {
+        rethrow;
+      }
+      throw AuthException(
+        message: 'Failed to create vendor profile: ${e.toString()}',
+        code: 'profile-creation-failed',
+      );
     }
   }
 
@@ -165,9 +223,46 @@ class FirebaseService {
     }
   }
 
+  Future<void> _setUserRole(UserRoles role) async {
+    try {
+      await _firestore.collection('userRoles').doc(role.uid).set(role.toJson());
+    } catch (e) {
+      throw FirestoreException('Failed to set user role: ${e.toString()}');
+    }
+  }
+
+  Future<UserRoles> _getUserRole(String uid) async {
+    try {
+      final doc = await _firestore.collection('userRoles').doc(uid).get();
+
+      if (doc.exists && doc.data() != null) {
+        return UserRoles.fromJson(doc.data()!);
+      }
+
+      // Return a default 'vendor' role if no role document exists
+      return UserRoles(
+        uid: uid,
+        role: 'vendor',
+        isAdmin: false,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+    } catch (e) {
+      // Return a default role on error as well
+      return UserRoles(
+        uid: uid,
+        role: 'vendor',
+        isAdmin: false,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+    }
+  }
+
   Future<Vendor?> getVendorProfile(String vendorId) async {
     try {
       final doc = await _firestore.collection('vendors').doc(vendorId).get();
+
       if (!doc.exists) return null;
       return Vendor.fromFirestore(doc);
     } catch (e) {
@@ -187,6 +282,73 @@ class FirebaseService {
     }
   }
 
+  Future<List<String>> getVehicleBrands() async {
+    try {
+      final snapshot =
+          await _firestore.collection('car_brand').orderBy('part_name').get();
+
+      return snapshot.docs
+          .map((doc) => doc.data()['part_name'] as String)
+          .toList();
+    } catch (e) {
+      throw FirestoreException('Failed to get vehicle brands: ${e.toString()}');
+    }
+  }
+
+  Future<List<String>> getVehicleModels(String brandName) async {
+    try {
+      // Find the brand by name
+      final brandQuery = await _firestore
+          .collection('car_brand')
+          .where('part_name', isEqualTo: brandName)
+          .limit(1)
+          .get();
+
+      if (brandQuery.docs.isEmpty) {
+        // Try case-insensitive search
+        final allBrands = await _firestore.collection('car_brand').get();
+        final matchingBrand = allBrands.docs.firstWhere(
+          (doc) =>
+              (doc.data()['part_name'] as String?)?.toLowerCase() ==
+              brandName.toLowerCase(),
+          orElse: () => throw FirestoreException('Brand not found'),
+        );
+
+        // Get the numeric ID
+        final numericId = matchingBrand.data()['id'];
+
+        // Query models using the numeric ID
+        final modelsSnapshot = await _firestore
+            .collection('car_models')
+            .where('car_makeid', isEqualTo: numericId)
+            .get();
+
+        return modelsSnapshot.docs
+            .map((doc) => doc.data()['model'] as String)
+            .toList();
+      }
+
+      // Get the numeric ID from brand
+      final brandData = brandQuery.docs.first.data();
+      final numericId = brandData['id'];
+
+      // Query models using the numeric ID
+      final modelsSnapshot = await _firestore
+          .collection('car_models')
+          .where('car_makeid', isEqualTo: numericId)
+          .get();
+
+      return modelsSnapshot.docs
+          .map((doc) => doc.data()['model'] as String)
+          .toList();
+    } catch (e) {
+      if (kDebugMode) {
+        print('Failed to get models for brand $brandName: ${e.toString()}');
+      }
+      return [];
+    }
+  }
+
   Future<String> uploadProfileImage(String path) async {
     try {
       final fileName = 'profile_${DateTime.now().millisecondsSinceEpoch}.jpg';
@@ -199,7 +361,7 @@ class FirebaseService {
     }
   }
 
-  AuthException _handleFirebaseAuthError(
+  static AuthException handleFirebaseAuthError(
       firebase_auth.FirebaseAuthException e) {
     switch (e.code) {
       case 'user-not-found':
@@ -236,6 +398,16 @@ class FirebaseService {
         return const AuthException(
           message: 'Please use a stronger password',
           code: 'weak-password',
+        );
+      case 'invalid-credential':
+        return const AuthException(
+          message: 'Invalid email or password',
+          code: 'invalid-credential',
+        );
+      case 'network-request-failed':
+        return const AuthException(
+          message: 'Network error. Please check your internet connection.',
+          code: 'network-error',
         );
       default:
         return AuthException(

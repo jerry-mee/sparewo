@@ -1,0 +1,12 @@
+{
+    "indexes": [
+      {
+        "collectionGroup": "vendors",
+        "queryScope": "COLLECTION",
+        "fields": [
+          { "fieldPath": "email", "order": "ASCENDING" },
+          { "fieldPath": "isEmailVerified", "order": "ASCENDING" }
+        ]
+      }
+    ]
+  }

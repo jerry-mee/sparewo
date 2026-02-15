@@ -11,6 +11,7 @@ import PrivacyPolicy from '@/components/PrivacyPolicy';
 import TermsOfService from '@/components/TermsOfService';
 import HowItWorks from '@/components/HowItWorks';
 import WhatYouCanDo from '@/components/WhatYouCanDo';
+import DataPrivacy from '@/components/DataPrivacy';
 
 // Page components wrappers
 const HomePage = () => (
@@ -44,6 +45,7 @@ const App: React.FC = () => {
             <Route path="/faq" element={<FAQ />} />
             <Route path="/support" element={<Support />} />
             <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+            <Route path="/data-privacy" element={<DataPrivacy />} />
             <Route path="/terms-of-service" element={<TermsOfService />} />
             <Route path="/how-it-works" element={<HowItWorks />} />
             {/* Fallback route to catch any mismatches */}

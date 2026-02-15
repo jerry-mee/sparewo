@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SpareWo Vendor</string>
+    <!-- Disable Firebase auto-initialization -->
+    <bool name="firebase_analytics_collection_enabled">false</bool>
+    <bool name="firebase_crashlytics_collection_enabled">false</bool>
+    <bool name="firebase_messaging_auto_init_enabled">false</bool>
+    <bool name="firebase_performance_collection_enabled">false</bool>
+</resources>

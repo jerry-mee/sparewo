@@ -5,27 +5,27 @@ import { getVendors } from "@/lib/firebase/vendors";
 import { Vendor } from "@/lib/types/vendor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
 } from "@/components/ui/select";
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
 } from "@/components/ui/table";
 import { VendorStatusBadge } from "@/components/vendor/vendor-status-badge";
 import { DocumentData } from "firebase/firestore";
 import { formatDate } from "@/lib/utils";
 import Link from "next/link";
 import { Search, ChevronRight, Users } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function VendorsPage() {
   const [vendors, setVendors] = useState<Vendor[]>([]);
@@ -35,7 +35,6 @@ export default function VendorsPage() {
   const [lastDoc, setLastDoc] = useState<DocumentData | undefined>(undefined);
   const [hasMore, setHasMore] = useState(true);
 
-  // Fetch vendors on component mount and when filters change
   useEffect(() => {
     const fetchVendors = async () => {
       setLoading(true);
@@ -55,10 +54,9 @@ export default function VendorsPage() {
     fetchVendors();
   }, [statusFilter]);
 
-  // Load more vendors
   const loadMore = async () => {
     if (!lastDoc) return;
-    
+
     try {
       const status = statusFilter === "all" ? null : statusFilter;
       const result = await getVendors(status, 10, lastDoc);
@@ -70,14 +68,11 @@ export default function VendorsPage() {
     }
   };
 
-  // Handle search
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    // In a real app, this would search by calling the Firebase function
   };
 
-  // Filter vendors by search query (client-side filtering for demo)
-  const filteredVendors = vendors.filter(vendor => 
+  const filteredVendors = vendors.filter(vendor =>
     vendor.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     vendor.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
     vendor.businessName.toLowerCase().includes(searchQuery.toLowerCase())
@@ -91,7 +86,7 @@ export default function VendorsPage() {
           Manage and review vendor accounts
         </p>
       </div>
-      
+
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <Card className="shadow-sm">
           <CardHeader className="py-3 px-4">
@@ -104,7 +99,7 @@ export default function VendorsPage() {
             <div className="text-2xl font-bold">{vendors.length}</div>
           </CardContent>
         </Card>
-        
+
         <Card className="shadow-sm">
           <CardHeader className="py-3 px-4">
             <CardTitle className="flex items-center gap-2 text-md font-medium">
@@ -118,7 +113,7 @@ export default function VendorsPage() {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card className="shadow-sm sm:col-span-2 lg:col-span-1">
           <CardHeader className="py-3 px-4">
             <CardTitle className="flex items-center gap-2 text-md font-medium">
@@ -133,12 +128,12 @@ export default function VendorsPage() {
           </CardContent>
         </Card>
       </div>
-      
+
       <Card className="shadow-sm">
         <CardHeader className="py-3 px-4">
           <div className="flex flex-col gap-3">
             <CardTitle>Vendor List</CardTitle>
-            
+
             <div className="flex flex-col gap-2">
               <form onSubmit={handleSearch} className="flex">
                 <Input
@@ -151,7 +146,7 @@ export default function VendorsPage() {
                   <Search size={16} />
                 </Button>
               </form>
-              
+
               <Select
                 value={statusFilter}
                 onValueChange={setStatusFilter}
@@ -169,7 +164,7 @@ export default function VendorsPage() {
             </div>
           </div>
         </CardHeader>
-        
+
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <Table>
@@ -221,7 +216,7 @@ export default function VendorsPage() {
               </TableBody>
             </Table>
           </div>
-          
+
           {hasMore && (
             <div className="flex justify-center p-4">
               <Button
