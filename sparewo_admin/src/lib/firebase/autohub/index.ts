@@ -1,4 +1,5 @@
 import {
+  addDoc,
   collection,
   doc,
   getDoc,
@@ -13,7 +14,7 @@ import {
   QueryConstraint,
   startAfter,
   Timestamp,
-  FieldValue
+  FieldValue,
 } from 'firebase/firestore';
 import { db } from '../config';
 
@@ -47,47 +48,53 @@ export interface ServiceProvider {
   phone: string;
   address: string;
   isActive: boolean;
+  email?: string;
+  createdAt?: Timestamp | Date;
+  updatedAt?: Timestamp | Date;
 }
 
-// Get bookings with filters
+export interface ServiceProviderInput {
+  name: string;
+  type: ServiceProvider['type'];
+  phone: string;
+  address: string;
+  email?: string;
+}
+
 export const getServiceBookings = async (
   status?: string,
   pageSize: number = 10,
   lastDoc?: DocumentData
-): Promise<{ bookings: ServiceBooking[], lastDoc: DocumentData | undefined }> => {
+): Promise<{ bookings: ServiceBooking[]; lastDoc: DocumentData | undefined }> => {
   try {
     const constraints: QueryConstraint[] = [orderBy('createdAt', 'desc')];
-    
+
     if (status && status !== 'all') {
       constraints.push(where('status', '==', status));
     }
-    
-    let q = query(
-      collection(db, 'service_bookings'),
-      ...constraints,
-      limit(pageSize)
-    );
-    
+
+    let q = query(collection(db, 'service_bookings'), ...constraints, limit(pageSize));
+
     if (lastDoc) {
       q = query(q, startAfter(lastDoc));
     }
-    
+
     const querySnapshot = await getDocs(q);
     const bookings: ServiceBooking[] = [];
-    let lastVisible: DocumentData | undefined = undefined;
-    
-    querySnapshot.forEach((doc) => {
-      const data = doc.data();
-      bookings.push({ 
-        id: doc.id, 
+    let lastVisible: DocumentData | undefined;
+
+    querySnapshot.forEach((docSnap) => {
+      const data = docSnap.data();
+      bookings.push({
+        id: docSnap.id,
         ...data,
         pickupDate: data.pickupDate,
         createdAt: data.createdAt,
-        updatedAt: data.updatedAt
+        updatedAt: data.updatedAt,
       } as ServiceBooking);
-      lastVisible = doc;
+      lastVisible = docSnap;
     });
-    
+
     return { bookings, lastDoc: lastVisible };
   } catch (error) {
     console.error('Error getting bookings:', error);
@@ -95,15 +102,11 @@ export const getServiceBookings = async (
   }
 };
 
-// NEW: Get total booking count for stats
 export const getTotalBookingCount = async (status?: string): Promise<number> => {
   try {
-    let q;
-    if (status) {
-      q = query(collection(db, 'service_bookings'), where('status', '==', status));
-    } else {
-      q = query(collection(db, 'service_bookings'));
-    }
+    const q = status
+      ? query(collection(db, 'service_bookings'), where('status', '==', status))
+      : query(collection(db, 'service_bookings'));
     const snapshot = await getDocs(q);
     return snapshot.size;
   } catch (error) {
@@ -112,7 +115,6 @@ export const getTotalBookingCount = async (status?: string): Promise<number> => 
   }
 };
 
-// Get single booking
 export const getBookingById = async (id: string): Promise<ServiceBooking | null> => {
   try {
     const docRef = doc(db, 'service_bookings', id);
@@ -127,22 +129,23 @@ export const getBookingById = async (id: string): Promise<ServiceBooking | null>
   }
 };
 
-// Update booking status
 export const updateBookingStatus = async (
-  bookingId: string, 
+  bookingId: string,
   status: ServiceBooking['status'],
   notes?: string
 ): Promise<void> => {
   try {
     const docRef = doc(db, 'service_bookings', bookingId);
-    
+
     const updateData: Record<string, string | FieldValue> = {
       status,
-      updatedAt: serverTimestamp()
+      updatedAt: serverTimestamp(),
     };
-    
-    if (notes) updateData.adminNotes = notes;
-    
+
+    if (typeof notes === 'string') {
+      updateData.adminNotes = notes;
+    }
+
     await updateDoc(docRef, updateData);
   } catch (error) {
     console.error('Error updating booking:', error);
@@ -150,7 +153,6 @@ export const updateBookingStatus = async (
   }
 };
 
-// Assign Provider
 export const assignProviderToBooking = async (
   bookingId: string,
   providerId: string,
@@ -161,8 +163,8 @@ export const assignProviderToBooking = async (
     await updateDoc(docRef, {
       assignedProviderId: providerId,
       assignedProviderName: providerName,
-      status: 'confirmed', // Auto-confirm when assigning
-      updatedAt: serverTimestamp()
+      status: 'confirmed',
+      updatedAt: serverTimestamp(),
     });
   } catch (error) {
     console.error('Error assigning provider:', error);
@@ -170,14 +172,61 @@ export const assignProviderToBooking = async (
   }
 };
 
-// Fetch Providers
 export const getServiceProviders = async (): Promise<ServiceProvider[]> => {
   try {
-    const q = query(collection(db, 'service_providers'), where('isActive', '==', true));
+    const q = query(
+      collection(db, 'service_providers'),
+      where('isActive', '==', true),
+      orderBy('name', 'asc')
+    );
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ServiceProvider));
+    return querySnapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }) as ServiceProvider);
   } catch (error) {
-    console.error('Error getting providers:', error);
+    console.error('Error getting active providers:', error);
     return [];
+  }
+};
+
+export const getAllServiceProviders = async (): Promise<ServiceProvider[]> => {
+  try {
+    const q = query(collection(db, 'service_providers'), orderBy('name', 'asc'));
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }) as ServiceProvider);
+  } catch (error) {
+    console.error('Error getting all providers:', error);
+    return [];
+  }
+};
+
+export const createServiceProvider = async (provider: ServiceProviderInput): Promise<string> => {
+  try {
+    const payload = {
+      ...provider,
+      isActive: true,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+
+    const docRef = await addDoc(collection(db, 'service_providers'), payload);
+    return docRef.id;
+  } catch (error) {
+    console.error('Error creating provider:', error);
+    throw error;
+  }
+};
+
+export const toggleServiceProviderActive = async (
+  providerId: string,
+  isActive: boolean
+): Promise<void> => {
+  try {
+    const docRef = doc(db, 'service_providers', providerId);
+    await updateDoc(docRef, {
+      isActive,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error('Error updating provider status:', error);
+    throw error;
   }
 };

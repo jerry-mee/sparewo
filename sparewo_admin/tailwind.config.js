@@ -1,14 +1,13 @@
-/** @type {import('tailwindcss').Config} */
- 
-import animatePlugin from "tailwindcss-animate";
+const animatePlugin = require("tailwindcss-animate");
 
+/** @type {import('tailwindcss').Config} */
 module.exports = {
   darkMode: ["class"],
   content: [
-    './pages/**/*.{ts,tsx}',
-    './components/**/*.{ts,tsx}',
-    './app/**/*.{ts,tsx}',
-    './src/**/*.{ts,tsx}',
+    "./pages/**/*.{ts,tsx}",
+    "./components/**/*.{ts,tsx}",
+    "./app/**/*.{ts,tsx}",
+    "./src/**/*.{ts,tsx}",
   ],
   theme: {
     container: {
@@ -20,46 +19,48 @@ module.exports = {
     },
     extend: {
       colors: {
-        // SpareWo Theme Colors from theme.dart
+        border: "hsl(var(--border))",
+        input: "hsl(var(--input))",
+        ring: "hsl(var(--ring))",
+        background: "hsl(var(--background))",
+        foreground: "hsl(var(--foreground))",
         primary: {
-          DEFAULT: "#FF9800", // VendorColors.primary
-          foreground: "#ffffff",
+          DEFAULT: "hsl(var(--primary))",
+          foreground: "hsl(var(--primary-foreground))",
         },
         secondary: {
-          DEFAULT: "#1A1B4B", // VendorColors.secondary
-          foreground: "#ffffff",
+          DEFAULT: "hsl(var(--secondary))",
+          foreground: "hsl(var(--secondary-foreground))",
         },
-        background: "#F5F5F5", // VendorColors.background
-        card: "#FFFFFF", // VendorColors.cardBackground
-        text: {
-          DEFAULT: "#2D2D2D", // VendorColors.text
-          light: "#757575", // VendorColors.textLight
-        },
-        status: {
-          error: "#D32F2F", // VendorColors.error
-          success: "#388E3C", // VendorColors.success
-          pending: "#FFA726", // VendorColors.pending
-          approved: "#66BB6A", // VendorColors.approved
-          rejected: "#EF5350", // VendorColors.rejected
-        },
-        border: "#E0E0E0", // VendorColors.divider
-        input: "#FFFFFF",
-        ring: "#FF9800",
         destructive: {
-          DEFAULT: "#D32F2F",
-          foreground: "#FFFFFF",
+          DEFAULT: "hsl(var(--destructive))",
+          foreground: "hsl(var(--destructive-foreground))",
         },
         muted: {
-          DEFAULT: "#F5F5F5",
-          foreground: "#757575",
+          DEFAULT: "hsl(var(--muted))",
+          foreground: "hsl(var(--muted-foreground))",
         },
         accent: {
-          DEFAULT: "#1A1B4B",
-          foreground: "#FFFFFF",
+          DEFAULT: "hsl(var(--accent))",
+          foreground: "hsl(var(--accent-foreground))",
         },
         popover: {
-          DEFAULT: "#FFFFFF",
-          foreground: "#2D2D2D",
+          DEFAULT: "hsl(var(--popover))",
+          foreground: "hsl(var(--popover-foreground))",
+        },
+        card: {
+          DEFAULT: "hsl(var(--card))",
+          foreground: "hsl(var(--card-foreground))",
+        },
+        sidebar: {
+          DEFAULT: "hsl(var(--sidebar-background))",
+          foreground: "hsl(var(--sidebar-foreground))",
+          primary: "hsl(var(--sidebar-primary))",
+          "primary-foreground": "hsl(var(--sidebar-primary-foreground))",
+          accent: "hsl(var(--sidebar-accent))",
+          "accent-foreground": "hsl(var(--sidebar-accent-foreground))",
+          border: "hsl(var(--sidebar-border))",
+          ring: "hsl(var(--sidebar-ring))",
         },
       },
       borderRadius: {
@@ -68,7 +69,11 @@ module.exports = {
         sm: "calc(var(--radius) - 4px)",
       },
       fontFamily: {
-        sans: ["var(--font-poppins)"],
+        sans: ["var(--font-plus-jakarta)", "Helvetica Neue", "Arial", "sans-serif"],
+        display: ["var(--font-forum)", "Helvetica Neue", "serif"],
+      },
+      boxShadow: {
+        soft: "0 2px 8px 0 rgba(0, 0, 0, 0.04), 0 1px 2px 0 rgba(0, 0, 0, 0.02)",
       },
       keyframes: {
         "accordion-down": {
@@ -87,4 +92,4 @@ module.exports = {
     },
   },
   plugins: [animatePlugin],
-}
+};

@@ -5,7 +5,7 @@ import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { 
   getBookingById, 
-  getServiceProviders, 
+  getAllServiceProviders, 
   updateBookingStatus, 
   assignProviderToBooking,
   ServiceBooking,
@@ -41,7 +41,7 @@ export default function BookingDetailsPage() {
       try {
         const [bookingData, providersData] = await Promise.all([
           getBookingById(id),
-          getServiceProviders()
+          getAllServiceProviders()
         ]);
         
         setBooking(bookingData);

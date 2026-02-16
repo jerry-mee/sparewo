@@ -201,7 +201,7 @@ export default function VendorsPage() {
                       <TableCell className="truncate max-w-[120px]">{vendor.email}</TableCell>
                       <TableCell className="whitespace-nowrap">{formatDate(vendor.createdAt)}</TableCell>
                       <TableCell>
-                        <VendorStatusBadge status={vendor.status} />
+                        <VendorStatusBadge status={vendor.status} isSuspended={vendor.isSuspended} />
                       </TableCell>
                       <TableCell className="text-right">
                         <Link href={`/dashboard/vendors/${vendor.id}`}>

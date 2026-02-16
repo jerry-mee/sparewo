@@ -1,29 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { getOrders } from "@/lib/firebase/orders";
+import { useState, useEffect, useMemo } from "react";
+import { getOrders, getOrderStats } from "@/lib/firebase/orders";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow
-} from "@/components/ui/table";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DocumentData } from "firebase/firestore";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import Link from "next/link";
-import { Search, ChevronRight, ShoppingCart } from "lucide-react";
+import { Search, ChevronRight, ShoppingCart, PackageCheck, Clock3, Truck } from "lucide-react";
 import { toast } from "sonner";
 
 interface OrderItem {
@@ -40,49 +27,50 @@ interface Order {
   customerName?: string;
   userName?: string;
   totalAmount: number;
-  // Relaxing status type to string to avoid union mismatches with repository
-  status: string; 
-  // Allow flexible date types
-  createdAt: Date | string | number | { toDate(): Date } | null | undefined; 
+  status: string;
+  createdAt: Date | string | number | { toDate(): Date } | null | undefined;
   items: OrderItem[];
+}
+
+interface OrderStats {
+  total: number;
+  pending: number;
+  processing: number;
+  completed: number;
+  cancelled: number;
 }
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [stats, setStats] = useState<OrderStats>({ total: 0, pending: 0, processing: 0, completed: 0, cancelled: 0 });
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [lastDoc, setLastDoc] = useState<DocumentData | undefined>(undefined);
   const [hasMore, setHasMore] = useState(true);
 
-  const fetchOrders = async (reset: boolean = false) => {
+  const fetchOrders = async (reset = false) => {
     setLoading(true);
     try {
-      const result = await getOrders(
-        statusFilter === "all" ? null : statusFilter, 
-        10, 
-        reset ? undefined : lastDoc
-      );
-      
-      // Map result to local state
-      // We explicitly cast to Order[] to handle potential loose types from the repo
-      const mappedOrders: Order[] = result.orders.map((o) => ({
-        id: o.id,
-        orderNumber: o.orderNumber,
-        customerId: o.customerId,
-        // @ts-expect-error - Handling potential missing fields from different order versions
-        customerName: o.userName || o.customerName || 'Guest User',
-        totalAmount: o.totalAmount,
-        status: o.status,
-        createdAt: o.createdAt,
-        items: o.items || []
+      const result = await getOrders(statusFilter === "all" ? null : statusFilter, 10, reset ? undefined : lastDoc);
+
+      const mappedOrders: Order[] = result.orders.map((order) => ({
+        id: order.id,
+        orderNumber: order.orderNumber,
+        customerId: order.customerId,
+        customerName: (order as unknown as Record<string, string>).userName || (order as unknown as Record<string, string>).customerName || "Guest User",
+        totalAmount: order.totalAmount,
+        status: order.status,
+        createdAt: order.createdAt,
+        items: order.items || [],
       }));
 
       if (reset) {
         setOrders(mappedOrders);
       } else {
-        setOrders(prev => [...prev, ...mappedOrders]);
+        setOrders((prev) => [...prev, ...mappedOrders]);
       }
+
       setLastDoc(result.lastDoc);
       setHasMore(result.orders.length === 10);
     } catch (error) {
@@ -95,48 +83,88 @@ export default function OrdersPage() {
 
   useEffect(() => {
     fetchOrders(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusFilter]);
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    fetchOrders(true); 
-  };
+  useEffect(() => {
+    getOrderStats()
+      .then((payload) => setStats(payload))
+      .catch((error) => {
+        console.error(error);
+        toast.error("Failed to load order stats");
+      });
+  }, []);
 
-  // Status Badge Helper
+  const filteredOrders = useMemo(() => {
+    const needle = searchQuery.trim().toLowerCase();
+    if (!needle) return orders;
+
+    return orders.filter((order) => {
+      const orderNumber = order.orderNumber?.toLowerCase() || "";
+      const customerName = order.customerName?.toLowerCase() || "";
+      return orderNumber.includes(needle) || customerName.includes(needle) || order.id.toLowerCase().includes(needle);
+    });
+  }, [orders, searchQuery]);
+
   const getStatusBadge = (status: string) => {
     const styles: Record<string, string> = {
       pending: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
       processing: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
       shipped: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400",
-      delivered: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+      delivered: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400",
+      completed: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
       cancelled: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
-      completed: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400", // Added completed for safety
     };
+
     const style = styles[status] || "bg-gray-100 text-gray-800";
-    return (
-      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${style}`}>
-        {status ? status.charAt(0).toUpperCase() + status.slice(1) : 'Unknown'}
-      </span>
-    );
+    return <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${style}`}>{status}</span>;
   };
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Order Management</h1>
-        <p className="text-muted-foreground">Track and fulfill customer orders.</p>
+        <h1 className="text-2xl font-semibold tracking-tight">Order Tracker</h1>
+        <p className="text-muted-foreground">Track order progression, fulfillment assignment, and delivery status.</p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-            <span className="text-muted-foreground font-sans">UGX</span>
+            <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
+            <ShoppingCart className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {formatCurrency(orders.reduce((sum, o) => sum + (o.totalAmount || 0), 0))}
-            </div>
+            <div className="text-2xl font-bold">{stats.total}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Pending</CardTitle>
+            <Clock3 className="h-4 w-4 text-amber-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.pending}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Processing</CardTitle>
+            <Truck className="h-4 w-4 text-blue-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.processing}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Completed</CardTitle>
+            <PackageCheck className="h-4 w-4 text-green-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.completed}</div>
           </CardContent>
         </Card>
       </div>
@@ -147,20 +175,18 @@ export default function OrdersPage() {
             <CardTitle className="flex items-center gap-2">
               <ShoppingCart className="h-5 w-5" /> All Orders
             </CardTitle>
-            <div className="flex gap-2">
-              <form onSubmit={handleSearch} className="flex w-full md:w-auto items-center gap-2">
-                <Input 
-                  placeholder="Order ID..." 
+            <div className="flex flex-col sm:flex-row gap-2">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Search order # or customer"
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="h-9 w-[200px]"
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  className="h-9 w-[240px] pl-9"
                 />
-                <Button type="submit" size="sm" variant="secondary">
-                  <Search className="h-4 w-4" />
-                </Button>
-              </form>
+              </div>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-[140px] h-9">
+                <SelectTrigger className="w-[150px] h-9">
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent>
@@ -169,6 +195,7 @@ export default function OrdersPage() {
                   <SelectItem value="processing">Processing</SelectItem>
                   <SelectItem value="shipped">Shipped</SelectItem>
                   <SelectItem value="delivered">Delivered</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
                   <SelectItem value="cancelled">Cancelled</SelectItem>
                 </SelectContent>
               </Select>
@@ -192,14 +219,18 @@ export default function OrdersPage() {
               <TableBody>
                 {loading && orders.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="h-24 text-center">Loading orders...</TableCell>
+                    <TableCell colSpan={7} className="h-24 text-center">
+                      Loading orders...
+                    </TableCell>
                   </TableRow>
-                ) : orders.length === 0 ? (
+                ) : filteredOrders.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="h-24 text-center">No orders found.</TableCell>
+                    <TableCell colSpan={7} className="h-24 text-center">
+                      No orders found.
+                    </TableCell>
                   </TableRow>
                 ) : (
-                  orders.map((order) => (
+                  filteredOrders.map((order) => (
                     <TableRow key={order.id}>
                       <TableCell className="font-mono">{order.orderNumber}</TableCell>
                       <TableCell>{formatDate(order.createdAt)}</TableCell>

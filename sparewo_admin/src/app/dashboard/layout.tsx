@@ -1,270 +1,252 @@
-// src/app/dashboard/layout.tsx
 "use client";
 
-import React, { useState, useEffect } from 'react';
-import Link from 'next/link';
-import Image from 'next/image';
-import { usePathname } from 'next/navigation';
-import { useTheme } from 'next-themes';
+import React, { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
-  Users,
-  Store,
-  Wrench,
-  Package,
-  ShoppingCart,
-  Settings,
+  LogOut,
   Menu,
-  X,
-  Sun,
+  MessageSquareWarning,
   Moon,
-  LogOut
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { NotificationDropdown } from '@/components/ui/notification-dropdown';
-import { useAuth } from '@/lib/context/auth-context';
-import { logOut } from '@/lib/firebase/auth';
-import { toast } from 'sonner';
-import { getInitials } from '@/lib/utils';
+  Package,
+  Search,
+  Settings,
+  ShoppingCart,
+  Store,
+  Sun,
+  Users,
+  Wrench,
+  X,
+} from "lucide-react";
+import { useTheme } from "next-themes";
+import { toast } from "sonner";
 
-export default function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [isMobile, setIsMobile] = useState(false);
+import { NotificationDropdown } from "@/components/ui/notification-dropdown";
+import { Button } from "@/components/ui/button";
+import { useAuth } from "@/lib/context/auth-context";
+import { logOut } from "@/lib/firebase/auth";
+import { cn, getInitials } from "@/lib/utils";
+
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { theme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
+  const router = useRouter();
+  const { resolvedTheme, setTheme } = useTheme();
   const { user, adminData } = useAuth();
 
+  const [mounted, setMounted] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [searchValue, setSearchValue] = useState("");
+
   useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 1024);
-      if (window.innerWidth < 1024) {
-        setIsSidebarOpen(false);
-      } else {
-        setIsSidebarOpen(true);
-      }
+    const media = window.matchMedia("(max-width: 1023px)");
+
+    const syncLayout = (mobile: boolean) => {
+      setIsMobile(mobile);
+      setIsSidebarOpen(!mobile);
     };
 
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
+    syncLayout(media.matches);
+    const handleChange = (event: MediaQueryListEvent) => syncLayout(event.matches);
+    media.addEventListener("change", handleChange);
     setMounted(true);
 
-    return () => window.removeEventListener('resize', checkMobile);
+    return () => media.removeEventListener("change", handleChange);
   }, []);
 
-  const toggleSidebar = () => {
-    setIsSidebarOpen(!isSidebarOpen);
-  };
+  const navItems = useMemo(
+    () => [
+      { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+      { title: "Clients", href: "/dashboard/clients", icon: Users },
+      { title: "AutoHub", href: "/dashboard/autohub", icon: Wrench },
+      { title: "Vendors", href: "/dashboard/vendors", icon: Store },
+      { title: "Products", href: "/dashboard/products", icon: Package },
+      { title: "Orders", href: "/dashboard/orders", icon: ShoppingCart },
+      { title: "Comms", href: "/dashboard/comms", icon: MessageSquareWarning },
+      { title: "Settings", href: "/dashboard/settings", icon: Settings },
+    ],
+    []
+  );
 
-  const toggleTheme = () => {
-    setTheme(theme === 'dark' ? 'light' : 'dark');
+  const currentTitle = useMemo(() => {
+    if (pathname === "/dashboard") return "Operations Overview";
+    const item = navItems.find((nav) => pathname.startsWith(nav.href));
+    return item?.title ?? "Dashboard";
+  }, [navItems, pathname]);
+
+  const onSearch = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const query = searchValue.trim();
+    if (!query) return;
+    router.push(`/dashboard/orders?query=${encodeURIComponent(query)}`);
   };
 
   const handleLogout = async () => {
     try {
       await logOut();
-      toast.success('Logged out successfully');
+      toast.success("Signed out successfully");
     } catch {
-      toast.error('Failed to log out');
+      toast.error("Failed to sign out");
     }
   };
 
-  // UPDATED NAVIGATION ITEMS
-  const navItems = [
-    {
-      title: 'Dashboard',
-      href: '/dashboard',
-      icon: <LayoutDashboard size={20} />,
-      active: pathname === '/dashboard',
-    },
-    {
-      title: 'Clients',
-      href: '/dashboard/clients',
-      icon: <Users size={20} />,
-      active: pathname.startsWith('/dashboard/clients'),
-    },
-    {
-      title: 'AutoHub',
-      href: '/dashboard/autohub',
-      icon: <Wrench size={20} />,
-      active: pathname.startsWith('/dashboard/autohub'),
-    },
-    {
-      title: 'Vendors',
-      href: '/dashboard/vendors',
-      icon: <Store size={20} />,
-      active: pathname.startsWith('/dashboard/vendors'),
-    },
-    {
-      title: 'Products',
-      href: '/dashboard/products',
-      icon: <Package size={20} />,
-      active: pathname.startsWith('/dashboard/products'),
-    },
-    {
-      title: 'Orders',
-      href: '/dashboard/orders',
-      icon: <ShoppingCart size={20} />,
-      active: pathname.startsWith('/dashboard/orders'),
-    },
-    {
-      title: 'Settings',
-      href: '/dashboard/settings',
-      icon: <Settings size={20} />,
-      active: pathname.startsWith('/dashboard/settings'),
-    },
-  ];
-
-  const getCurrentPageTitle = () => {
-    if (pathname === '/dashboard') return 'Dashboard';
-    const parts = pathname.split('/');
-    const lastPart = parts[parts.length - 1];
-    
-    if (lastPart === 'dashboard') return 'Dashboard';
-    
-    if (parts.includes('autohub')) return 'AutoHub Manager';
-    if (parts.includes('clients')) return 'Client Management';
-    if (parts.includes('vendors')) return 'Vendor Management';
-    if (parts.includes('products')) return 'Product Catalog';
-    if (parts.includes('orders')) return 'Orders';
-    if (parts.includes('settings')) return 'Settings';
-
-    return lastPart.charAt(0).toUpperCase() + lastPart.slice(1);
-  };
-
-  const sidebarOverlay = isMobile && isSidebarOpen ? (
-    <div
-      className="fixed inset-0 bg-black/50 z-20 lg:hidden"
-      onClick={() => setIsSidebarOpen(false)}
-    />
-  ) : null;
+  const isDark = resolvedTheme === "dark";
 
   return (
-    <div className={`flex min-h-screen ${mounted && theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-gray-100'}`}>
-      {sidebarOverlay}
+    <div className="min-h-screen bg-background text-foreground">
+      {isMobile && isSidebarOpen && (
+        <button
+          aria-label="Close sidebar"
+          className="fixed inset-0 z-30 bg-black/45 backdrop-blur-sm"
+          onClick={() => setIsSidebarOpen(false)}
+          type="button"
+        />
+      )}
 
-      <div
-        className={`${
-          isSidebarOpen ? "w-64" : "w-0 lg:w-20"
-        } ${mounted && theme === 'dark' ? 'bg-gray-800' : 'bg-indigo-900'} fixed inset-y-0 left-0 z-30 transition-all duration-300 ease-in-out flex flex-col overflow-hidden`}
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-40 border-r border-sidebar-border bg-sidebar transition-all duration-300 ease-out",
+          isMobile
+            ? isSidebarOpen
+              ? "w-72 translate-x-0"
+              : "w-72 -translate-x-full"
+            : isSidebarOpen
+              ? "w-72 translate-x-0"
+              : "w-20 translate-x-0"
+        )}
       >
-        <div className="flex items-center justify-between h-16 px-4 border-b border-opacity-20 border-gray-600">
-          <div className="flex items-center space-x-2">
-            {isSidebarOpen && (
-              <div className="text-lg font-semibold text-white flex items-center">
-                <Image
-                  src="/images/logo.png"
-                  alt="SpareWo Logo"
-                  width={32}
-                  height={32}
-                  className="mr-2"
-                  style={{ width: 'auto', height: 'auto' }}
-                />
-                SpareWo Admin
-              </div>
-            )}
-          </div>
-          <button onClick={toggleSidebar} className="text-white lg:block hidden">
-            {isSidebarOpen ? <X size={20} /> : <Menu size={20} />}
-          </button>
-        </div>
-
-        <nav className="flex-1 overflow-y-auto py-4">
-          <div className="px-4 space-y-1">
-            {navItems.map((item) => (
-              <Link key={item.title} href={item.href}>
-                <div
-                  className={`flex items-center py-3 px-4 rounded-md cursor-pointer transition-colors ${
-                    item.active
-                      ? "bg-orange-500 text-white"
-                      : "text-gray-300 hover:bg-orange-500 hover:bg-opacity-30 hover:text-white"
-                  } ${!isSidebarOpen && 'justify-center'}`}
-                >
-                  <div className="flex items-center justify-center">
-                    {item.icon}
-                  </div>
-                  {isSidebarOpen && <span className="ml-3 text-sm">{item.title}</span>}
+        <div className="flex h-full flex-col">
+          <div className="flex h-20 items-center justify-between border-b border-sidebar-border px-5">
+            <Link href="/dashboard" className="flex min-w-0 items-center gap-3">
+              <Image
+                src="/images/logo.png"
+                alt="SpareWo"
+                width={36}
+                height={36}
+                className="rounded-lg"
+                style={{ width: "auto", height: "auto" }}
+              />
+              {isSidebarOpen && (
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold tracking-tight">SpareWo Admin</p>
+                  <p className="truncate text-xs text-muted-foreground">Operations Control Panel</p>
                 </div>
-              </Link>
-            ))}
-          </div>
-        </nav>
-
-        <div className="p-4 border-t border-gray-600 border-opacity-20">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <div className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-white font-medium">
-                {user ? getInitials(user.displayName || user.email || 'A') : 'A'}
-              </div>
-            </div>
-            {isSidebarOpen && (
-              <div className="ml-3 overflow-hidden">
-                <p className="text-sm font-medium text-white truncate">
-                  {user?.displayName || 'Admin User'}
-                </p>
-                <p className="text-xs text-gray-300 truncate">
-                  {adminData?.role || 'Admin'}
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div
-        className={`flex-1 ${
-          isSidebarOpen ? "lg:ml-64" : "lg:ml-20"
-        } transition-all duration-300 ease-in-out`}
-      >
-        <header
-          className={`fixed right-0 left-0 lg:left-auto ${
-            isSidebarOpen ? "lg:left-64" : "lg:left-20"
-          } h-16 z-20 flex items-center justify-between px-4 border-b ${
-            mounted && theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
-          } transition-all duration-300`}
-        >
-          <div className="flex items-center">
-            <button
-              onClick={toggleSidebar}
-              className="text-gray-500 dark:text-gray-300 mr-4 lg:hidden"
-            >
-              <Menu size={20} />
-            </button>
-            <h1 className="text-xl font-semibold truncate">
-              {getCurrentPageTitle()}
-            </h1>
-          </div>
-
-          <div className="flex items-center space-x-4">
-            <button
-              onClick={toggleTheme}
-              className={`p-1 rounded-full ${theme === 'dark' ? 'text-gray-300 hover:text-white' : 'text-gray-500 hover:text-gray-700'}`}
-            >
-              {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
-            </button>
-
-            <NotificationDropdown />
+              )}
+            </Link>
 
             <Button
               variant="ghost"
               size="icon"
-              onClick={handleLogout}
-              aria-label="Log out"
+              onClick={() => setIsSidebarOpen((open) => !open)}
+              className="hidden lg:inline-flex"
             >
-              <LogOut size={20} />
+              {isSidebarOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
             </Button>
+          </div>
+
+          <nav className="flex-1 space-y-2 overflow-y-auto px-3 py-6">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => {
+                    if (isMobile) setIsSidebarOpen(false);
+                  }}
+                  className={cn(
+                    "group flex items-center gap-3 rounded-xl px-4 py-3 text-sm transition-all duration-150",
+                    active
+                      ? "bg-primary text-primary-foreground shadow-soft"
+                      : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-foreground",
+                    !isSidebarOpen && !isMobile && "justify-center px-2"
+                  )}
+                >
+                  <Icon className="h-5 w-5 shrink-0" />
+                  {isSidebarOpen && <span className="truncate">{item.title}</span>}
+                </Link>
+              );
+            })}
+          </nav>
+
+          <div className="border-t border-sidebar-border p-4">
+            <div className={cn("flex items-center gap-3", !isSidebarOpen && !isMobile && "justify-center")}>
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary font-semibold text-primary-foreground">
+                {getInitials(user?.displayName || user?.email || "Admin")}
+              </div>
+
+              {isSidebarOpen && (
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold">{user?.displayName || "Admin User"}</p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {adminData?.role || "admin"}
+                    {adminData?.role === "viewer" && " (read-only)"}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <div className={cn("min-h-screen transition-all duration-300", isSidebarOpen ? "lg:pl-72" : "lg:pl-20")}>
+        <header className="sticky top-0 z-20 border-b border-border/70 bg-card/90 px-4 backdrop-blur-sm md:px-6 lg:px-8">
+          <div className="flex h-20 items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3 md:gap-6">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="lg:hidden"
+                onClick={() => setIsSidebarOpen((open) => !open)}
+              >
+                <Menu className="h-5 w-5" />
+              </Button>
+
+              <div className="hidden min-w-0 md:block">
+                <p className="truncate text-base font-semibold font-display">{currentTitle}</p>
+                <p className="truncate text-xs text-muted-foreground">Platform command and monitoring</p>
+              </div>
+
+              <form onSubmit={onSearch} className="relative hidden w-full max-w-xl md:block">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  value={searchValue}
+                  onChange={(event) => setSearchValue(event.target.value)}
+                  placeholder="Search orders, clients, vendors..."
+                  className="h-11 w-full rounded-xl border border-border bg-background pl-10 pr-4 text-sm outline-none ring-primary/30 transition focus:border-primary focus:ring-2"
+                />
+              </form>
+            </div>
+
+            <div className="flex items-center gap-1 md:gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setTheme(isDark ? "light" : "dark")}
+                aria-label="Toggle theme"
+                className="rounded-xl"
+              >
+                {mounted ? (
+                  isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />
+                ) : (
+                  <Moon className="h-4 w-4" />
+                )}
+              </Button>
+
+              <NotificationDropdown />
+
+              <Button variant="ghost" size="icon" onClick={handleLogout} className="rounded-xl" aria-label="Sign out">
+                <LogOut className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </header>
 
-        <main className="pt-24 px-4 md:px-6 pb-6 min-h-screen">
-          <div className="max-w-7xl mx-auto">
-            {children}
-          </div>
-        </main>
+        <main className="px-4 pb-8 pt-6 md:px-6 lg:px-8">{children}</main>
       </div>
     </div>
   );

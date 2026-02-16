@@ -2,13 +2,29 @@
 
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
-import { getOrderById, updateOrderStatus } from "@/lib/firebase/orders";
+import {
+  autoAssignVendorsToOrder,
+  getOrderById,
+  getOrderFulfillments,
+  updateFulfillmentStatus,
+  updateOrderStatus,
+} from "@/lib/firebase/orders";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { ArrowLeft, MapPin, User, CreditCard } from "lucide-react";
+import {
+  ArrowLeft,
+  MapPin,
+  User,
+  CreditCard,
+  Truck,
+  Route,
+  Workflow,
+  Save,
+  RefreshCw,
+} from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
 
@@ -38,40 +54,152 @@ interface OrderDetail {
   customerPhone?: string;
   deliveryAddress?: DeliveryAddress;
   paymentMethod?: string;
+  adminNotes?: string;
 }
+
+interface Fulfillment {
+  id: string;
+  vendorId: string;
+  vendorName?: string;
+  productName?: string;
+  status: "pending" | "accepted" | "processing" | "shipped" | "delivered" | "cancelled";
+  quantity: number;
+  vendorPrice: number;
+  totalVendorAmount: number;
+  trackingNumber?: string;
+  carrier?: string;
+  vendorNotes?: string;
+  createdAt?: unknown;
+}
+
+interface FulfillmentEdit {
+  status: Fulfillment["status"];
+  trackingNumber: string;
+  carrier: string;
+  vendorNotes: string;
+}
+
+const statusOptions = ["pending", "processing", "shipped", "delivered", "completed", "cancelled"] as const;
+const fulfillmentStatusOptions: Fulfillment["status"][] = [
+  "pending",
+  "accepted",
+  "processing",
+  "shipped",
+  "delivered",
+  "cancelled",
+];
 
 export default function OrderDetailsPage() {
   const { id } = useParams<{ id: string }>();
+
   const [order, setOrder] = useState<OrderDetail | null>(null);
+  const [fulfillments, setFulfillments] = useState<Fulfillment[]>([]);
+  const [fulfillmentEdits, setFulfillmentEdits] = useState<Record<string, FulfillmentEdit>>({});
+
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [assigning, setAssigning] = useState(false);
+  const [savingFulfillmentId, setSavingFulfillmentId] = useState<string | null>(null);
+
+  const loadOrder = async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    try {
+      const [orderData, fulfillmentData] = await Promise.all([
+        getOrderById(id),
+        getOrderFulfillments(id),
+      ]);
+
+      setOrder(orderData as unknown as OrderDetail);
+      setFulfillments(fulfillmentData as unknown as Fulfillment[]);
+
+      const initialEdits: Record<string, FulfillmentEdit> = {};
+      (fulfillmentData as unknown as Fulfillment[]).forEach((item) => {
+        initialEdits[item.id] = {
+          status: item.status,
+          trackingNumber: item.trackingNumber || "",
+          carrier: item.carrier || "",
+          vendorNotes: item.vendorNotes || "",
+        };
+      });
+      setFulfillmentEdits(initialEdits);
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to load order details");
+    } finally {
+      setLoading(false);
+      if (isRefresh) setRefreshing(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchOrder = async () => {
-      setLoading(true);
-      try {
-        const data = await getOrderById(id);
-        // Cast to unknown first to allow assignment if structure matches mostly
-        setOrder(data as unknown as OrderDetail);
-      } catch (error) {
-        console.error(error);
-        toast.error("Failed to load order details");
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchOrder();
+    loadOrder();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  const handleStatusChange = async (newStatus: string) => {
+  const handleOrderStatusChange = async (newStatus: string) => {
     if (!order) return;
+
     try {
-      // @ts-expect-error - Mismatch in string literal types vs string
-      await updateOrderStatus(order.id, newStatus);
+      await updateOrderStatus(order.id, newStatus as typeof statusOptions[number]);
       setOrder({ ...order, status: newStatus });
       toast.success(`Order status updated to ${newStatus}`);
     } catch (error) {
       console.error(error);
       toast.error("Failed to update order status");
+    }
+  };
+
+  const handleAutoAssign = async () => {
+    if (!order) return;
+
+    setAssigning(true);
+    try {
+      const assignmentIds = await autoAssignVendorsToOrder(order.id, true);
+      toast.success(`Created ${assignmentIds.length} fulfillment assignment(s)`);
+      await loadOrder(true);
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to auto-assign fulfillments");
+    } finally {
+      setAssigning(false);
+    }
+  };
+
+  const updateEdit = (fulfillmentId: string, updates: Partial<FulfillmentEdit>) => {
+    setFulfillmentEdits((current) => ({
+      ...current,
+      [fulfillmentId]: {
+        ...current[fulfillmentId],
+        ...updates,
+      },
+    }));
+  };
+
+  const handleSaveFulfillment = async (fulfillmentId: string) => {
+    const edit = fulfillmentEdits[fulfillmentId];
+    if (!edit) return;
+
+    setSavingFulfillmentId(fulfillmentId);
+    try {
+      await updateFulfillmentStatus(
+        fulfillmentId,
+        edit.status,
+        edit.vendorNotes,
+        edit.status === "shipped" || edit.status === "delivered"
+          ? {
+              trackingNumber: edit.trackingNumber || undefined,
+              carrier: edit.carrier || undefined,
+            }
+          : undefined
+      );
+
+      toast.success("Fulfillment updated");
+      await loadOrder(true);
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to update fulfillment");
+    } finally {
+      setSavingFulfillmentId(null);
     }
   };
 
@@ -87,35 +215,37 @@ export default function OrderDetailsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Link href="/dashboard/orders">
-            <Button variant="ghost" size="icon"><ArrowLeft className="h-5 w-5" /></Button>
+            <Button variant="ghost" size="icon">
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
           </Link>
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Order #{order.orderNumber}</h1>
             <p className="text-sm text-muted-foreground">Placed on {formatDate(order.createdAt)}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium">Status:</span>
-          <select 
+
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-medium">Order Status</span>
+          <select
             className="rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
             value={order.status}
-            onChange={(e) => handleStatusChange(e.target.value)}
+            onChange={(event) => handleOrderStatusChange(event.target.value)}
           >
-            <option value="pending">Pending</option>
-            <option value="processing">Processing</option>
-            <option value="shipped">Shipped</option>
-            <option value="delivered">Delivered</option>
-            <option value="cancelled">Cancelled</option>
+            {statusOptions.map((option) => (
+              <option key={option} value={option}>
+                {option.charAt(0).toUpperCase() + option.slice(1)}
+              </option>
+            ))}
           </select>
         </div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-3">
         <div className="space-y-6 md:col-span-2">
-          {/* Order Items */}
           <Card>
             <CardHeader>
               <CardTitle>Items</CardTitle>
@@ -131,8 +261,8 @@ export default function OrderDetailsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {order.items?.map((item: OrderItem, i: number) => (
-                    <TableRow key={i}>
+                  {order.items?.map((item: OrderItem, index: number) => (
+                    <TableRow key={index}>
                       <TableCell>
                         <div className="flex flex-col">
                           <span className="font-medium">{item.productName}</span>
@@ -145,17 +275,137 @@ export default function OrderDetailsPage() {
                     </TableRow>
                   ))}
                   <TableRow>
-                    <TableCell colSpan={3} className="text-right font-medium">Total</TableCell>
+                    <TableCell colSpan={3} className="text-right font-medium">
+                      Total
+                    </TableCell>
                     <TableCell className="text-right font-bold">{formatCurrency(order.totalAmount)}</TableCell>
                   </TableRow>
                 </TableBody>
               </Table>
             </CardContent>
           </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Route className="h-5 w-5" /> Fulfillment Tracker
+                </CardTitle>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Assign vendors, manage shipment progress, and track carrier details.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={() => loadOrder(true)} disabled={refreshing}>
+                  <RefreshCw className="mr-2 h-4 w-4" /> Refresh
+                </Button>
+                <Button size="sm" onClick={handleAutoAssign} disabled={assigning || order.status === "cancelled"}>
+                  <Workflow className="mr-2 h-4 w-4" />
+                  {assigning ? "Assigning..." : "Auto Assign Vendors"}
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {fulfillments.length === 0 ? (
+                <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+                  No fulfillments created yet. Use auto-assignment to generate vendor work orders.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {fulfillments.map((fulfillment) => {
+                    const edit = fulfillmentEdits[fulfillment.id];
+                    if (!edit) return null;
+
+                    return (
+                      <div key={fulfillment.id} className="rounded-lg border p-4">
+                        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                          <div>
+                            <p className="font-medium">{fulfillment.productName || "Order item"}</p>
+                            <p className="text-xs text-muted-foreground">
+                              Vendor: {fulfillment.vendorName || fulfillment.vendorId}
+                            </p>
+                          </div>
+                          <span className="text-xs rounded-full bg-muted px-2.5 py-1">
+                            Qty {fulfillment.quantity} • {formatCurrency(fulfillment.totalVendorAmount)}
+                          </span>
+                        </div>
+
+                        <div className="grid gap-3 md:grid-cols-4">
+                          <div>
+                            <label className="mb-1 block text-xs font-medium text-muted-foreground">Status</label>
+                            <select
+                              className="w-full rounded-md border border-input bg-background px-2.5 py-2 text-sm"
+                              value={edit.status}
+                              onChange={(event) =>
+                                updateEdit(fulfillment.id, {
+                                  status: event.target.value as Fulfillment["status"],
+                                })
+                              }
+                            >
+                              {fulfillmentStatusOptions.map((option) => (
+                                <option key={option} value={option}>
+                                  {option}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="mb-1 block text-xs font-medium text-muted-foreground">Carrier</label>
+                            <input
+                              className="w-full rounded-md border border-input bg-background px-2.5 py-2 text-sm"
+                              value={edit.carrier}
+                              onChange={(event) => updateEdit(fulfillment.id, { carrier: event.target.value })}
+                              placeholder="DHL / UPS / Local"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="mb-1 block text-xs font-medium text-muted-foreground">Tracking #</label>
+                            <input
+                              className="w-full rounded-md border border-input bg-background px-2.5 py-2 text-sm"
+                              value={edit.trackingNumber}
+                              onChange={(event) =>
+                                updateEdit(fulfillment.id, { trackingNumber: event.target.value })
+                              }
+                              placeholder="Optional"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="mb-1 block text-xs font-medium text-muted-foreground">Vendor Notes</label>
+                            <input
+                              className="w-full rounded-md border border-input bg-background px-2.5 py-2 text-sm"
+                              value={edit.vendorNotes}
+                              onChange={(event) =>
+                                updateEdit(fulfillment.id, { vendorNotes: event.target.value })
+                              }
+                              placeholder="Optional"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="mt-3 flex justify-end">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleSaveFulfillment(fulfillment.id)}
+                            disabled={savingFulfillmentId === fulfillment.id}
+                          >
+                            <Save className="mr-2 h-4 w-4" />
+                            {savingFulfillmentId === fulfillment.id ? "Saving..." : "Save Update"}
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
         <div className="space-y-6">
-          {/* Customer Details */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
@@ -171,7 +421,6 @@ export default function OrderDetailsPage() {
             </CardContent>
           </Card>
 
-          {/* Shipping Address */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
@@ -182,7 +431,9 @@ export default function OrderDetailsPage() {
               {order.deliveryAddress ? (
                 <div className="grid gap-1">
                   <span>{order.deliveryAddress.street}</span>
-                  <span>{order.deliveryAddress.city}, {order.deliveryAddress.country}</span>
+                  <span>
+                    {order.deliveryAddress.city}, {order.deliveryAddress.country}
+                  </span>
                 </div>
               ) : (
                 <p className="text-muted-foreground">Pickup in store</p>
@@ -190,7 +441,6 @@ export default function OrderDetailsPage() {
             </CardContent>
           </Card>
 
-          {/* Payment Info */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
@@ -207,6 +457,19 @@ export default function OrderDetailsPage() {
                 <span>Total Paid</span>
                 <span>{formatCurrency(order.totalAmount)}</span>
               </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Truck className="h-4 w-4" /> Operational Notes
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">
+                {order.adminNotes || "No order-level admin notes recorded yet."}
+              </p>
             </CardContent>
           </Card>
         </div>

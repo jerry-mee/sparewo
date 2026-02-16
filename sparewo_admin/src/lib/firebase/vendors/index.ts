@@ -386,6 +386,35 @@ export const getTopVendorsByScore = async (
   }
 };
 
+// Suspend or reactivate vendor account
+export const toggleVendorSuspension = async (
+  id: string,
+  suspend: boolean,
+  reason?: string
+): Promise<void> => {
+  try {
+    const docRef = doc(db, 'vendors', id);
+
+    const updateData: FirebaseUpdateData = {
+      isSuspended: suspend,
+      updatedAt: serverTimestamp(),
+    };
+
+    if (suspend) {
+      updateData.suspendedAt = serverTimestamp();
+      updateData.suspensionReason = reason || 'Suspended by admin';
+    } else {
+      updateData.reactivatedAt = serverTimestamp();
+      updateData.suspensionReason = null;
+    }
+
+    await updateDoc(docRef, updateData);
+  } catch (error) {
+    console.error('Error toggling vendor suspension:', error);
+    throw error;
+  }
+};
+
 // Count vendors by status
 export const countVendorsByStatus = async (status: string): Promise<number> => {
   try {

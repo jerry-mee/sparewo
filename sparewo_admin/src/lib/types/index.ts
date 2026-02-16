@@ -8,7 +8,7 @@ export interface AdminUser {
 }
 
 export interface VendorStatus {
-  value: 'pending' | 'approved' | 'rejected';
+  value: 'pending' | 'approved' | 'rejected' | 'suspended';
   label: string;
   color: string;
 }
@@ -23,6 +23,7 @@ export const VENDOR_STATUSES: VendorStatus[] = [
   { value: 'pending', label: 'Pending Review', color: 'bg-amber-500' },
   { value: 'approved', label: 'Approved', color: 'bg-green-500' },
   { value: 'rejected', label: 'Rejected', color: 'bg-red-500' },
+  { value: 'suspended', label: 'Suspended', color: 'bg-slate-600' },
 ];
 
 export const PRODUCT_STATUSES: ProductStatus[] = [

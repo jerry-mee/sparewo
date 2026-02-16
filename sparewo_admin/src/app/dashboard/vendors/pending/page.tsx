@@ -221,7 +221,7 @@ export default function PendingVendorsPage() {
                       <TableCell className="truncate max-w-[120px]">{vendor.email}</TableCell>
                       <TableCell className="whitespace-nowrap">{formatDate(vendor.createdAt)}</TableCell>
                       <TableCell>
-                        <VendorStatusBadge status={vendor.status} />
+                        <VendorStatusBadge status={vendor.status} isSuspended={vendor.isSuspended} />
                       </TableCell>
                       <TableCell className="text-right p-0 pr-2">
                         <div className="flex justify-end items-center space-x-1">

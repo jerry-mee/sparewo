@@ -10,6 +10,8 @@ export interface Vendor {
   taxId?: string;
   description?: string;
   status: 'pending' | 'approved' | 'rejected';
+  isSuspended?: boolean;
+  suspensionReason?: string;
   rejectionReason?: string;
   logoUrl?: string;
   documentUrls?: string[];
@@ -17,4 +19,6 @@ export interface Vendor {
   updatedAt: any;
   approvedAt?: any;
   rejectedAt?: any;
+  suspendedAt?: any;
+  reactivatedAt?: any;
 }

@@ -361,6 +361,7 @@ export default function ProductDetailPage() {
                             src={activeImage} 
                             alt={productName}
                             fill
+                            sizes="(max-width: 1024px) 100vw, 66vw"
                             className="object-contain"
                             onError={() => {
                               console.error('Image failed to load:', activeImage);
@@ -383,6 +384,7 @@ export default function ProductDetailPage() {
                               src={url} 
                               alt={`${productName} - Image ${index + 1}`}
                               fill
+                              sizes="(max-width: 640px) 25vw, 12vw"
                               className="object-cover"
                               onError={() => {
                                 console.error('Thumbnail failed to load:', url);

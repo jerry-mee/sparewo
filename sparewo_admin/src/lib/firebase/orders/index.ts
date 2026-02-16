@@ -30,7 +30,7 @@ interface Order {
   orderNumber: string;
   customerId: string;
   items: OrderItem[];
-  status: 'pending' | 'processing' | 'completed' | 'cancelled';
+  status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'completed' | 'cancelled';
   totalAmount: number;
   deliveryAddress?: DeliveryAddress;
   customerPhone: string;
@@ -38,6 +38,8 @@ interface Order {
   createdAt: Timestamp;
   updatedAt: Timestamp;
   completedAt?: Timestamp;
+  shippedAt?: Timestamp;
+  deliveredAt?: Timestamp;
   cancelledAt?: Timestamp;
 }
 
@@ -63,6 +65,8 @@ interface OrderFulfillment {
   catalogProductId: string;
   vendorProductId: string;
   vendorId: string;
+  vendorName?: string;
+  productName?: string;
   customerId: string;
   quantity: number;
   vendorPrice: number;
@@ -190,7 +194,7 @@ export const getOrderById = async (id: string): Promise<Order | null> => {
 // Update order status
 export const updateOrderStatus = async (
   orderId: string,
-  status: 'pending' | 'processing' | 'completed' | 'cancelled',
+  status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'completed' | 'cancelled',
   notes?: string
 ): Promise<void> => {
   try {
@@ -205,6 +209,14 @@ export const updateOrderStatus = async (
       updateData.adminNotes = notes;
     }
     
+    if (status === 'shipped') {
+      updateData.shippedAt = serverTimestamp();
+    }
+
+    if (status === 'delivered') {
+      updateData.deliveredAt = serverTimestamp();
+    }
+
     if (status === 'completed') {
       updateData.completedAt = serverTimestamp();
     }
@@ -227,6 +239,8 @@ export const createOrderFulfillment = async (
     catalogProductId: string;
     vendorProductId: string;
     vendorId: string;
+    vendorName?: string;
+    productName?: string;
     quantity: number;
     vendorPrice: number;
   }>
@@ -248,6 +262,8 @@ export const createOrderFulfillment = async (
         catalogProductId: item.catalogProductId,
         vendorProductId: item.vendorProductId,
         vendorId: item.vendorId,
+        vendorName: item.vendorName || '',
+        productName: item.productName || '',
         customerId: order.customerId || '',
         quantity: item.quantity,
         vendorPrice: item.vendorPrice,
@@ -461,7 +477,7 @@ export const getAvailableVendorsForProduct = async (
           // Get vendor details
           const vendorDoc = await getDoc(doc(db, 'vendors', mapping.vendorId));
           
-          if (vendorDoc.exists() && vendorDoc.data().status === 'approved') {
+          if (vendorDoc.exists() && vendorDoc.data().status === 'approved' && !vendorDoc.data().isSuspended) {
             availableVendors.push({
               vendorId: mapping.vendorId,
               vendorName: mapping.vendorName || vendorDoc.data().businessName,
@@ -499,6 +515,8 @@ export const autoAssignVendorsToOrder = async (
       catalogProductId: string;
       vendorProductId: string;
       vendorId: string;
+      vendorName?: string;
+      productName?: string;
       quantity: number;
       vendorPrice: number;
     }> = [];
@@ -530,6 +548,8 @@ export const autoAssignVendorsToOrder = async (
           catalogProductId: item.catalogProductId,
           vendorProductId: selectedVendor.vendorProductId,
           vendorId: selectedVendor.vendorId,
+          vendorName: selectedVendor.vendorName,
+          productName: item.productName || '',
           quantity: item.quantity,
           vendorPrice: selectedVendor.vendorPrice,
         });

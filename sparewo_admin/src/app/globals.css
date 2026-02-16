@@ -1,26 +1,134 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: 0 0% 100%;
+  --foreground: 210 24% 12%;
+  --card: 0 0% 100%;
+  --card-foreground: 210 24% 12%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 210 24% 12%;
+  --primary: 42 95% 60%;
+  --primary-foreground: 210 24% 12%;
+  --secondary: 201 98% 11%;
+  --secondary-foreground: 0 0% 100%;
+  --muted: 200 20% 95%;
+  --muted-foreground: 210 8% 40%;
+  --accent: 157 100% 96%;
+  --accent-foreground: 201 98% 11%;
+  --destructive: 0 66% 50%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 210 20% 90%;
+  --input: 210 20% 90%;
+  --ring: 42 95% 60%;
+  --radius: 0.85rem;
+
+  --sidebar-background: 0 0% 100%;
+  --sidebar-foreground: 210 24% 12%;
+  --sidebar-primary: 42 95% 60%;
+  --sidebar-primary-foreground: 210 24% 12%;
+  --sidebar-accent: 200 20% 95%;
+  --sidebar-accent-foreground: 210 24% 12%;
+  --sidebar-border: 210 20% 90%;
+  --sidebar-ring: 42 95% 60%;
+}
+
+.dark {
+  --background: 200 100% 9%;
+  --foreground: 0 0% 98%;
+  --card: 200 100% 10%;
+  --card-foreground: 0 0% 98%;
+  --popover: 200 100% 9%;
+  --popover-foreground: 0 0% 98%;
+  --primary: 42 95% 60%;
+  --primary-foreground: 201 98% 11%;
+  --secondary: 200 85% 12%;
+  --secondary-foreground: 0 0% 98%;
+  --muted: 200 70% 14%;
+  --muted-foreground: 200 10% 70%;
+  --accent: 200 70% 14%;
+  --accent-foreground: 0 0% 98%;
+  --destructive: 0 55% 40%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 200 52% 22%;
+  --input: 200 52% 22%;
+  --ring: 42 95% 60%;
+
+  --sidebar-background: 200 100% 9%;
+  --sidebar-foreground: 0 0% 98%;
+  --sidebar-primary: 42 95% 60%;
+  --sidebar-primary-foreground: 201 98% 11%;
+  --sidebar-accent: 200 70% 14%;
+  --sidebar-accent-foreground: 0 0% 98%;
+  --sidebar-border: 200 52% 22%;
+  --sidebar-ring: 42 95% 60%;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+
+  --color-sidebar: hsl(var(--sidebar-background));
+  --color-sidebar-foreground: hsl(var(--sidebar-foreground));
+  --color-sidebar-primary: hsl(var(--sidebar-primary));
+  --color-sidebar-primary-foreground: hsl(var(--sidebar-primary-foreground));
+  --color-sidebar-accent: hsl(var(--sidebar-accent));
+  --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
+  --color-sidebar-border: hsl(var(--sidebar-border));
+  --color-sidebar-ring: hsl(var(--sidebar-ring));
+
+  --font-sans: var(--font-plus-jakarta), "Helvetica Neue", Arial, sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  border-color: hsl(var(--border));
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: var(--font-plus-jakarta), "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  background-image:
+    radial-gradient(1200px 600px at 10% -10%, hsl(var(--primary) / 0.12), transparent 60%),
+    radial-gradient(900px 500px at 90% -20%, hsl(var(--accent) / 0.08), transparent 55%);
+  background-attachment: fixed;
+}
+
+.dark body {
+  background-image: none;
+  background-color: #001e2d;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+.font-display {
+  font-family: var(--font-forum), "Helvetica Neue", Georgia, serif;
+  letter-spacing: 0.02em;
+}
+
+.shadow-soft {
+  box-shadow: 0 2px 8px 0 rgb(0 0 0 / 0.04), 0 1px 2px 0 rgb(0 0 0 / 0.02);
 }

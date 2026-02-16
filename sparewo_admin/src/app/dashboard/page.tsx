@@ -1,190 +1,191 @@
-// src/app/dashboard/page.tsx
 "use client";
 
 import React, { useEffect, useState } from "react";
+import Link from "next/link";
 import {
-  Users,
-  Package,
-  CheckCircle,
   AlertCircle,
-  Wrench,
+  BellRing,
+  Package,
+  ShieldAlert,
+  ShoppingCart,
   Store,
-  Truck
-} from 'lucide-react';
+  Users,
+  Wrench,
+} from "lucide-react";
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatCard } from "@/components/ui/stat-card";
-import { getTotalVendorCount } from "@/lib/firebase/vendors";
-import { getTotalProductCount } from "@/lib/firebase/products";
+import { getTotalVendorCount, countVendorsByStatus } from "@/lib/firebase/vendors";
+import { getTotalProductCount, countProductsByStatus } from "@/lib/firebase/products";
 import { getTotalClientCount } from "@/lib/firebase/clients";
 import { getTotalBookingCount } from "@/lib/firebase/autohub";
-import Link from "next/link";
+import { getOrderStats } from "@/lib/firebase/orders";
+
+interface DashboardStats {
+  vendors: number;
+  products: number;
+  clients: number;
+  activeBookings: number;
+  pendingOrders: number;
+  pendingVendors: number;
+  pendingProducts: number;
+}
 
 export default function Dashboard() {
-  const [stats, setStats] = useState({
+  const [stats, setStats] = useState<DashboardStats>({
     vendors: 0,
     products: 0,
     clients: 0,
     activeBookings: 0,
+    pendingOrders: 0,
+    pendingVendors: 0,
+    pendingProducts: 0,
   });
 
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        // Fetch all counts in parallel
         const [
-          totalVendors, 
+          totalVendors,
           totalProducts,
           totalClients,
-          activeBookings
+          activeBookings,
+          orderStats,
+          pendingVendors,
+          pendingProducts,
         ] = await Promise.all([
           getTotalVendorCount(),
           getTotalProductCount(),
           getTotalClientCount(),
-          getTotalBookingCount("pending") // Count only pending bookings for "Active Requests"
+          getTotalBookingCount("pending"),
+          getOrderStats(),
+          countVendorsByStatus("pending"),
+          countProductsByStatus("pending"),
         ]);
 
         setStats({
           vendors: totalVendors,
           products: totalProducts,
-          clients: totalClients, 
-          activeBookings: activeBookings,
+          clients: totalClients,
+          activeBookings,
+          pendingOrders: orderStats.pending,
+          pendingVendors,
+          pendingProducts,
         });
       } catch (error) {
-        console.error('Error fetching dashboard stats:', error);
+        console.error("Error fetching dashboard stats:", error);
       }
     };
 
     fetchStats();
   }, []);
 
-  const recentActivity = [
+  const alertRows = [
     {
-      id: '1',
-      icon: <Users size={16} />,
-      title: 'New vendor registration',
-      description: 'Auto Parts Plus has registered as a new vendor',
-      time: 'Just now',
-      status: 'success',
+      id: "pending-vendors",
+      label: "Vendor approvals pending",
+      count: stats.pendingVendors,
+      href: "/dashboard/vendors/pending",
     },
     {
-      id: '2',
-      icon: <Package size={16} />,
-      title: 'New products added',
-      description: '25 new products were uploaded by CarTech Solutions',
-      time: '2 hours ago',
-      status: 'success',
+      id: "pending-products",
+      label: "Product approvals pending",
+      count: stats.pendingProducts,
+      href: "/dashboard/products/pending",
     },
     {
-      id: '3',
-      icon: <AlertCircle size={16} />,
-      title: 'Product rejected',
-      description: 'Brake pads from Mecha Parts were rejected',
-      time: '5 hours ago',
-      status: 'danger',
+      id: "pending-orders",
+      label: "Orders waiting processing",
+      count: stats.pendingOrders,
+      href: "/dashboard/orders",
     },
-    {
-      id: '4',
-      icon: <Wrench size={16} />,
-      title: 'New Service Request',
-      description: 'Service booking #BK-2024-001 needs assignment',
-      time: 'Yesterday',
-      status: 'warning',
-    },
-  ] as const;
+  ];
 
   return (
     <div className="space-y-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold">Dashboard</h1>
-        <p className="mt-1 text-gray-500 dark:text-gray-400">
-          Welcome back, here&apos;s what&apos;s happening with your platform today.
+      <div className="mb-1">
+        <h1 className="text-3xl font-display">Operations Overview</h1>
+        <p className="mt-1 text-muted-foreground">
+          Monitor platform health and jump straight into operational workflows.
         </p>
       </div>
 
-      {/* Stat Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard
           title="Total Clients"
           value={stats.clients}
-          change="+5%"
           icon={<Users className="h-6 w-6 text-white" />}
-          color="bg-blue-600"
+          color="bg-secondary"
         />
         <StatCard
-          title="Active Requests"
+          title="Active AutoHub Requests"
           value={stats.activeBookings}
-          change="+2"
           icon={<Wrench className="h-6 w-6 text-white" />}
-          color="bg-purple-600"
+          color="bg-primary"
         />
         <StatCard
-          title="Total Vendors"
-          value={stats.vendors}
-          change="+12%"
+          title="Approved Vendors"
+          value={stats.vendors - stats.pendingVendors}
           icon={<Store className="h-6 w-6 text-white" />}
-          color="bg-indigo-600"
+          color="bg-emerald-600"
         />
         <StatCard
-          title="Products"
+          title="Catalog Products"
           value={stats.products}
-          change="+8%"
           icon={<Package className="h-6 w-6 text-white" />}
-          color="bg-orange-500"
+          color="bg-sky-700"
         />
       </div>
 
-      {/* Main Content */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Quick Actions */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-1">
           <CardHeader>
             <CardTitle>Quick Actions</CardTitle>
+            <CardDescription>High-frequency operations</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <Link href="/dashboard/autohub">
-              <Button variant="outline" className="flex items-center w-full justify-start">
-                <Wrench size={18} className="mr-2" />
-                Manage AutoHub
-              </Button>
-            </Link>
-            <Link href="/dashboard/clients">
-              <Button variant="outline" className="flex items-center w-full justify-start">
-                <Users size={18} className="mr-2" />
-                View Clients
-              </Button>
-            </Link>
-            <Link href="/dashboard/vendors/pending">
-              <Button variant="outline" className="flex items-center w-full justify-start">
-                <CheckCircle size={18} className="mr-2" />
-                Approve Vendors
+              <Button variant="outline" className="w-full justify-start">
+                <Wrench className="mr-2 h-4 w-4" /> AutoHub Queue
               </Button>
             </Link>
             <Link href="/dashboard/orders">
-              <Button variant="outline" className="flex items-center w-full justify-start">
-                <Truck size={18} className="mr-2" />
-                Process Orders
+              <Button variant="outline" className="w-full justify-start">
+                <ShoppingCart className="mr-2 h-4 w-4" /> Track Orders
+              </Button>
+            </Link>
+            <Link href="/dashboard/comms">
+              <Button variant="outline" className="w-full justify-start">
+                <BellRing className="mr-2 h-4 w-4" /> Send Communication
+              </Button>
+            </Link>
+            <Link href="/dashboard/vendors/pending">
+              <Button variant="outline" className="w-full justify-start">
+                <ShieldAlert className="mr-2 h-4 w-4" /> Review Vendors
               </Button>
             </Link>
           </CardContent>
         </Card>
 
-        {/* Recent Activity */}
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle>Recent Activity</CardTitle>
-            <CardDescription>Latest actions in the system</CardDescription>
+            <CardTitle>Priority Alerts</CardTitle>
+            <CardDescription>Queues that need immediate attention</CardDescription>
           </CardHeader>
-          <CardContent>
-            {recentActivity.map((activity) => (
-              <ActivityItem
-                key={activity.id}
-                icon={activity.icon}
-                title={activity.title}
-                description={activity.description}
-                time={activity.time}
-                status={activity.status}
-              />
+          <CardContent className="space-y-3">
+            {alertRows.map((alert) => (
+              <Link
+                key={alert.id}
+                href={alert.href}
+                className="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3 transition-colors hover:bg-muted/50"
+              >
+                <div className="flex items-center gap-3">
+                  <AlertCircle className="h-4 w-4 text-primary" />
+                  <span className="text-sm">{alert.label}</span>
+                </div>
+                <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-semibold">{alert.count}</span>
+              </Link>
             ))}
           </CardContent>
         </Card>
@@ -192,33 +193,3 @@ export default function Dashboard() {
     </div>
   );
 }
-
-// Activity Item Component
-interface ActivityItemProps {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-  time: string;
-  status: 'success' | 'warning' | 'danger';
-}
-
-const ActivityItem = ({ icon, title, description, time, status }: ActivityItemProps) => {
-  const statusColors: Record<string, string> = {
-    success: 'bg-green-500',
-    warning: 'bg-amber-500',
-    danger: 'bg-red-500'
-  };
-
-  return (
-    <div className="flex items-start mb-4 pb-4 border-b border-gray-200 dark:border-gray-700 last:border-0">
-      <div className={`${statusColors[status]} p-2 rounded-full mr-4 text-white flex-shrink-0`}>
-        {icon}
-      </div>
-      <div className="flex-1 min-w-0">
-        <h3 className="text-sm font-medium truncate">{title}</h3>
-        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate">{description}</p>
-        <span className="text-xs text-gray-400 dark:text-gray-500 mt-1 block">{time}</span>
-      </div>
-    </div>
-  );
-};
