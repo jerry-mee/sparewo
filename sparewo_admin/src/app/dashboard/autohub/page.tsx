@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import {
   createServiceProvider,
   getAllServiceProviders,
@@ -42,6 +43,7 @@ const getStatusColor = (status: string) => {
 const providerTypes: Array<ServiceProvider["type"]> = ["mechanic", "garage", "towing"];
 
 export default function AutoHubPage() {
+  const router = useRouter();
   const [bookings, setBookings] = useState<ServiceBooking[]>([]);
   const [providers, setProviders] = useState<ServiceProvider[]>([]);
 
@@ -215,7 +217,7 @@ export default function AutoHubPage() {
                       </TableRow>
                     ) : (
                       bookings.map((item) => (
-                        <TableRow key={item.id}>
+                        <TableRow key={item.id} className="cursor-pointer hover:bg-muted/40" onClick={() => router.push("/dashboard/autohub/" + item.id)}>
                           <TableCell className="font-mono font-medium">{item.bookingNumber}</TableCell>
                           <TableCell>
                             <div className="flex flex-col">
@@ -249,8 +251,8 @@ export default function AutoHubPage() {
                               {item.status.replace("_", " ").toUpperCase()}
                             </span>
                           </TableCell>
-                          <TableCell className="text-right">
-                            <Link href={`/dashboard/autohub/${item.id}`}>
+                          <TableCell className="text-right" onClick={(event) => event.stopPropagation()}>
+                            <Link href={"/dashboard/autohub/" + item.id}>
                               <Button variant="ghost" size="icon">
                                 <ChevronRight className="h-4 w-4" />
                               </Button>

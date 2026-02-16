@@ -1,7 +1,8 @@
 // src/app/dashboard/clients/page.tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { getClients, UserProfile } from "@/lib/firebase/clients";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,30 +12,34 @@ import {
   TableCell,
   TableHead,
   TableHeader,
-  TableRow
+  TableRow,
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DocumentData } from "firebase/firestore";
 import { formatDate, getInitials } from "@/lib/utils";
 import Link from "next/link";
-import { Search, ChevronRight, Users, Mail } from "lucide-react";
+import { Search, ChevronRight, Users, Mail, UserCheck, UserX } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
+type ClientFilter = "all" | "active" | "suspended";
+
 export default function ClientsPage() {
+  const router = useRouter();
   const [clients, setClients] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<ClientFilter>("all");
   const [lastDoc, setLastDoc] = useState<DocumentData | undefined>(undefined);
   const [hasMore, setHasMore] = useState(true);
 
-  const fetchClients = async (reset: boolean = false) => {
+  const fetchClients = async (reset = false) => {
     setLoading(true);
     try {
       const result = await getClients(searchQuery, 10, reset ? undefined : lastDoc);
       if (reset) {
         setClients(result.clients);
       } else {
-        setClients(prev => [...prev, ...result.clients]);
+        setClients((prev) => [...prev, ...result.clients]);
       }
       setLastDoc(result.lastDoc);
       setHasMore(result.clients.length === 10);
@@ -47,32 +52,77 @@ export default function ClientsPage() {
 
   useEffect(() => {
     fetchClients(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSearch = (event: React.FormEvent) => {
+    event.preventDefault();
     fetchClients(true);
   };
+
+  const activeCount = useMemo(() => clients.filter((client) => !client.isSuspended).length, [clients]);
+  const suspendedCount = useMemo(() => clients.filter((client) => client.isSuspended).length, [clients]);
+
+  const filteredClients = useMemo(() => {
+    if (statusFilter === "active") {
+      return clients.filter((client) => !client.isSuspended);
+    }
+
+    if (statusFilter === "suspended") {
+      return clients.filter((client) => client.isSuspended);
+    }
+
+    return clients;
+  }, [clients, statusFilter]);
+
+  const summaryCards = [
+    {
+      key: "all",
+      label: "Total Clients",
+      value: `${clients.length}${hasMore ? "+" : ""}`,
+      icon: <Users className="h-4 w-4 text-muted-foreground" />,
+      active: statusFilter === "all",
+      onClick: () => setStatusFilter("all"),
+    },
+    {
+      key: "active",
+      label: "Active Clients",
+      value: activeCount,
+      icon: <UserCheck className="h-4 w-4 text-emerald-600" />,
+      active: statusFilter === "active",
+      onClick: () => setStatusFilter("active"),
+    },
+    {
+      key: "suspended",
+      label: "Suspended Clients",
+      value: suspendedCount,
+      icon: <UserX className="h-4 w-4 text-red-600" />,
+      active: statusFilter === "suspended",
+      onClick: () => setStatusFilter("suspended"),
+    },
+  ];
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-1">
         <h1 className="text-2xl font-semibold tracking-tight">Client Management</h1>
-        <p className="text-muted-foreground">
-          View and manage registered users and their vehicles.
-        </p>
+        <p className="text-muted-foreground">View and manage registered users and their vehicles.</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Clients</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{clients.length}{hasMore ? '+' : ''}</div>
-          </CardContent>
-        </Card>
+        {summaryCards.map((card) => (
+          <button key={card.key} type="button" onClick={card.onClick} className="text-left">
+            <Card className={`transition-colors hover:border-primary/50 ${card.active ? "border-primary/60 bg-primary/5" : ""}`}>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">{card.label}</CardTitle>
+                {card.icon}
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{card.value}</div>
+              </CardContent>
+            </Card>
+          </button>
+        ))}
       </div>
 
       <Card>
@@ -83,7 +133,7 @@ export default function ClientsPage() {
               <Input
                 placeholder="Search by name or email..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(event) => setSearchQuery(event.target.value)}
                 className="h-9"
               />
               <Button type="submit" size="sm" variant="secondary">
@@ -111,15 +161,19 @@ export default function ClientsPage() {
                       Loading clients...
                     </TableCell>
                   </TableRow>
-                ) : clients.length === 0 ? (
+                ) : filteredClients.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={5} className="h-24 text-center">
                       No clients found.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  clients.map((client) => (
-                    <TableRow key={client.id}>
+                  filteredClients.map((client) => (
+                    <TableRow
+                      key={client.id}
+                      className="cursor-pointer hover:bg-muted/40"
+                      onClick={() => router.push(`/dashboard/clients/${client.id}`)}
+                    >
                       <TableCell>
                         <div className="flex items-center gap-3">
                           <Avatar className="h-9 w-9">
@@ -153,9 +207,9 @@ export default function ClientsPage() {
                           </span>
                         )}
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right" onClick={(event) => event.stopPropagation()}>
                         <Link href={`/dashboard/clients/${client.id}`}>
-                          <Button variant="ghost" size="icon">
+                          <Button variant="ghost" size="icon" aria-label={`Open client ${client.name}`}>
                             <ChevronRight className="h-4 w-4" />
                           </Button>
                         </Link>

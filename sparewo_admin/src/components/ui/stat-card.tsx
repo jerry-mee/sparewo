@@ -1,5 +1,7 @@
-import { Card, CardContent } from "./card";
+import Link from "next/link";
 import { ReactNode } from "react";
+
+import { Card, CardContent } from "./card";
 
 interface StatCardProps {
   title: string;
@@ -8,6 +10,7 @@ interface StatCardProps {
   change?: string;
   changeDirection?: "up" | "down";
   color?: string;
+  href?: string;
 }
 
 export function StatCard({
@@ -17,9 +20,14 @@ export function StatCard({
   change,
   changeDirection = "up",
   color = "bg-secondary",
+  href,
 }: StatCardProps) {
-  return (
-    <Card className="border-border/90 shadow-soft">
+  const body = (
+    <Card
+      className={`border-border/90 shadow-soft transition-all ${
+        href ? "hover:border-primary/40 hover:shadow-md" : ""
+      }`}
+    >
       <CardContent className="p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -41,5 +49,15 @@ export function StatCard({
         </div>
       </CardContent>
     </Card>
+  );
+
+  if (!href) {
+    return body;
+  }
+
+  return (
+    <Link href={href} className="block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+      {body}
+    </Link>
   );
 }

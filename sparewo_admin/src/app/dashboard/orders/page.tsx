@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { getOrders, getOrderStats } from "@/lib/firebase/orders";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,6 +42,7 @@ interface OrderStats {
 }
 
 export default function OrdersPage() {
+  const router = useRouter();
   const [orders, setOrders] = useState<Order[]>([]);
   const [stats, setStats] = useState<OrderStats>({ total: 0, pending: 0, processing: 0, completed: 0, cancelled: 0 });
   const [loading, setLoading] = useState(true);
@@ -120,6 +122,41 @@ export default function OrdersPage() {
     return <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${style}`}>{status}</span>;
   };
 
+  const summaryTiles = [
+    {
+      key: "total",
+      label: "Total Orders",
+      value: stats.total,
+      icon: <ShoppingCart className="h-4 w-4 text-muted-foreground" />,
+      onClick: () => setStatusFilter("all"),
+      active: statusFilter === "all",
+    },
+    {
+      key: "pending",
+      label: "Pending",
+      value: stats.pending,
+      icon: <Clock3 className="h-4 w-4 text-amber-500" />,
+      onClick: () => setStatusFilter("pending"),
+      active: statusFilter === "pending",
+    },
+    {
+      key: "processing",
+      label: "Processing",
+      value: stats.processing,
+      icon: <Truck className="h-4 w-4 text-blue-500" />,
+      onClick: () => setStatusFilter("processing"),
+      active: statusFilter === "processing",
+    },
+    {
+      key: "completed",
+      label: "Completed",
+      value: stats.completed,
+      icon: <PackageCheck className="h-4 w-4 text-green-600" />,
+      onClick: () => setStatusFilter("completed"),
+      active: statusFilter === "completed",
+    },
+  ];
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-1">
@@ -128,45 +165,19 @@ export default function OrdersPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
-            <ShoppingCart className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.total}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending</CardTitle>
-            <Clock3 className="h-4 w-4 text-amber-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.pending}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Processing</CardTitle>
-            <Truck className="h-4 w-4 text-blue-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.processing}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Completed</CardTitle>
-            <PackageCheck className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.completed}</div>
-          </CardContent>
-        </Card>
+        {summaryTiles.map((tile) => (
+          <button key={tile.key} type="button" onClick={tile.onClick} className="text-left">
+            <Card className={`transition-colors hover:border-primary/50 ${tile.active ? "border-primary/60 bg-primary/5" : ""}`}>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">{tile.label}</CardTitle>
+                {tile.icon}
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{tile.value}</div>
+              </CardContent>
+            </Card>
+          </button>
+        ))}
       </div>
 
       <Card>
@@ -231,16 +242,20 @@ export default function OrdersPage() {
                   </TableRow>
                 ) : (
                   filteredOrders.map((order) => (
-                    <TableRow key={order.id}>
+                    <TableRow
+                      key={order.id}
+                      className="cursor-pointer hover:bg-muted/40"
+                      onClick={() => router.push(`/dashboard/orders/${order.id}`)}
+                    >
                       <TableCell className="font-mono">{order.orderNumber}</TableCell>
                       <TableCell>{formatDate(order.createdAt)}</TableCell>
                       <TableCell>{order.customerName}</TableCell>
                       <TableCell>{order.items?.length || 0} items</TableCell>
                       <TableCell>{formatCurrency(order.totalAmount)}</TableCell>
                       <TableCell>{getStatusBadge(order.status)}</TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right" onClick={(event) => event.stopPropagation()}>
                         <Link href={`/dashboard/orders/${order.id}`}>
-                          <Button variant="ghost" size="icon">
+                          <Button variant="ghost" size="icon" aria-label={`Open order ${order.orderNumber}`}>
                             <ChevronRight className="h-4 w-4" />
                           </Button>
                         </Link>
