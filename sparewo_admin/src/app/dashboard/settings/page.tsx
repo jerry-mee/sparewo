@@ -25,7 +25,10 @@ import {
   UserCheck,
   KeyRound,
   Trash2,
-  ShieldEllipsis
+  ShieldEllipsis,
+  Eye,
+  EyeOff,
+  Copy
 } from "lucide-react";
 
 import {
@@ -281,28 +284,56 @@ export default function SettingsPage() {
     }
   };
 
+  const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
+  const [resetStaff, setResetStaff] = useState<StaffMember | null>(null);
+  const [resetOption, setResetOption] = useState<'email' | 'manual'>('email');
+  const [manualPassword, setManualPassword] = useState('');
+  const [showManualPassword, setShowManualPassword] = useState(false);
+  const [resetting, setResetting] = useState(false);
+
   const [generatedLink, setGeneratedLink] = useState<{ url: string; label: string; email: string } | null>(null);
+  const [tempVisiblePassword, setTempVisiblePassword] = useState<string | null>(null);
 
-  const handleSendPasswordReset = async (member: StaffMember) => {
-    if (!isCurrentAdmin) return;
+  const handleExecuteReset = async () => {
+    if (!resetStaff || !isCurrentAdmin) return;
 
-    const toastId = toast.loading("Generating password reset link...");
+    setResetting(true);
     try {
-      const res = await sendStaffPasswordReset(member.id);
-      if (res.link && (res.message.includes("failed") || res.message.includes("manually"))) {
-        setGeneratedLink({
-          url: res.link,
-          label: "Password Reset Link (Email Failed)",
-          email: member.email || "User"
-        });
+      if (resetOption === 'email') {
+        const res = await sendStaffPasswordReset(resetStaff.id);
+        if (res.link && (res.message.includes("failed") || res.message.includes("manually"))) {
+          setGeneratedLink({
+            url: res.link,
+            label: "Password Reset Link (Email Failed)",
+            email: resetStaff.email || "User"
+          });
+        } else {
+          toast.success(res.message || "Password reset email sent.");
+        }
       } else {
-        toast.success(res.message || "Password reset email sent.");
+        // Manual password
+        const passwordToSet = manualPassword || Math.random().toString(36).slice(-10);
+        await updateStaff({
+          staff_id: resetStaff.id,
+          password: passwordToSet,
+        });
+        setTempVisiblePassword(passwordToSet);
+        toast.success("Password updated successfully.");
       }
+      setIsResetDialogOpen(false);
+      setManualPassword('');
     } catch (error) {
-      toast.dismiss(toastId);
-      const message = error instanceof Error ? error.message : "Failed to generate link.";
-      toast.error(message);
+      toast.error(error instanceof Error ? error.message : "Failed to reset password");
+    } finally {
+      setResetting(false);
     }
+  };
+
+  const openResetDialog = (member: StaffMember) => {
+    setResetStaff(member);
+    setIsResetDialogOpen(true);
+    setResetOption('email');
+    setTempVisiblePassword(null);
   };
 
 
@@ -312,6 +343,108 @@ export default function SettingsPage() {
         <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
         <p className="text-muted-foreground">Manage your account and platform preferences.</p>
       </div>
+
+      {/* NEW RESET PASSWORD DIALOG */}
+      <Dialog open={isResetDialogOpen} onOpenChange={setIsResetDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-semibold">
+              Reset password for {resetStaff?.first_name} {resetStaff?.last_name}
+            </DialogTitle>
+            <DialogDescription>
+              Choose how you want to reset this user's password.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-6 py-4">
+            <div className="space-y-4">
+              <div
+                className={`flex items-start gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all ${resetOption === 'email' ? 'border-primary bg-primary/5' : 'border-transparent bg-muted/30'}`}
+                onClick={() => setResetOption('email')}
+              >
+                <div className={`mt-1 flex h-5 w-5 items-center justify-center rounded-full border-2 ${resetOption === 'email' ? 'border-primary' : 'border-muted-foreground'}`}>
+                  {resetOption === 'email' && <div className="h-2.5 w-2.5 rounded-full bg-primary" />}
+                </div>
+                <div className="space-y-1">
+                  <p className="font-medium text-sm">Send password reset link</p>
+                  <p className="text-xs text-muted-foreground">User will receive an email (via Resend) with a link to choose their own password.</p>
+                </div>
+              </div>
+
+              <div
+                className={`flex items-start gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all ${resetOption === 'manual' ? 'border-primary bg-primary/5' : 'border-transparent bg-muted/30'}`}
+                onClick={() => setResetOption('manual')}
+              >
+                <div className={`mt-1 flex h-5 w-5 items-center justify-center rounded-full border-2 ${resetOption === 'manual' ? 'border-primary' : 'border-muted-foreground'}`}>
+                  {resetOption === 'manual' && <div className="h-2.5 w-2.5 rounded-full bg-primary" />}
+                </div>
+                <div className="space-y-1 w-full">
+                  <p className="font-medium text-sm">Create password</p>
+                  <p className="text-xs text-muted-foreground">Manually set a new password for the user.</p>
+
+                  {resetOption === 'manual' && (
+                    <div className="mt-3 space-y-3 pt-2 animate-in slide-in-from-top-2 duration-200">
+                      <div className="relative">
+                        <Input
+                          placeholder="New password (leave empty to auto-generate)"
+                          type={showManualPassword ? "text" : "password"}
+                          value={manualPassword}
+                          onChange={(e) => setManualPassword(e.target.value)}
+                          className="pr-10"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowManualPassword(!showManualPassword)}
+                          className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground"
+                        >
+                          {showManualPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setIsResetDialogOpen(false)} disabled={resetting}>
+              CANCEL
+            </Button>
+            <Button onClick={handleExecuteReset} disabled={resetting}>
+              {resetting ? "RESETTING..." : "RESET"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* PASSWORD SUCCESS DIALOG */}
+      <Dialog open={!!tempVisiblePassword} onOpenChange={() => setTempVisiblePassword(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Password Reset Successful</DialogTitle>
+            <DialogDescription>
+              The password for {resetStaff?.email} has been updated. Please share this new password with them securely.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="bg-muted p-4 rounded-lg flex items-center justify-between font-mono text-lg break-all">
+            <span>{tempVisiblePassword}</span>
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => {
+                if (tempVisiblePassword) {
+                  navigator.clipboard.writeText(tempVisiblePassword);
+                  toast.success("Copied to clipboard");
+                }
+              }}
+            >
+              <Copy className="h-4 w-4" />
+            </Button>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setTempVisiblePassword(null)}>Done</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!generatedLink} onOpenChange={(open) => !open && setGeneratedLink(null)}>
         <DialogContent>
@@ -412,36 +545,14 @@ export default function SettingsPage() {
                   variant="outline"
                   className="w-full justify-start h-auto py-2 px-3 text-xs"
                   onClick={() => {
-                    if (editingStaff) handleSendPasswordReset(editingStaff);
-                  }}
-                >
-                  <KeyRound className="w-3.5 h-3.5 mr-2 text-blue-500" />
-                  Send Password Reset Email
-                </Button>
-                <Button
-                  variant="outline"
-                  className="w-full justify-start h-auto py-2 px-3 text-xs"
-                  onClick={async () => {
-                    if (!editingStaff) return;
-                    const tId = toast.loading("Generating link...");
-                    try {
-                      const res = await sendStaffPasswordReset(editingStaff.id);
-                      toast.dismiss(tId);
-                      if (res.link) {
-                        setGeneratedLink({
-                          url: res.link,
-                          label: "Manual Reset Link",
-                          email: editingStaff.email || "User"
-                        });
-                      }
-                    } catch (e) {
-                      toast.dismiss(tId);
-                      toast.error("Failed to generate link");
+                    if (editingStaff) {
+                      setEditingStaff(null); // Close edit dialog
+                      openResetDialog(editingStaff);
                     }
                   }}
                 >
-                  <Save className="w-3.5 h-3.5 mr-2 text-orange-500" />
-                  Copy Manual Reset Link
+                  <KeyRound className="w-3.5 h-3.5 mr-2 text-blue-500" />
+                  Reset Password Settings
                 </Button>
               </div>
             </div>

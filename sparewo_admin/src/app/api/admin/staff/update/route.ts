@@ -23,7 +23,7 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
 
-        const { staff_id, first_name, last_name, username, role, is_active, suspend_auth_access } = await req.json();
+        const { staff_id, first_name, last_name, username, role, is_active, suspend_auth_access, password } = await req.json();
 
         if (!staff_id) {
             return NextResponse.json({ error: 'Missing staff ID' }, { status: 400 });
@@ -37,13 +37,21 @@ export async function POST(req: Request) {
         if (typeof is_active === 'boolean') updates.is_active = is_active;
         if (typeof suspend_auth_access === 'boolean') updates.suspend_auth_access = suspend_auth_access;
 
-        await db.collection('adminUsers').doc(staff_id).update(updates);
+        if (Object.keys(updates).length > 0) {
+            await db.collection('adminUsers').doc(staff_id).update(updates);
+        }
 
+        // Handle Auth updates
+        const authUpdates: any = {};
         if (updates.suspend_auth_access !== undefined) {
-            // Toggle Auth active state
-            await auth.updateUser(staff_id, {
-                disabled: updates.suspend_auth_access
-            });
+            authUpdates.disabled = updates.suspend_auth_access;
+        }
+        if (password) {
+            authUpdates.password = password;
+        }
+
+        if (Object.keys(authUpdates).length > 0) {
+            await auth.updateUser(staff_id, authUpdates);
         }
 
         // Capture audit log? If I have time.

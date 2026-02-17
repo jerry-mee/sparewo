@@ -54,6 +54,7 @@ export async function updateStaff(payload: {
     role?: string;
     is_active?: boolean;
     suspend_auth_access?: boolean;
+    password?: string;
 }) {
     const headers = await withAuthHeaders();
     const response = await fetch("/api/admin/staff/update", {
