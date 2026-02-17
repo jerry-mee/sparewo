@@ -38,11 +38,20 @@ export async function POST(req: Request) {
                 console.warn(`User ${doc.id} not found in Auth`, e);
             }
 
+            const email = authUser?.email || data.email || null;
+
+            // Check if we already have this email in our list
+            const existingIndex = staffMembers.findIndex(m => m.email === email && email !== null);
+            if (existingIndex !== -1) {
+                // Should we replace or skip? Let's skip duplicates for now.
+                continue;
+            }
+
             staffMembers.push({
                 id: doc.id,
                 user_id: doc.id,
                 username: data.username || null,
-                email: authUser?.email || data.email || null,
+                email,
                 first_name: data.first_name || data.firstName || '',
                 last_name: data.last_name || data.lastName || '',
                 role: data.role || 'Mechanic',

@@ -88,7 +88,15 @@ export async function listStaffAudit(limit = 100): Promise<StaffAuditLog[]> {
 }
 
 export async function sendStaffPasswordReset(staffId: string) {
-    // Password reset implementation pending
-    // Could implemented via sending email via firebase auth
-    return { success: true, message: "Use Firebase Console to send password reset email for now." };
+    const headers = await withAuthHeaders();
+    const response = await fetch("/api/admin/staff/reset-password", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ staff_id: staffId }),
+    });
+    if (!response.ok) {
+        const json = await response.json().catch(() => ({}));
+        throw new Error(json.error || "Failed to generate password reset.");
+    }
+    return response.json();
 }

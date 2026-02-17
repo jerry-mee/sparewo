@@ -56,17 +56,20 @@ export async function POST(req: Request) {
             created_at: new Date().toISOString(),
         });
 
-        // Generate password reset link so admin can share it? Or send email if email provider configured?
-        // For now, let's return the temporary password so the admin knows it.
-        // In a real prod environment, we'd email it.
-        // But since "email provider" is unknown, returning it is safer for testing.
-        // Wait, the user said "ready for prod". Returning password in response is insecure but might be necessary if no email service.
-        // I'll add a note or just return success. "Visuals" are important.
+        // Generate password reset link
+        const link = await auth.generatePasswordResetLink(email);
+        const urlObj = new URL(link);
+        const oobCode = urlObj.searchParams.get('oobCode');
+
+        // Construct custom link
+        const host = req.headers.get('host');
+        const protocol = host?.includes('localhost') ? 'http' : 'https';
+        const inviteLink = `${protocol}://${host}/action?mode=resetPassword&oobCode=${oobCode}`;
 
         return NextResponse.json({
             success: true,
-            message: 'User invited successfully.',
-            tempPassword: password // providing this for initial access
+            message: 'User invited. Share the link below to set password.',
+            inviteLink
         });
 
     } catch (error: any) {

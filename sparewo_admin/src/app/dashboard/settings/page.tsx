@@ -166,10 +166,13 @@ export default function SettingsPage() {
       });
 
       toast.success(res.message || "Team invite sent.");
-      if (res.tempPassword) {
-        // Show temporary password in a dialog or toast?
-        // This is a "wire in" instruction, so making it functional is key.
-        // A long duration toast is okay for now.
+      if (res.inviteLink) {
+        setGeneratedLink({
+          url: res.inviteLink,
+          label: "Invitation Link",
+          email: inviteForm.email
+        });
+      } else if (res.tempPassword) {
         toast.success(`User created. Temporary Password: ${res.tempPassword}`, { duration: 10000 });
       }
 
@@ -279,6 +282,31 @@ export default function SettingsPage() {
     }
   };
 
+  const [generatedLink, setGeneratedLink] = useState<{ url: string; label: string; email: string } | null>(null);
+
+  const handleSendPasswordReset = async (member: StaffMember) => {
+    if (!isCurrentAdmin) return;
+
+    const toastId = toast.loading("Generating password reset link...");
+    try {
+      const res = await sendStaffPasswordReset(member.id);
+      toast.dismiss(toastId);
+      if (res.link) {
+        setGeneratedLink({
+          url: res.link,
+          label: "Password Reset Link",
+          email: member.email || "User"
+        });
+      } else {
+        toast.success("Password reset email sent (if configured).");
+      }
+    } catch (error) {
+      toast.dismiss(toastId);
+      const message = error instanceof Error ? error.message : "Failed to generate link.";
+      toast.error(message);
+    }
+  };
+
 
   return (
     <div className="space-y-6">
@@ -286,6 +314,29 @@ export default function SettingsPage() {
         <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
         <p className="text-muted-foreground">Manage your account and platform preferences.</p>
       </div>
+
+      <Dialog open={!!generatedLink} onOpenChange={(open) => !open && setGeneratedLink(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{generatedLink?.label}</DialogTitle>
+            <DialogDescription>
+              Share this link with <strong>{generatedLink?.email}</strong> to help them set their password.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex items-center space-x-2">
+            <Input readOnly value={generatedLink?.url || ''} />
+            <Button size="sm" onClick={() => {
+              navigator.clipboard.writeText(generatedLink?.url || '');
+              toast.success("Link copied to clipboard");
+            }}>
+              Copy
+            </Button>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setGeneratedLink(null)}>Done</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!editingStaff} onOpenChange={(open) => !open && setEditingStaff(null)}>
         <DialogContent>
@@ -352,6 +403,27 @@ export default function SettingsPage() {
                 onChange={(e) => setEditForm(prev => ({ ...prev, suspendAuthAccess: e.target.checked }))}
               />
               <Label htmlFor="suspendAuth" className="text-destructive">Suspend Login Access</Label>
+            </div>
+
+            <Separator />
+
+            <div className="flex flex-col gap-2">
+              <Label>Security Actions</Label>
+              <Button
+                variant="outline"
+                className="w-full justify-start"
+                onClick={() => {
+                  if (editingStaff) {
+                    handleSendPasswordReset(editingStaff);
+                    // We don't close the dialog immediately, or maybe we do?
+                    // If we show another dialog (the link dialog), it might stack or close this one.
+                    // Radix UI dialogs stack fine.
+                  }
+                }}
+              >
+                <KeyRound className="w-4 h-4 mr-2" />
+                Generate Password Reset Link
+              </Button>
             </div>
           </div>
           <DialogFooter>
