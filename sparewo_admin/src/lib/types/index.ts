@@ -2,9 +2,11 @@ export interface AdminUser {
   id: string;
   email: string;
   displayName: string;
-  role: 'superAdmin' | 'admin' | 'viewer' | 'super_admin';
-  createdAt: any;
-  updatedAt: any;
+  role: string;
+  pending_activation?: boolean;
+  is_active?: boolean;
+  createdAt: unknown;
+  updatedAt: unknown;
 }
 
 export interface VendorStatus {

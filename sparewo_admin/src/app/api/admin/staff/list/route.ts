@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import { db, auth } from '@/lib/firebase/admin';
 import { StaffMember } from '@/lib/types/staff';
+import { normalizeRole } from '@/lib/auth/roles';
 
 export async function POST(req: Request) {
     try {
@@ -13,15 +14,12 @@ export async function POST(req: Request) {
         const token = authHeader.split('Bearer ')[1];
         const decodedToken = await auth.verifyIdToken(token);
 
-        // Check if requester is admin (optional, if using custom claims or adminUsers collection)
-        // Check if requester is admin (optional, if using custom claims or adminUsers collection)
+        // Only authenticated dashboard roles can list staff.
         const adminRef = db.collection('adminUsers').doc(decodedToken.uid);
         const adminSnap = await adminRef.get();
-        const role = adminSnap.data()?.role;
-        const allowedRoles = ['Administrator', 'superAdmin', 'super_admin', 'admin'];
-
-        if (!adminSnap.exists || !allowedRoles.includes(role)) {
-            // return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        const role = normalizeRole(adminSnap.data()?.role);
+        if (!adminSnap.exists || !role) {
+            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
 
         const usersSnapshot = await db.collection('adminUsers').get();
@@ -33,9 +31,13 @@ export async function POST(req: Request) {
             let authUser;
             try {
                 authUser = await auth.getUser(doc.id);
-            } catch (e) {
+            } catch (e: unknown) {
                 // User might have been deleted from auth but remains in firestore
-                console.warn(`User ${doc.id} not found in Auth`, e);
+                const code = typeof e === 'object' && e !== null && 'code' in e ? String((e as { code?: string }).code) : '';
+                if (code !== 'auth/user-not-found') {
+                    const message = e instanceof Error ? e.message : 'Unknown error';
+                    console.warn(`Error fetching Auth user ${doc.id}:`, message);
+                }
             }
 
             const email = authUser?.email || data.email || null;
@@ -54,9 +56,11 @@ export async function POST(req: Request) {
                 email,
                 first_name: data.first_name || data.firstName || '',
                 last_name: data.last_name || data.lastName || '',
-                role: data.role || 'Mechanic',
+                role: normalizeRole(data.role) || 'Mechanic',
                 is_active: data.is_active ?? true,
+                pending_activation: data.pending_activation ?? false,
                 auth_suspended: authUser?.disabled ?? false,
+                auth_account_missing: !authUser,
                 last_sign_in_at: authUser?.metadata.lastSignInTime || null,
                 created_at: authUser?.metadata.creationTime || new Date().toISOString(),
             });

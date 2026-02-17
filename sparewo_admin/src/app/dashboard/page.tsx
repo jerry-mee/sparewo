@@ -17,12 +17,10 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatCard } from "@/components/ui/stat-card";
-import { getTotalVendorCount, countVendorsByStatus } from "@/lib/firebase/vendors";
-import { getTotalProductCount, countProductsByStatus } from "@/lib/firebase/products";
-import { getTotalClientCount } from "@/lib/firebase/clients";
-import { getTotalBookingCount } from "@/lib/firebase/autohub";
-import { getOrderStats, getOrders } from "@/lib/firebase/orders";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { useAuth } from "@/lib/context/auth-context";
+import { normalizeRole } from "@/lib/auth/roles";
+import { auth } from "@/lib/firebase/config";
 
 interface DashboardStats {
   vendors: number;
@@ -44,6 +42,12 @@ interface RecentOrder {
 }
 
 export default function Dashboard() {
+  const { adminData, user } = useAuth();
+  const currentRole = normalizeRole(adminData?.role);
+  const canViewClients = currentRole === "Administrator" || currentRole === "Manager";
+  const canViewVendors = currentRole === "Administrator" || currentRole === "Manager";
+  const canViewComms = currentRole === "Administrator" || currentRole === "Manager";
+
   const [stats, setStats] = useState<DashboardStats>({
     vendors: 0,
     products: 0,
@@ -57,65 +61,43 @@ export default function Dashboard() {
 
   useEffect(() => {
     const fetchStats = async () => {
+      if (!user) return;
       try {
-        const [
-          totalVendors,
-          totalProducts,
-          totalClients,
-          activeBookings,
-          orderStats,
-          pendingVendors,
-          pendingProducts,
-          latestOrders,
-        ] = await Promise.all([
-          getTotalVendorCount(),
-          getTotalProductCount(),
-          getTotalClientCount(),
-          getTotalBookingCount("pending"),
-          getOrderStats(),
-          countVendorsByStatus("pending"),
-          countProductsByStatus("pending"),
-          getOrders(null, 6),
-        ]);
+        const token = await auth.currentUser?.getIdToken();
+        if (!token) return;
 
-        setStats({
-          vendors: totalVendors,
-          products: totalProducts,
-          clients: totalClients,
-          activeBookings,
-          pendingOrders: orderStats.pending,
-          pendingVendors,
-          pendingProducts,
+        const response = await fetch("/api/dashboard/overview", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
         });
 
-        setRecentOrders(
-          latestOrders.orders.map((order) => ({
-            id: order.id,
-            orderNumber: order.orderNumber,
-            customerName:
-              (order as unknown as Record<string, string>).userName ||
-              (order as unknown as Record<string, string>).customerName ||
-              "Guest User",
-            totalAmount: order.totalAmount,
-            status: order.status,
-            createdAt: order.createdAt,
-          }))
-        );
+        if (!response.ok) {
+          throw new Error("Failed to load dashboard metrics");
+        }
+
+        const json = await response.json();
+        setStats(json.stats);
+        setRecentOrders(json.latestOrders || []);
       } catch (error) {
         console.error("Error fetching dashboard stats:", error);
       }
     };
 
-    fetchStats();
-  }, []);
+    void fetchStats();
+  }, [user]);
 
   const alertRows = [
-    {
-      id: "pending-vendors",
-      label: "Vendor approvals pending",
-      count: stats.pendingVendors,
-      href: "/dashboard/vendors/pending",
-    },
+    ...(canViewVendors
+      ? [{
+          id: "pending-vendors",
+          label: "Vendor approvals pending",
+          count: stats.pendingVendors,
+          href: "/dashboard/vendors/pending",
+        }]
+      : []),
     {
       id: "pending-products",
       label: "Product approvals pending",
@@ -153,13 +135,15 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          title="Total Clients"
-          value={stats.clients}
-          icon={<Users className="h-6 w-6 text-white" />}
-          color="bg-secondary"
-          href="/dashboard/clients"
-        />
+        {canViewClients && (
+          <StatCard
+            title="Total Clients"
+            value={stats.clients}
+            icon={<Users className="h-6 w-6 text-white" />}
+            color="bg-secondary"
+            href="/dashboard/clients"
+          />
+        )}
         <StatCard
           title="Active AutoHub Requests"
           value={stats.activeBookings}
@@ -167,13 +151,15 @@ export default function Dashboard() {
           color="bg-primary"
           href="/dashboard/autohub"
         />
-        <StatCard
-          title="Approved Vendors"
-          value={stats.vendors - stats.pendingVendors}
-          icon={<Store className="h-6 w-6 text-white" />}
-          color="bg-emerald-600"
-          href="/dashboard/vendors"
-        />
+        {canViewVendors && (
+          <StatCard
+            title="Approved Vendors"
+            value={stats.vendors - stats.pendingVendors}
+            icon={<Store className="h-6 w-6 text-white" />}
+            color="bg-emerald-600"
+            href="/dashboard/vendors"
+          />
+        )}
         <StatCard
           title="Catalog Products"
           value={stats.products}
@@ -200,16 +186,20 @@ export default function Dashboard() {
                 <ShoppingCart className="mr-2 h-4 w-4" /> Track Orders
               </Button>
             </Link>
-            <Link href="/dashboard/comms">
-              <Button variant="outline" className="w-full justify-start">
-                <BellRing className="mr-2 h-4 w-4" /> Send Communication
-              </Button>
-            </Link>
-            <Link href="/dashboard/vendors/pending">
-              <Button variant="outline" className="w-full justify-start">
-                <ShieldAlert className="mr-2 h-4 w-4" /> Review Vendors
-              </Button>
-            </Link>
+            {canViewComms && (
+              <Link href="/dashboard/comms">
+                <Button variant="outline" className="w-full justify-start">
+                  <BellRing className="mr-2 h-4 w-4" /> Send Communication
+                </Button>
+              </Link>
+            )}
+            {canViewVendors && (
+              <Link href="/dashboard/vendors/pending">
+                <Button variant="outline" className="w-full justify-start">
+                  <ShieldAlert className="mr-2 h-4 w-4" /> Review Vendors
+                </Button>
+              </Link>
+            )}
           </CardContent>
         </Card>
 

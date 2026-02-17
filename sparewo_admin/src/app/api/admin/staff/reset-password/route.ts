@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import { db, auth } from '@/lib/firebase/admin';
 import { getResetPasswordEmailHtml, sendEmail } from '@/lib/mail';
+import { isAdministratorRole } from '@/lib/auth/roles';
 
 export async function POST(req: Request) {
     try {
@@ -17,9 +18,7 @@ export async function POST(req: Request) {
         const adminRef = db.collection('adminUsers').doc(decodedToken.uid);
         const adminSnap = await adminRef.get();
         const callerRole = adminSnap.data()?.role;
-        const allowedCallerRoles = ['Administrator', 'superAdmin', 'super_admin', 'admin'];
-
-        if (!adminSnap.exists || !allowedCallerRoles.includes(callerRole)) {
+        if (!adminSnap.exists || !isAdministratorRole(callerRole)) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
 
@@ -70,8 +69,9 @@ export async function POST(req: Request) {
             link: customLink
         });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Reset password error:', error);
-        return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+        const message = error instanceof Error ? error.message : 'Internal Server Error';
+        return NextResponse.json({ error: message }, { status: 500 });
     }
 }

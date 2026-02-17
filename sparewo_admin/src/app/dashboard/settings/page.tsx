@@ -39,6 +39,7 @@ import {
   sendStaffPasswordReset
 } from "@/lib/api/staff";
 import { StaffRole, type StaffMember } from "@/lib/types/staff";
+import { isAdministratorRole, normalizeRole } from "@/lib/auth/roles";
 
 // Reuse logic from reference dashboard
 const ROLE_OPTIONS: Array<{ value: StaffRole; label: string; description: string }> = [
@@ -109,8 +110,7 @@ export default function SettingsPage() {
   const [savingEdit, setSavingEdit] = useState(false);
   const [actioningStaffId, setActioningStaffId] = useState<string | null>(null);
 
-  const ADMIN_ROLE_VARIANTS = ["Administrator", "superAdmin", "super_admin", "admin"];
-  const isCurrentAdmin = ADMIN_ROLE_VARIANTS.includes(adminData?.role || "");
+  const isCurrentAdmin = isAdministratorRole(adminData?.role);
 
   const loadStaff = useCallback(async () => {
     setLoadingStaff(true);
@@ -137,12 +137,12 @@ export default function SettingsPage() {
   const teamStats = useMemo(() => {
     const active = staffMembers.filter((member) => member.is_active).length;
     const suspendedLogin = staffMembers.filter((member) => member.auth_suspended).length;
-    const admins = staffMembers.filter((member) => member.role === "Administrator").length;
+    const pendingInvites = staffMembers.filter((member) => member.pending_activation).length;
     return {
       total: staffMembers.length,
       active,
       suspendedLogin,
-      admins,
+      pendingInvites,
     };
   }, [staffMembers]);
 
@@ -352,7 +352,7 @@ export default function SettingsPage() {
               Reset password for {resetStaff?.first_name} {resetStaff?.last_name}
             </DialogTitle>
             <DialogDescription>
-              Choose how you want to reset this user's password.
+              Choose how you want to reset this user&apos;s password.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-6 py-4">
@@ -590,7 +590,9 @@ export default function SettingsPage() {
                 <div className="space-y-1">
                   <h3 className="font-medium">{user?.displayName}</h3>
                   <p className="text-sm text-muted-foreground">{user?.email}</p>
-                  <p className="text-xs text-muted-foreground capitalize">Role: {adminData?.role}</p>
+                  <p className="text-xs text-muted-foreground capitalize">
+                    Role: {normalizeRole(adminData?.role) ?? adminData?.role}
+                  </p>
                 </div>
               </div>
               <Separator />
@@ -640,8 +642,8 @@ export default function SettingsPage() {
               <CardContent className="text-2xl font-semibold">{teamStats.suspendedLogin}</CardContent>
             </Card>
             <Card>
-              <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Admins</CardTitle></CardHeader>
-              <CardContent className="text-2xl font-semibold">{teamStats.admins}</CardContent>
+              <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Pending Invites</CardTitle></CardHeader>
+              <CardContent className="text-2xl font-semibold">{teamStats.pendingInvites}</CardContent>
             </Card>
           </div>
 
@@ -744,9 +746,20 @@ export default function SettingsPage() {
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge variant="outline">{member.role}</Badge>
-                      <Badge variant={member.is_active ? "default" : "secondary"}>
-                        {member.is_active ? "Active" : "Disabled"}
-                      </Badge>
+                      {member.auth_account_missing ? (
+                        <Badge variant="destructive" className="bg-orange-500 hover:bg-orange-600">
+                          Auth Account Missing
+                        </Badge>
+                      ) : member.pending_activation || (!member.last_sign_in_at && !member.is_active) ? (
+                        <Badge variant="secondary" className="bg-blue-100 text-blue-700 hover:bg-blue-200 border-blue-200">
+                          Pending Invite
+                        </Badge>
+                      ) : (
+                        <Badge variant={member.is_active ? "default" : "secondary"}>
+                          {member.is_active ? "Active" : "Disabled"}
+                        </Badge>
+                      )}
+
                       {member.auth_suspended && (
                         <Badge variant="destructive">Login Suspended</Badge>
                       )}

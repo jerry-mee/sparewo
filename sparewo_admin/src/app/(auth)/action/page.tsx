@@ -42,6 +42,7 @@ function ActionPageContent() {
     const [isVerifying, setIsVerifying] = useState(true);
     const [email, setEmail] = useState<string | null>(null);
     const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
     const {
         register,
@@ -205,13 +206,22 @@ function ActionPageContent() {
 
                             <div className="space-y-2">
                                 <Label htmlFor="confirmPassword">Confirm Password</Label>
-                                <Input
-                                    id="confirmPassword"
-                                    type="password"
-                                    autoComplete="new-password"
-                                    {...register('confirmPassword')}
-                                    className={errors.confirmPassword ? 'border-destructive' : ''}
-                                />
+                                <div className="relative">
+                                    <Input
+                                        id="confirmPassword"
+                                        type={showConfirmPassword ? "text" : "password"}
+                                        autoComplete="new-password"
+                                        {...register('confirmPassword')}
+                                        className={errors.confirmPassword ? 'border-destructive pr-10' : 'pr-10'}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                        className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground"
+                                    >
+                                        {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                    </button>
+                                </div>
                                 {errors.confirmPassword && (
                                     <p className="text-xs text-destructive">{errors.confirmPassword.message}</p>
                                 )}

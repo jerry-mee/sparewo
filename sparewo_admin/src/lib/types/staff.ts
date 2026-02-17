@@ -10,7 +10,9 @@ export type StaffMember = {
     last_name: string;
     role: StaffRole;
     is_active: boolean;
+    pending_activation?: boolean;
     auth_suspended?: boolean;
+    auth_account_missing?: boolean;
     last_sign_in_at?: string | null;
     created_at: string;
 };

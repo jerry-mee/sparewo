@@ -26,6 +26,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/context/auth-context";
 import { logOut } from "@/lib/firebase/auth";
 import { cn, getInitials } from "@/lib/utils";
+import { canAccessDashboardPath, getDefaultDashboardPath, normalizeRole } from "@/lib/auth/roles";
 
 const ThemeToggleButton = dynamic(
   () => import("@/components/ui/theme-toggle-button").then((module) => module.ThemeToggleButton),
@@ -35,7 +36,8 @@ const ThemeToggleButton = dynamic(
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, adminData } = useAuth();
+  const { user, adminData, loading } = useAuth();
+  const currentRole = normalizeRole(adminData?.role);
 
   const [isDesktopSidebarExpanded, setIsDesktopSidebarExpanded] = useState(true);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -47,23 +49,34 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const navItems = useMemo(
     () => [
-      { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-      { title: "Clients", href: "/dashboard/clients", icon: Users },
-      { title: "AutoHub", href: "/dashboard/autohub", icon: Wrench },
-      { title: "Vendors", href: "/dashboard/vendors", icon: Store },
-      { title: "Products", href: "/dashboard/products", icon: Package },
-      { title: "Orders", href: "/dashboard/orders", icon: ShoppingCart },
-      { title: "Comms", href: "/dashboard/comms", icon: MessageSquareWarning },
-      { title: "Settings", href: "/dashboard/settings", icon: Settings },
+      { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["Administrator", "Manager", "Mechanic"] },
+      { title: "Clients", href: "/dashboard/clients", icon: Users, roles: ["Administrator", "Manager"] },
+      { title: "AutoHub", href: "/dashboard/autohub", icon: Wrench, roles: ["Administrator", "Manager", "Mechanic"] },
+      { title: "Vendors", href: "/dashboard/vendors", icon: Store, roles: ["Administrator", "Manager"] },
+      { title: "Products", href: "/dashboard/products", icon: Package, roles: ["Administrator", "Manager", "Mechanic"] },
+      { title: "Orders", href: "/dashboard/orders", icon: ShoppingCart, roles: ["Administrator", "Manager", "Mechanic"] },
+      { title: "Comms", href: "/dashboard/comms", icon: MessageSquareWarning, roles: ["Administrator", "Manager"] },
+      { title: "Settings", href: "/dashboard/settings", icon: Settings, roles: ["Administrator"] },
     ],
     []
   );
+  const visibleNavItems = useMemo(
+    () => navItems.filter((item) => currentRole && item.roles.includes(currentRole)),
+    [currentRole, navItems]
+  );
+
+  useEffect(() => {
+    if (loading) return;
+    if (!pathname.startsWith("/dashboard")) return;
+    if (canAccessDashboardPath(currentRole, pathname)) return;
+    router.replace(getDefaultDashboardPath(currentRole));
+  }, [currentRole, loading, pathname, router]);
 
   const currentTitle = useMemo(() => {
     if (pathname === "/dashboard") return "Operations Overview";
-    const item = navItems.find((nav) => pathname.startsWith(nav.href));
+    const item = visibleNavItems.find((nav) => pathname.startsWith(nav.href));
     return item?.title ?? "Dashboard";
-  }, [navItems, pathname]);
+  }, [visibleNavItems, pathname]);
 
   const onSearch = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -127,7 +140,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
 
           <nav className="flex-1 space-y-2 overflow-y-auto px-3 py-6">
-            {navItems.map((item) => {
+            {visibleNavItems.map((item) => {
               const Icon = item.icon;
               const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
 
@@ -162,8 +175,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <div className={cn("min-w-0 flex-1", !isDesktopSidebarExpanded && "lg:hidden")}>
                 <p className="truncate text-sm font-semibold">{user?.displayName || "Admin User"}</p>
                 <p className="truncate text-xs text-muted-foreground">
-                  {adminData?.role || "admin"}
-                  {adminData?.role === "viewer" && " (read-only)"}
+                  {currentRole || adminData?.role || "Unknown"}
                 </p>
               </div>
             </div>

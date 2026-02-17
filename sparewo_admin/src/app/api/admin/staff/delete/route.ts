@@ -1,6 +1,7 @@
 
 import { NextResponse } from 'next/server';
 import { db, auth } from '@/lib/firebase/admin';
+import { isAdministratorRole } from '@/lib/auth/roles';
 
 export async function POST(req: Request) {
     try {
@@ -13,13 +14,10 @@ export async function POST(req: Request) {
         const decodedToken = await auth.verifyIdToken(token);
 
         // Verify admin role
-        // Verify admin role
         const adminRef = db.collection('adminUsers').doc(decodedToken.uid);
         const adminSnap = await adminRef.get();
         const callerRole = adminSnap.data()?.role;
-        const allowedCallerRoles = ['Administrator', 'superAdmin', 'super_admin', 'admin'];
-
-        if (!adminSnap.exists || !allowedCallerRoles.includes(callerRole)) {
+        if (!adminSnap.exists || !isAdministratorRole(callerRole)) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
 
@@ -31,14 +29,24 @@ export async function POST(req: Request) {
 
         // Delete from Firestore
         await db.collection('adminUsers').doc(staff_id).delete();
+        await db.collection('user_roles').doc(staff_id).delete();
 
-        // Delete from Auth
-        await auth.deleteUser(staff_id);
+        // Delete from Auth (ignore if already deleted/missing)
+        try {
+            await auth.deleteUser(staff_id);
+        } catch (e: unknown) {
+            const code = typeof e === 'object' && e !== null && 'code' in e ? String((e as { code?: string }).code) : '';
+            if (code !== 'auth/user-not-found') {
+                const message = e instanceof Error ? e.message : 'Unknown error';
+                console.error(`Error deleting Auth user ${staff_id}:`, message);
+            }
+        }
 
         return NextResponse.json({ success: true, message: 'Deleted successfully' });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Delete staff error:', error);
-        return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+        const message = error instanceof Error ? error.message : 'Internal Server Error';
+        return NextResponse.json({ error: message }, { status: 500 });
     }
 }

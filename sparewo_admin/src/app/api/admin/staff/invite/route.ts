@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { db, auth } from '@/lib/firebase/admin';
 import * as crypto from 'crypto';
 import { getInviteEmailHtml, sendEmail } from '@/lib/mail';
+import { isAdministratorRole, normalizeRole } from '@/lib/auth/roles';
 
 export async function POST(req: Request) {
     try {
@@ -18,9 +19,7 @@ export async function POST(req: Request) {
         const adminRef = db.collection('adminUsers').doc(decodedToken.uid);
         const adminSnap = await adminRef.get();
         const callerRole = adminSnap.data()?.role;
-        const allowedCallerRoles = ['Administrator', 'superAdmin', 'super_admin', 'admin'];
-
-        if (!adminSnap.exists || !allowedCallerRoles.includes(callerRole)) {
+        if (!adminSnap.exists || !isAdministratorRole(callerRole)) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
 
@@ -34,13 +33,13 @@ export async function POST(req: Request) {
         try {
             await auth.getUserByEmail(email);
             return NextResponse.json({ error: 'User with this email already exists.' }, { status: 400 });
-        } catch (e) {
+        } catch {
             // User doesn't exist, proceed
         }
 
         // specific role validation
-        const validRoles = ['Administrator', 'Manager', 'Mechanic'];
-        if (!validRoles.includes(role)) {
+        const normalizedInviteRole = normalizeRole(role);
+        if (!normalizedInviteRole) {
             return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
         }
 
@@ -59,10 +58,19 @@ export async function POST(req: Request) {
             first_name,
             last_name,
             username: username || email.split('@')[0],
-            role,
-            is_active: true,
+            role: normalizedInviteRole,
+            is_active: false,
+            pending_activation: true,
             created_at: new Date().toISOString(),
         });
+
+        await db.collection('user_roles').doc(user.uid).set({
+            isAdmin: true,
+            role: normalizedInviteRole.toLowerCase(),
+            dashboard_role: normalizedInviteRole,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+        }, { merge: true });
 
         // Generate password reset link
         const link = await auth.generatePasswordResetLink(email);
@@ -95,8 +103,9 @@ export async function POST(req: Request) {
             inviteLink
         });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Invite staff error:', error);
-        return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+        const message = error instanceof Error ? error.message : 'Internal Server Error';
+        return NextResponse.json({ error: message }, { status: 500 });
     }
 }
