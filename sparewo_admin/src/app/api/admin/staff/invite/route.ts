@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import { db, auth } from '@/lib/firebase/admin';
 import * as crypto from 'crypto';
+import { getInviteEmailHtml, sendEmail } from '@/lib/mail';
 
 export async function POST(req: Request) {
     try {
@@ -13,7 +14,6 @@ export async function POST(req: Request) {
         const token = authHeader.split('Bearer ')[1];
         const decodedToken = await auth.verifyIdToken(token);
 
-        // Verify admin role
         // Verify admin role
         const adminRef = db.collection('adminUsers').doc(decodedToken.uid);
         const adminSnap = await adminRef.get();
@@ -30,6 +30,14 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
         }
 
+        // Check if user already exists in Auth
+        try {
+            await auth.getUserByEmail(email);
+            return NextResponse.json({ error: 'User with this email already exists.' }, { status: 400 });
+        } catch (e) {
+            // User doesn't exist, proceed
+        }
+
         // specific role validation
         const validRoles = ['Administrator', 'Manager', 'Mechanic'];
         if (!validRoles.includes(role)) {
@@ -37,12 +45,12 @@ export async function POST(req: Request) {
         }
 
         // create user in Auth
-        const password = crypto.randomBytes(8).toString('hex');
+        const initialPassword = crypto.randomBytes(16).toString('hex');
         const user = await auth.createUser({
             email,
-            password,
+            password: initialPassword,
             displayName: `${first_name} ${last_name}`,
-            emailVerified: true, // or false if email verification flow exists
+            emailVerified: true,
         });
 
         // create user record in Firestore
@@ -61,14 +69,29 @@ export async function POST(req: Request) {
         const urlObj = new URL(link);
         const oobCode = urlObj.searchParams.get('oobCode');
 
-        // Construct custom link
+        // Construct custom link pointing to /invite
         const host = req.headers.get('host');
         const protocol = host?.includes('localhost') ? 'http' : 'https';
-        const inviteLink = `${protocol}://${host}/action?mode=resetPassword&oobCode=${oobCode}`;
+        const inviteLink = `${protocol}://${host}/invite?oobCode=${oobCode}`;
+
+        // Send Email using Nodemailer
+        let emailSent = false;
+        try {
+            await sendEmail({
+                to: email,
+                subject: 'Welcome to SpareWo - Activate Your Admin Account',
+                html: getInviteEmailHtml(`${first_name} ${last_name}`, inviteLink),
+            });
+            emailSent = true;
+        } catch (mailError) {
+            console.error('Failed to send invitation email:', mailError);
+        }
 
         return NextResponse.json({
             success: true,
-            message: 'User invited. Share the link below to set password.',
+            message: emailSent
+                ? 'Invitation email sent successfully.'
+                : 'User created, but email failed to send. Share the link manually below.',
             inviteLink
         });
 

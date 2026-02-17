@@ -1,6 +1,7 @@
 
 import { NextResponse } from 'next/server';
 import { db, auth } from '@/lib/firebase/admin';
+import { getResetPasswordEmailHtml, sendEmail } from '@/lib/mail';
 
 export async function POST(req: Request) {
     try {
@@ -28,7 +29,7 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Missing staff ID' }, { status: 400 });
         }
 
-        // Get user email
+        // Get user details
         const user = await auth.getUser(staff_id);
         if (!user.email) {
             return NextResponse.json({ error: 'User does not have an email address.' }, { status: 400 });
@@ -36,9 +37,6 @@ export async function POST(req: Request) {
 
         // Generate password reset link
         const link = await auth.generatePasswordResetLink(user.email);
-
-        // Construct custom link
-        // Link format: https://<project>.firebaseapp.com/__/auth/action?mode=resetPassword&oobCode=<code>&apiKey=<key>...
         const urlObj = new URL(link);
         const oobCode = urlObj.searchParams.get('oobCode');
 
@@ -46,14 +44,29 @@ export async function POST(req: Request) {
             throw new Error('Failed to extract reset code');
         }
 
-        // Determine origin
+        // Construct custom link
         const host = req.headers.get('host');
         const protocol = host?.includes('localhost') ? 'http' : 'https';
         const customLink = `${protocol}://${host}/action?mode=resetPassword&oobCode=${oobCode}`;
 
+        // Send Email
+        let emailSent = false;
+        try {
+            await sendEmail({
+                to: user.email,
+                subject: 'Reset Your SpareWo Admin Password',
+                html: getResetPasswordEmailHtml(user.displayName || user.email, customLink),
+            });
+            emailSent = true;
+        } catch (mailError) {
+            console.error('Failed to send reset email:', mailError);
+        }
+
         return NextResponse.json({
             success: true,
-            message: 'Password reset link generated.',
+            message: emailSent
+                ? 'Password reset email sent.'
+                : 'Reset link generated, but email failed to send. Share the link manually below.',
             link: customLink
         });
 

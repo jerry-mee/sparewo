@@ -165,15 +165,14 @@ export default function SettingsPage() {
         role: inviteForm.role,
       });
 
-      toast.success(res.message || "Team invite sent.");
-      if (res.inviteLink) {
+      if (res.inviteLink && (res.message.includes("failed") || res.message.includes("manually"))) {
         setGeneratedLink({
           url: res.inviteLink,
-          label: "Invitation Link",
+          label: "Invitation Link (Email Failed)",
           email: inviteForm.email
         });
-      } else if (res.tempPassword) {
-        toast.success(`User created. Temporary Password: ${res.tempPassword}`, { duration: 10000 });
+      } else {
+        toast.success(res.message || "Team invite sent.");
       }
 
       setInviteForm({
@@ -290,15 +289,14 @@ export default function SettingsPage() {
     const toastId = toast.loading("Generating password reset link...");
     try {
       const res = await sendStaffPasswordReset(member.id);
-      toast.dismiss(toastId);
-      if (res.link) {
+      if (res.link && (res.message.includes("failed") || res.message.includes("manually"))) {
         setGeneratedLink({
           url: res.link,
-          label: "Password Reset Link",
+          label: "Password Reset Link (Email Failed)",
           email: member.email || "User"
         });
       } else {
-        toast.success("Password reset email sent (if configured).");
+        toast.success(res.message || "Password reset email sent.");
       }
     } catch (error) {
       toast.dismiss(toastId);
@@ -409,21 +407,43 @@ export default function SettingsPage() {
 
             <div className="flex flex-col gap-2">
               <Label>Security Actions</Label>
-              <Button
-                variant="outline"
-                className="w-full justify-start"
-                onClick={() => {
-                  if (editingStaff) {
-                    handleSendPasswordReset(editingStaff);
-                    // We don't close the dialog immediately, or maybe we do?
-                    // If we show another dialog (the link dialog), it might stack or close this one.
-                    // Radix UI dialogs stack fine.
-                  }
-                }}
-              >
-                <KeyRound className="w-4 h-4 mr-2" />
-                Generate Password Reset Link
-              </Button>
+              <div className="grid grid-cols-1 gap-2">
+                <Button
+                  variant="outline"
+                  className="w-full justify-start h-auto py-2 px-3 text-xs"
+                  onClick={() => {
+                    if (editingStaff) handleSendPasswordReset(editingStaff);
+                  }}
+                >
+                  <KeyRound className="w-3.5 h-3.5 mr-2 text-blue-500" />
+                  Send Password Reset Email
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full justify-start h-auto py-2 px-3 text-xs"
+                  onClick={async () => {
+                    if (!editingStaff) return;
+                    const tId = toast.loading("Generating link...");
+                    try {
+                      const res = await sendStaffPasswordReset(editingStaff.id);
+                      toast.dismiss(tId);
+                      if (res.link) {
+                        setGeneratedLink({
+                          url: res.link,
+                          label: "Manual Reset Link",
+                          email: editingStaff.email || "User"
+                        });
+                      }
+                    } catch (e) {
+                      toast.dismiss(tId);
+                      toast.error("Failed to generate link");
+                    }
+                  }}
+                >
+                  <Save className="w-3.5 h-3.5 mr-2 text-orange-500" />
+                  Copy Manual Reset Link
+                </Button>
+              </div>
             </div>
           </div>
           <DialogFooter>

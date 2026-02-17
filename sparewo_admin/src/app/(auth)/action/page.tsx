@@ -145,12 +145,10 @@ function ActionPageContent() {
                         />
                     </div>
                     <CardTitle className="text-2xl font-bold text-center">
-                        {mode === 'resetPassword' ? 'Reset Password' : 'Verify Email'}
+                        Reset Password
                     </CardTitle>
                     <CardDescription className="text-center">
-                        {mode === 'resetPassword'
-                            ? `Create a new password for ${email}`
-                            : 'Verifying your email address...'}
+                        {email ? `Create a new password for ${email}` : 'Loading reset details...'}
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
