@@ -14,6 +14,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { toast } from 'sonner';
 import { confirmPasswordReset, verifyPasswordResetCode } from 'firebase/auth';
 import { auth } from '@/lib/firebase/config';
+import { signIn } from '@/lib/firebase/auth';
 import { Loader2, Check, Eye, EyeOff } from 'lucide-react';
 
 const passwordSchema = z.object({
@@ -72,15 +73,21 @@ function InvitePageContent() {
 
 
     const onSubmit = async (data: PasswordFormValues) => {
-        if (!oobCode) return;
+        if (!oobCode || !email) return;
         setIsLoading(true);
         try {
             await confirmPasswordReset(auth, oobCode, data.password);
-            toast.success('Account setup complete! Redirecting to login...');
-            setTimeout(() => router.push('/login'), 2000);
-        } catch (error: any) {
+            await signIn(email, data.password);
+            toast.success('Account setup complete. Signing you in...');
+            setTimeout(() => {
+                window.location.href = '/dashboard';
+            }, 800);
+        } catch (error: unknown) {
             console.error(error);
-            const msg = error.code === 'auth/expired-action-code' ? 'Link has expired.' : (error.message || 'Failed to set password.');
+            const msg =
+                (typeof error === 'object' && error !== null && 'code' in error && (error as { code?: string }).code === 'auth/expired-action-code')
+                    ? 'Link has expired.'
+                    : (error instanceof Error ? error.message : 'Failed to set password.');
             toast.error(msg);
         } finally {
             setIsLoading(false);
@@ -120,11 +127,11 @@ function InvitePageContent() {
     }
 
     return (
-        <div className="flex min-h-screen items-center justify-center bg-white dark:bg-gray-950 p-4 relative overflow-hidden">
+        <div className="relative flex min-h-screen items-start justify-center overflow-y-auto bg-white p-4 py-6 dark:bg-gray-950 sm:items-center sm:py-10">
             <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_30%_20%,rgba(59,130,246,0.05)_0%,transparent_50%),radial-gradient(circle_at_70%_80%,rgba(59,130,246,0.05)_0%,transparent_50%)] pointer-events-none" />
 
-            <Card className="w-full max-w-md relative z-10 border-none shadow-2xl bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm">
-                <CardHeader className="space-y-4">
+            <Card className="relative z-10 w-full max-w-md border-none bg-white/80 shadow-2xl backdrop-blur-sm dark:bg-gray-900/80">
+                <CardHeader className="space-y-3 px-5 pb-2 pt-5 sm:space-y-4 sm:px-6 sm:pt-6">
                     <div className="mx-auto flex justify-center mb-4">
                         <Image
                             src="/images/logo.png"
@@ -139,11 +146,11 @@ function InvitePageContent() {
                     <CardTitle className="text-2xl font-bold text-center text-blue-600">
                         Welcome to SpareWo
                     </CardTitle>
-                    <CardDescription className="text-center">
+                    <CardDescription className="break-words text-center text-sm sm:text-base">
                         Hi <strong>{email}</strong>, set up your password to activate your admin account.
                     </CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="px-5 pb-5 sm:px-6 sm:pb-6">
                     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                         <div className="space-y-2">
                             <Label htmlFor="password">Create Password</Label>
