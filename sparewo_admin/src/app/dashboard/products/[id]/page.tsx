@@ -4,7 +4,8 @@
 
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
-import { getProductById, approveProductAndCreateCatalog, updateProductStatus } from "@/lib/firebase/products";
+import { getProductById, updateProductStatus } from "@/lib/firebase/products";
+import { auth } from "@/lib/firebase/config";
 import { getVendorById } from "@/lib/firebase/vendors";
 import { Product } from "@/lib/types/product";
 import { Vendor } from "@/lib/types/vendor";
@@ -101,7 +102,28 @@ export default function ProductDetailPage() {
           return;
         }
 
-        await approveProductAndCreateCatalog(product.id, { retailPrice: price });
+        const token = await auth.currentUser?.getIdToken();
+        if (!token) {
+          toast.error("You are not authenticated.");
+          return;
+        }
+
+        const response = await fetch("/api/admin/products/approve", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            productId: product.id,
+            retailPrice: price,
+          }),
+        });
+
+        const payload = await response.json();
+        if (!response.ok || payload?.success !== true) {
+          throw new Error(payload?.error || "Failed to approve product");
+        }
         
         setProduct({ ...product, status: "approved", showInCatalog: true });
         toast.success(`Product ${product.name || product.partName} approved and added to catalog`);
@@ -135,7 +157,7 @@ export default function ProductDetailPage() {
     return (
       <div className="text-center py-12">
         <h2 className="text-xl font-semibold mb-2">Product Not Found</h2>
-        <p className="text-gray-500 dark:text-gray-400 mb-6">
+        <p className="text-muted-foreground mb-6">
           The product you are looking for does not exist or has been removed.
         </p>
         <Link href="/dashboard/products">
@@ -172,7 +194,7 @@ export default function ProductDetailPage() {
           </Link>
           <div>
             <h1 className="text-2xl font-semibold">{productName}</h1>
-            <p className="text-gray-500 dark:text-gray-400">
+            <p className="text-muted-foreground">
               {product.brand} | {product.category}
             </p>
           </div>
@@ -219,72 +241,72 @@ export default function ProductDetailPage() {
                 <CardContent className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                      <h3 className="text-sm font-medium text-muted-foreground">
                         Product Name
                       </h3>
                       <p>{productName}</p>
                     </div>
                     <div>
-                      <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                      <h3 className="text-sm font-medium text-muted-foreground">
                         Brand
                       </h3>
                       <p>{product.brand}</p>
                     </div>
                     <div>
-                      <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                      <h3 className="text-sm font-medium text-muted-foreground">
                         Model
                       </h3>
                       <p>{product.model}</p>
                     </div>
                     <div>
-                      <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                      <h3 className="text-sm font-medium text-muted-foreground">
                         Year
                       </h3>
                       <p>{product.year}</p>
                     </div>
                     <div>
-                      <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                      <h3 className="text-sm font-medium text-muted-foreground">
                         Category
                       </h3>
                       <p>{product.category}</p>
                     </div>
                     {product.subcategory && (
                       <div>
-                        <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                        <h3 className="text-sm font-medium text-muted-foreground">
                           Subcategory
                         </h3>
                         <p>{product.subcategory}</p>
                       </div>
                     )}
                     <div>
-                      <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                      <h3 className="text-sm font-medium text-muted-foreground">
                         Price
                       </h3>
                       <p>{formatCurrency(productPrice)}</p>
                     </div>
                     {product.discountPrice !== undefined && (
                       <div>
-                        <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                        <h3 className="text-sm font-medium text-muted-foreground">
                           Discount Price
                         </h3>
                         <p>{formatCurrency(product.discountPrice)}</p>
                       </div>
                     )}
                     <div>
-                      <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                      <h3 className="text-sm font-medium text-muted-foreground">
                         Condition
                       </h3>
                       <p className="capitalize">{product.condition}</p>
                     </div>
                     <div>
-                      <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                      <h3 className="text-sm font-medium text-muted-foreground">
                         Quantity
                       </h3>
                       <p>{productQuantity}</p>
                     </div>
                     {product.partNumber && (
                       <div>
-                        <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                        <h3 className="text-sm font-medium text-muted-foreground">
                           Part Number
                         </h3>
                         <p>{product.partNumber}</p>
@@ -292,7 +314,7 @@ export default function ProductDetailPage() {
                     )}
                     {product.qualityGrade && (
                       <div>
-                        <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                        <h3 className="text-sm font-medium text-muted-foreground">
                           Quality Grade
                         </h3>
                         <p>{product.qualityGrade}</p>
@@ -301,7 +323,7 @@ export default function ProductDetailPage() {
                   </div>
                   
                   <div>
-                    <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
+                    <h3 className="text-sm font-medium text-muted-foreground mb-2">
                       Description
                     </h3>
                     <p className="text-sm whitespace-pre-line">{product.description}</p>
@@ -309,14 +331,14 @@ export default function ProductDetailPage() {
                   
                   {product.compatibility && product.compatibility.vehicles && product.compatibility.vehicles.length > 0 && (
                     <div>
-                      <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
+                      <h3 className="text-sm font-medium text-muted-foreground mb-2">
                         Vehicle Compatibility
                       </h3>
                       <div className="space-y-2">
                         {product.compatibility.vehicles.map((vehicle, index) => (
                           <div key={index} className="flex items-center space-x-2 text-sm">
                             <span className="font-medium">{vehicle.make} {vehicle.model}</span>
-                            <span className="text-gray-500">({vehicle.years?.join(', ') || 'N/A'})</span>
+                            <span className="text-muted-foreground">({vehicle.years?.join(', ') || 'N/A'})</span>
                           </div>
                         ))}
                       </div>
@@ -325,7 +347,7 @@ export default function ProductDetailPage() {
                   
                   {vendor && (
                     <div>
-                      <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
+                      <h3 className="text-sm font-medium text-muted-foreground mb-2">
                         Vendor
                       </h3>
                       <Link 
@@ -350,7 +372,7 @@ export default function ProductDetailPage() {
                 </CardHeader>
                 <CardContent>
                   {!productImages || productImages.length === 0 ? (
-                    <p className="text-center py-8 text-gray-500">
+                    <p className="text-center py-8 text-muted-foreground">
                       No images have been uploaded for this product.
                     </p>
                   ) : (
@@ -409,7 +431,7 @@ export default function ProductDetailPage() {
                 </CardHeader>
                 <CardContent>
                   {specifications.length === 0 ? (
-                    <p className="text-center py-8 text-gray-500">
+                    <p className="text-center py-8 text-muted-foreground">
                       No specifications have been added for this product.
                     </p>
                   ) : (
@@ -449,7 +471,7 @@ export default function ProductDetailPage() {
             <CardContent className="space-y-4">
               <div className="flex justify-between items-center">
                 <div>
-                  <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                  <h3 className="text-sm font-medium text-muted-foreground">
                     Current Status
                   </h3>
                   <div className="mt-1">
@@ -475,7 +497,7 @@ export default function ProductDetailPage() {
               </div>
               
               <div>
-                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                <h3 className="text-sm font-medium text-muted-foreground">
                   Show in Client Catalog
                 </h3>
                 <div className="flex items-center space-x-2 mt-1">
@@ -500,7 +522,7 @@ export default function ProductDetailPage() {
                   />
                   <label
                     htmlFor="catalog-status"
-                    className={`text-sm ${product.status !== "approved" ? 'text-gray-400' : ''}`}
+                    className={`text-sm ${product.status !== "approved" ? 'text-muted-foreground' : ''}`}
                   >
                     {product.showInCatalog ? "Visible to clients" : "Hidden from clients"}
                   </label>
@@ -508,7 +530,7 @@ export default function ProductDetailPage() {
               </div>
               
               <div>
-                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                <h3 className="text-sm font-medium text-muted-foreground">
                   Date Added
                 </h3>
                 <p>{formatDateTime(product.createdAt)}</p>
@@ -516,7 +538,7 @@ export default function ProductDetailPage() {
               
               {product.status === "approved" && product.approvedAt && (
                 <div>
-                  <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                  <h3 className="text-sm font-medium text-muted-foreground">
                     Approval Date
                   </h3>
                   <p>{formatDateTime(product.approvedAt)}</p>
@@ -526,7 +548,7 @@ export default function ProductDetailPage() {
               {product.status === "rejected" && product.rejectedAt && (
                 <>
                   <div>
-                    <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                    <h3 className="text-sm font-medium text-muted-foreground">
                       Rejection Date
                     </h3>
                     <p>{formatDateTime(product.rejectedAt)}</p>
@@ -534,7 +556,7 @@ export default function ProductDetailPage() {
                   
                   {product.rejectionReason && (
                     <div>
-                      <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                      <h3 className="text-sm font-medium text-muted-foreground">
                         Rejection Reason
                       </h3>
                       <p className="text-sm mt-1">{product.rejectionReason}</p>
@@ -552,25 +574,25 @@ export default function ProductDetailPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                  <h3 className="text-sm font-medium text-muted-foreground">
                     Business Name
                   </h3>
                   <p>{vendor.businessName}</p>
                 </div>
                 <div>
-                  <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                  <h3 className="text-sm font-medium text-muted-foreground">
                     Contact
                   </h3>
                   <p>{vendor.name}</p>
                 </div>
                 <div>
-                  <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                  <h3 className="text-sm font-medium text-muted-foreground">
                     Email
                   </h3>
                   <p>{vendor.email}</p>
                 </div>
                 <div>
-                  <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                  <h3 className="text-sm font-medium text-muted-foreground">
                     Status
                   </h3>
                   <div className="mt-1">

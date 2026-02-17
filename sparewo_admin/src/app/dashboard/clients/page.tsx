@@ -15,6 +15,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { StatusPill } from "@/components/ui/status-pill";
 import { DocumentData } from "firebase/firestore";
 import { formatDate, getInitials } from "@/lib/utils";
 import Link from "next/link";
@@ -197,15 +198,11 @@ export default function ClientsPage() {
                       </TableCell>
                       <TableCell>{formatDate(client.createdAt)}</TableCell>
                       <TableCell>
-                        {client.isSuspended ? (
-                          <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800 dark:bg-red-900/30 dark:text-red-400">
-                            Suspended
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/30 dark:text-green-400">
-                            Active
-                          </span>
-                        )}
+                        <StatusPill
+                          status={client.isSuspended ? "suspended" : "approved"}
+                          label={client.isSuspended ? "Suspended" : "Active"}
+                          className="text-xs"
+                        />
                       </TableCell>
                       <TableCell className="text-right" onClick={(event) => event.stopPropagation()}>
                         <Link href={`/dashboard/clients/${client.id}`}>

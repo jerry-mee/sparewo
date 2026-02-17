@@ -3,32 +3,56 @@
 
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
-import { 
-  getBookingById, 
-  getAllServiceProviders, 
-  updateBookingStatus, 
-  assignProviderToBooking,
+import {
+  getBookingById,
+  getAllServiceProviders,
   ServiceBooking,
-  ServiceProvider 
+  ServiceProvider,
 } from "@/lib/firebase/autohub";
+import { auth } from "@/lib/firebase/config";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
+import { StatusPill } from "@/components/ui/status-pill";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { formatDate } from "@/lib/utils";
-import { ArrowLeft, User, Car, Calendar, MapPin, CheckCircle2 } from "lucide-react";
+import {
+  ArrowLeft,
+  User,
+  Car,
+  Calendar,
+  MapPin,
+  CheckCircle2,
+  ChevronRight,
+  ClipboardList,
+} from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
 
+const trackerStages: ServiceBooking["status"][] = [
+  "pending",
+  "confirmed",
+  "in_progress",
+  "completed",
+];
+
+const trackerLabels: Record<ServiceBooking["status"], string> = {
+  pending: "Request Received",
+  confirmed: "Approved & Assigned",
+  in_progress: "Service In Progress",
+  completed: "Completed",
+  cancelled: "Cancelled",
+};
+
 export default function BookingDetailsPage() {
   const { id } = useParams<{ id: string }>();
-  
+
   const [booking, setBooking] = useState<ServiceBooking | null>(null);
   const [providers, setProviders] = useState<ServiceProvider[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,12 +65,12 @@ export default function BookingDetailsPage() {
       try {
         const [bookingData, providersData] = await Promise.all([
           getBookingById(id),
-          getAllServiceProviders()
+          getAllServiceProviders(),
         ]);
-        
+
         setBooking(bookingData);
         setProviders(providersData);
-        
+
         if (bookingData?.adminNotes) setNotes(bookingData.adminNotes);
         if (bookingData?.assignedProviderId) setSelectedProvider(bookingData.assignedProviderId);
       } catch (error) {
@@ -59,10 +83,32 @@ export default function BookingDetailsPage() {
     fetchData();
   }, [id]);
 
-  const handleStatusUpdate = async (newStatus: ServiceBooking['status']) => {
+  const handleStatusUpdate = async (newStatus: ServiceBooking["status"]) => {
     if (!booking) return;
     try {
-      await updateBookingStatus(booking.id, newStatus, notes);
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) {
+        toast.error("You are not authenticated.");
+        return;
+      }
+
+      const response = await fetch("/api/admin/autohub/status", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          bookingId: booking.id,
+          status: newStatus,
+          notes,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok || payload?.success !== true) {
+        throw new Error(payload?.error || "Failed to update booking status");
+      }
+
       setBooking({ ...booking, status: newStatus, adminNotes: notes });
       toast.success(`Status updated to ${newStatus}`);
     } catch (error) {
@@ -74,14 +120,38 @@ export default function BookingDetailsPage() {
   const handleAssignProvider = async () => {
     if (!booking || !selectedProvider) return;
     try {
-      const provider = providers.find(p => p.id === selectedProvider);
+      const provider = providers.find((p) => p.id === selectedProvider);
       if (provider) {
-        await assignProviderToBooking(booking.id, provider.id, provider.name);
-        setBooking({ 
-          ...booking, 
-          assignedProviderId: provider.id, 
+        const token = await auth.currentUser?.getIdToken();
+        if (!token) {
+          toast.error("You are not authenticated.");
+          return;
+        }
+
+        const response = await fetch("/api/admin/autohub/status", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            bookingId: booking.id,
+            status: "confirmed",
+            notes,
+            providerId: provider.id,
+            providerName: provider.name,
+          }),
+        });
+        const payload = await response.json();
+        if (!response.ok || payload?.success !== true) {
+          throw new Error(payload?.error || "Failed to assign provider");
+        }
+
+        setBooking({
+          ...booking,
+          assignedProviderId: provider.id,
           assignedProviderName: provider.name,
-          status: 'confirmed' 
+          status: "confirmed",
         });
         toast.success(`Assigned to ${provider.name}`);
       }
@@ -101,45 +171,113 @@ export default function BookingDetailsPage() {
 
   if (!booking) return <div>Booking not found</div>;
 
+  const stageIndex = trackerStages.indexOf(booking.status);
+  const cancelled = booking.status === "cancelled";
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
         <Link href="/dashboard/autohub">
-          <Button variant="ghost" size="icon"><ArrowLeft className="h-5 w-5" /></Button>
+          <Button variant="ghost" size="icon">
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
         </Link>
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Booking #{booking.bookingNumber}</h1>
-          <p className="text-sm text-muted-foreground">Created on {formatDate(booking.createdAt)}</p>
-        </div>
+        <span>AutoHub</span>
+        <ChevronRight className="h-4 w-4" />
+        <span>Request Tracker</span>
+        <ChevronRight className="h-4 w-4" />
+        <span className="font-medium text-foreground">{booking.bookingNumber}</span>
       </div>
 
+      <Card>
+        <CardContent className="space-y-4 pt-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight">Booking #{booking.bookingNumber}</h1>
+              <p className="text-sm text-muted-foreground">Created on {formatDate(booking.createdAt)}</p>
+            </div>
+            <StatusPill status={booking.status} />
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-4">
+            {trackerStages.map((stage, index) => {
+              const complete = !cancelled && stageIndex >= index;
+              return (
+                <div
+                  key={stage}
+                  className={`rounded-lg border px-3 py-3 ${complete ? "border-primary/40 bg-primary/10" : "bg-background"}`}
+                >
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Step {index + 1}</p>
+                  <p className="mt-1 text-sm font-medium">{trackerLabels[stage]}</p>
+                </div>
+              );
+            })}
+          </div>
+
+          {cancelled && (
+            <div className="rounded-md border border-rose-300 bg-rose-50 px-3 py-2 text-sm text-rose-800 dark:border-rose-500/50 dark:bg-rose-900/20 dark:text-rose-200">
+              This request has been cancelled.
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <div className="grid gap-6 lg:grid-cols-3">
-        {/* Main Details */}
         <div className="space-y-6 lg:col-span-2">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Car className="h-5 w-5 text-primary" /> Vehicle & Service
+                <Car className="h-5 w-5 text-primary" /> Vehicle & Service Snapshot
               </CardTitle>
             </CardHeader>
             <CardContent className="grid gap-6 sm:grid-cols-2">
               <div>
                 <h4 className="text-sm font-medium text-muted-foreground">Vehicle Details</h4>
-                <p className="mt-1 text-lg font-medium">{booking.vehicleYear} {booking.vehicleBrand} {booking.vehicleModel}</p>
+                <p className="mt-1 text-lg font-medium">
+                  {booking.vehicleYear} {booking.vehicleBrand} {booking.vehicleModel}
+                </p>
               </div>
               <div>
                 <h4 className="text-sm font-medium text-muted-foreground">Requested Services</h4>
                 <div className="mt-1 flex flex-wrap gap-2">
-                  {booking.services.map((s, i) => (
-                    <span key={i} className="rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-secondary-foreground">
-                      {s}
+                  {booking.services.map((service, index) => (
+                    <span
+                      key={index}
+                      className="rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-secondary-foreground"
+                    >
+                      {service}
                     </span>
                   ))}
                 </div>
               </div>
               <div className="sm:col-span-2">
                 <h4 className="text-sm font-medium text-muted-foreground">Description / Issue</h4>
-                <p className="mt-1 rounded-md bg-muted p-3 text-sm">{booking.serviceDescription || "No description provided."}</p>
+                <p className="mt-1 rounded-md bg-muted p-3 text-sm">
+                  {booking.serviceDescription || "No description provided."}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <ClipboardList className="h-5 w-5 text-primary" /> Follow-up Timeline
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-md border bg-background p-3">
+                <p className="text-sm font-medium">Pickup Window</p>
+                <p className="text-sm text-muted-foreground">
+                  {formatDate(booking.pickupDate)} at {booking.pickupTime}
+                </p>
+                <p className="text-sm text-muted-foreground">{booking.pickupLocation}</p>
+              </div>
+              <div className="rounded-md border bg-background p-3">
+                <p className="text-sm font-medium">Assigned Provider</p>
+                <p className="text-sm text-muted-foreground">
+                  {booking.assignedProviderName || "Pending assignment"}
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -161,7 +299,7 @@ export default function BookingDetailsPage() {
                 <p className="text-sm text-muted-foreground">{booking.userPhone}</p>
               </div>
               <div className="sm:col-span-2">
-                <h4 className="text-sm font-medium text-muted-foreground mb-1 flex items-center gap-1">
+                <h4 className="mb-1 flex items-center gap-1 text-sm font-medium text-muted-foreground">
                   <MapPin className="h-3 w-3" /> Pickup Location
                 </h4>
                 <p>{booking.pickupLocation}</p>
@@ -174,12 +312,11 @@ export default function BookingDetailsPage() {
           </Card>
         </div>
 
-        {/* Sidebar Actions */}
         <div className="space-y-6">
           <Card>
             <CardHeader>
               <CardTitle>Workflow Actions</CardTitle>
-              <CardDescription>Manage booking status</CardDescription>
+              <CardDescription>Manage booking status and assignment updates</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
@@ -187,11 +324,13 @@ export default function BookingDetailsPage() {
                 <div className="flex gap-2">
                   <Select value={selectedProvider} onValueChange={setSelectedProvider}>
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select Mechanic" />
+                      <SelectValue placeholder="Select Service Provider" />
                     </SelectTrigger>
                     <SelectContent>
-                      {providers.map(p => (
-                        <SelectItem key={p.id} value={p.id}>{p.name} ({p.type})</SelectItem>
+                      {providers.map((provider) => (
+                        <SelectItem key={provider.id} value={provider.id}>
+                          {provider.name} ({provider.type})
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -204,35 +343,35 @@ export default function BookingDetailsPage() {
               <div className="space-y-2">
                 <label className="text-sm font-medium">Status</label>
                 <div className="grid grid-cols-2 gap-2">
-                  <Button 
-                    variant={booking.status === 'confirmed' ? "default" : "outline"}
-                    size="sm" 
-                    onClick={() => handleStatusUpdate('confirmed')}
+                  <Button
+                    variant={booking.status === "confirmed" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => handleStatusUpdate("confirmed")}
                     className="w-full"
                   >
                     Confirm
                   </Button>
-                  <Button 
-                    variant={booking.status === 'in_progress' ? "default" : "outline"}
-                    size="sm" 
-                    onClick={() => handleStatusUpdate('in_progress')}
+                  <Button
+                    variant={booking.status === "in_progress" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => handleStatusUpdate("in_progress")}
                     className="w-full"
                   >
                     In Progress
                   </Button>
-                  <Button 
-                    variant={booking.status === 'completed' ? "default" : "outline"}
-                    size="sm" 
-                    onClick={() => handleStatusUpdate('completed')}
-                    className="w-full bg-green-600 hover:bg-green-700 text-white"
+                  <Button
+                    variant={booking.status === "completed" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => handleStatusUpdate("completed")}
+                    className="w-full"
                   >
                     Complete
                   </Button>
-                  <Button 
-                    variant={booking.status === 'cancelled' ? "default" : "outline"}
-                    size="sm" 
-                    onClick={() => handleStatusUpdate('cancelled')}
-                    className="w-full text-red-600 hover:bg-red-50 hover:text-red-700"
+                  <Button
+                    variant={booking.status === "cancelled" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => handleStatusUpdate("cancelled")}
+                    className="w-full"
                   >
                     Cancel
                   </Button>
@@ -241,12 +380,17 @@ export default function BookingDetailsPage() {
 
               <div className="space-y-2">
                 <label className="text-sm font-medium">Admin Notes</label>
-                <Textarea 
-                  placeholder="Internal notes..." 
-                  value={notes} 
-                  onChange={(e) => setNotes(e.target.value)} 
+                <Textarea
+                  placeholder="Internal notes..."
+                  value={notes}
+                  onChange={(event) => setNotes(event.target.value)}
                 />
-                <Button variant="ghost" size="sm" className="w-full" onClick={() => handleStatusUpdate(booking.status)}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => handleStatusUpdate(booking.status)}
+                >
                   Save Notes
                 </Button>
               </div>

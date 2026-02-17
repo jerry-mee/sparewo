@@ -17,6 +17,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatCard } from "@/components/ui/stat-card";
+import { StatusPill } from "@/components/ui/status-pill";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { useAuth } from "@/lib/context/auth-context";
 import { normalizeRole } from "@/lib/auth/roles";
@@ -111,19 +112,6 @@ export default function Dashboard() {
       href: "/dashboard/orders",
     },
   ];
-
-  const getStatusClass = (status: string) => {
-    const styles: Record<string, string> = {
-      pending: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
-      processing: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
-      shipped: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400",
-      delivered: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400",
-      completed: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
-      cancelled: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
-    };
-
-    return styles[status] || "bg-gray-100 text-gray-800";
-  };
 
   return (
     <div className="space-y-6">
@@ -255,9 +243,7 @@ export default function Dashboard() {
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${getStatusClass(order.status)}`}>
-                    {order.status}
-                  </span>
+                  <StatusPill status={order.status} className="text-xs" />
                   <span className="text-sm font-semibold">{formatCurrency(order.totalAmount || 0)}</span>
                   <ChevronRight className="h-4 w-4 text-muted-foreground" />
                 </div>

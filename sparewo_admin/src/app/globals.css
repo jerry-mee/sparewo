@@ -12,7 +12,7 @@
   --secondary: 201 98% 11%;
   --secondary-foreground: 0 0% 100%;
   --muted: 200 20% 95%;
-  --muted-foreground: 210 8% 40%;
+  --muted-foreground: 220 12% 30%;
   --accent: 157 100% 96%;
   --accent-foreground: 201 98% 11%;
   --destructive: 0 66% 50%;
@@ -44,7 +44,7 @@
   --secondary: 200 85% 12%;
   --secondary-foreground: 0 0% 98%;
   --muted: 200 70% 14%;
-  --muted-foreground: 200 10% 70%;
+  --muted-foreground: 210 12% 78%;
   --accent: 200 70% 14%;
   --accent-foreground: 0 0% 98%;
   --destructive: 0 55% 40%;
@@ -118,6 +118,16 @@ body {
   background-color: #001e2d;
 }
 
+::selection {
+  background-color: hsl(var(--primary) / 0.35);
+  color: hsl(var(--foreground));
+}
+
+.dark ::selection {
+  background-color: hsl(var(--primary) / 0.5);
+  color: hsl(var(--foreground));
+}
+
 h1,
 h2,
 h3,
@@ -131,4 +141,16 @@ h6,
 
 .shadow-soft {
   box-shadow: 0 2px 8px 0 rgb(0 0 0 / 0.04), 0 1px 2px 0 rgb(0 0 0 / 0.02);
+}
+
+@layer utilities {
+  .text-gray-500,
+  .text-gray-400 {
+    color: hsl(var(--muted-foreground));
+  }
+
+  .dark .text-gray-500,
+  .dark .text-gray-400 {
+    color: hsl(var(--muted-foreground));
+  }
 }

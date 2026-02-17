@@ -18,6 +18,7 @@ import { resetPassword } from "@/lib/firebase/auth";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { StatusPill } from "@/components/ui/status-pill";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -157,23 +158,6 @@ export default function ClientDetailsPage() {
     } finally {
       setSendingMessage(false);
     }
-  };
-
-  const getStatusBadge = (status: string) => {
-    const colors: Record<string, string> = {
-      pending: "bg-yellow-100 text-yellow-800",
-      completed: "bg-green-100 text-green-800",
-      confirmed: "bg-blue-100 text-blue-800",
-      cancelled: "bg-red-100 text-red-800",
-      delivered: "bg-green-100 text-green-800",
-      processing: "bg-indigo-100 text-indigo-800",
-      shipped: "bg-purple-100 text-purple-800",
-    };
-    return (
-      <span className={`px-2 py-1 rounded-full text-xs font-medium ${colors[status] || "bg-gray-100"}`}>
-        {status.toUpperCase()}
-      </span>
-    );
   };
 
   if (loading) {
@@ -361,7 +345,7 @@ export default function ClientDetailsPage() {
                             <TableCell className="font-mono">{order.orderNumber}</TableCell>
                             <TableCell>{formatDate(order.createdAt)}</TableCell>
                             <TableCell>{formatCurrency(order.totalAmount)}</TableCell>
-                            <TableCell>{getStatusBadge(order.status)}</TableCell>
+                            <TableCell><StatusPill status={order.status} className="text-xs" /></TableCell>
                             <TableCell className="text-right">
                               <Link href={`/dashboard/orders/${order.id}`}>
                                 <Button variant="ghost" size="sm">
@@ -407,7 +391,7 @@ export default function ClientDetailsPage() {
                               {booking.vehicleBrand} {booking.vehicleModel}
                             </TableCell>
                             <TableCell>{formatDate(booking.pickupDate)}</TableCell>
-                            <TableCell>{getStatusBadge(booking.status)}</TableCell>
+                            <TableCell><StatusPill status={booking.status} className="text-xs" /></TableCell>
                             <TableCell className="text-right">
                               <Link href={`/dashboard/autohub/${booking.id}`}>
                                 <Button variant="ghost" size="sm">

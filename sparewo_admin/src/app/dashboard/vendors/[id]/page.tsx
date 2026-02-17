@@ -196,7 +196,7 @@ export default function VendorDetailPage() {
     return (
       <div className="text-center py-12">
         <h2 className="text-xl font-semibold mb-2">Vendor Not Found</h2>
-        <p className="text-gray-500 dark:text-gray-400 mb-6">
+        <p className="text-muted-foreground mb-6">
           The vendor you are looking for does not exist or has been removed.
         </p>
         <Link href="/dashboard/vendors">
@@ -220,7 +220,7 @@ export default function VendorDetailPage() {
           </Link>
           <div>
             <h1 className="text-2xl font-semibold">{vendor.name}</h1>
-            <p className="text-gray-500 dark:text-gray-400">{vendor.businessName}</p>
+            <p className="text-muted-foreground">{vendor.businessName}</p>
           </div>
         </div>
 
@@ -279,7 +279,7 @@ export default function VendorDetailPage() {
 
                   {vendor.description && (
                     <div>
-                      <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Description</h3>
+                      <h3 className="text-sm font-medium text-muted-foreground mb-2">Description</h3>
                       <p className="text-sm">{vendor.description}</p>
                     </div>
                   )}
@@ -295,7 +295,7 @@ export default function VendorDetailPage() {
                 </CardHeader>
                 <CardContent>
                   {products.length === 0 ? (
-                    <p className="text-center py-8 text-gray-500">This vendor has not uploaded products yet.</p>
+                    <p className="text-center py-8 text-muted-foreground">This vendor has not uploaded products yet.</p>
                   ) : (
                     <div className="border rounded-lg overflow-hidden">
                       <Table>
@@ -342,7 +342,7 @@ export default function VendorDetailPage() {
                 </CardHeader>
                 <CardContent>
                   {!vendor.documentUrls || vendor.documentUrls.length === 0 ? (
-                    <p className="text-center py-8 text-gray-500">No documents uploaded.</p>
+                    <p className="text-center py-8 text-muted-foreground">No documents uploaded.</p>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {vendor.documentUrls.map((url, index) => (
@@ -350,7 +350,7 @@ export default function VendorDetailPage() {
                           <div className="aspect-video relative bg-gray-100 mb-3 rounded overflow-hidden">
                             {url.endsWith(".pdf") ? (
                               <div className="flex items-center justify-center h-full">
-                                <p className="text-gray-500">PDF Document</p>
+                                <p className="text-muted-foreground">PDF Document</p>
                               </div>
                             ) : (
                               <Image
@@ -387,7 +387,7 @@ export default function VendorDetailPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Current Status</h3>
+                <h3 className="text-sm font-medium text-muted-foreground">Current Status</h3>
                 <div className="mt-1">
                   <VendorStatusBadge status={vendor.status} isSuspended={vendor.isSuspended} />
                 </div>
@@ -511,7 +511,7 @@ export default function VendorDetailPage() {
 function Info({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">{label}</h3>
+      <h3 className="text-sm font-medium text-muted-foreground">{label}</h3>
       <p className="break-words">{value}</p>
     </div>
   );

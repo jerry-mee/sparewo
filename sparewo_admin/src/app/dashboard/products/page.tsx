@@ -172,7 +172,7 @@ export default function ProductsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-2">
         <h1 className="text-2xl font-semibold">Products</h1>
-        <p className="text-gray-500 dark:text-gray-400">Manage and review all products</p>
+        <p className="text-muted-foreground">Manage and review all products</p>
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -258,7 +258,7 @@ export default function ProductsPage() {
                   filteredProducts.map((product) => (
                     <TableRow
                       key={product.id}
-                      className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
+                      className="cursor-pointer hover:bg-muted/40"
                       onClick={() => router.push(`/dashboard/products/${product.id}`)}
                     >
                       <TableCell className="font-medium">{product.name}</TableCell>
@@ -278,7 +278,7 @@ export default function ProductsPage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="hover:bg-gray-100 dark:hover:bg-gray-700"
+                            className="hover:bg-muted/60"
                             aria-label={`Open product ${product.name}`}
                           >
                             <ChevronRight size={18} />

@@ -1,4 +1,4 @@
-import { Badge } from "@/components/ui/badge";
+import { StatusPill } from "@/components/ui/status-pill";
 import { PRODUCT_STATUSES } from "@/lib/types";
 
 interface ProductStatusBadgeProps {
@@ -12,11 +12,5 @@ export function ProductStatusBadge({ status }: ProductStatusBadgeProps) {
     return null;
   }
 
-  return (
-    <Badge
-      className={`${statusConfig.color} text-white`}
-    >
-      {statusConfig.label}
-    </Badge>
-  );
+  return <StatusPill status={status} label={statusConfig.label} />;
 }

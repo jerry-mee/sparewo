@@ -52,8 +52,8 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
         const data = doc.data() as Notification;
         const resolvedRead = data.isRead ?? data.read ?? false;
         const notification = {
-          id: doc.id,
           ...data,
+          id: doc.id,
           read: resolvedRead,
           isRead: resolvedRead,
         } as Notification;

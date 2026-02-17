@@ -119,7 +119,7 @@ export default function VendorsPage() {
     <div className="space-y-4">
       <div className="mb-2 flex flex-col gap-1">
         <h1 className="text-xl font-semibold md:text-2xl">Vendors</h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400">Manage and review vendor accounts</p>
+        <p className="text-sm text-muted-foreground">Manage and review vendor accounts</p>
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -205,7 +205,7 @@ export default function VendorsPage() {
                   filteredVendors.map((vendor) => (
                     <TableRow
                       key={vendor.id}
-                      className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
+                      className="cursor-pointer hover:bg-muted/40"
                       onClick={() => router.push(`/dashboard/vendors/${vendor.id}`)}
                     >
                       <TableCell className="max-w-[120px] truncate font-medium">{vendor.name}</TableCell>
@@ -220,7 +220,7 @@ export default function VendorsPage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-8 w-8 p-0 hover:bg-gray-100 dark:hover:bg-gray-700"
+                            className="h-8 w-8 p-0 hover:bg-muted/60"
                             aria-label={`Open vendor ${vendor.name}`}
                           >
                             <ChevronRight size={16} />

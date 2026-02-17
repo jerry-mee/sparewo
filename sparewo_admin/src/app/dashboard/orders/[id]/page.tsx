@@ -11,11 +11,13 @@ import {
 } from "@/lib/firebase/orders";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { StatusPill } from "@/components/ui/status-pill";
 import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import {
   ArrowLeft,
+  ChevronRight,
   MapPin,
   User,
   CreditCard,
@@ -88,6 +90,15 @@ const fulfillmentStatusOptions: Fulfillment["status"][] = [
   "delivered",
   "cancelled",
 ];
+
+const orderTrackerStages = ["pending", "processing", "shipped", "delivered", "completed"] as const;
+const orderStageLabels: Record<(typeof orderTrackerStages)[number], string> = {
+  pending: "Order Received",
+  processing: "Processing",
+  shipped: "Shipped",
+  delivered: "Delivered",
+  completed: "Completed",
+};
 
 export default function OrderDetailsPage() {
   const { id } = useParams<{ id: string }>();
@@ -213,35 +224,91 @@ export default function OrderDetailsPage() {
 
   if (!order) return <div>Order not found</div>;
 
+  const isCancelled = order.status === "cancelled";
+  const currentOrderStageIndex = orderTrackerStages.indexOf(
+    order.status as (typeof orderTrackerStages)[number]
+  );
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Link href="/dashboard/orders">
-            <Button variant="ghost" size="icon">
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Order #{order.orderNumber}</h1>
-            <p className="text-sm text-muted-foreground">Placed on {formatDate(order.createdAt)}</p>
-          </div>
-        </div>
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Link href="/dashboard/orders">
+          <Button variant="ghost" size="icon">
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+        </Link>
+        <span>Orders</span>
+        <ChevronRight className="h-4 w-4" />
+        <span>Tracking</span>
+        <ChevronRight className="h-4 w-4" />
+        <span className="font-medium text-foreground">{order.orderNumber}</span>
+      </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-medium">Order Status</span>
-          <select
-            className="rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
-            value={order.status}
-            onChange={(event) => handleOrderStatusChange(event.target.value)}
-          >
-            {statusOptions.map((option) => (
-              <option key={option} value={option}>
-                {option.charAt(0).toUpperCase() + option.slice(1)}
-              </option>
-            ))}
-          </select>
-        </div>
+      <Card>
+        <CardContent className="space-y-4 pt-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight">Order #{order.orderNumber}</h1>
+              <p className="text-sm text-muted-foreground">Placed on {formatDate(order.createdAt)}</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <StatusPill status={order.status} />
+              <select
+                className="rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                value={order.status}
+                onChange={(event) => handleOrderStatusChange(event.target.value)}
+              >
+                {statusOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option.charAt(0).toUpperCase() + option.slice(1)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-5">
+            {orderTrackerStages.map((stage, index) => {
+              const complete = !isCancelled && currentOrderStageIndex >= index;
+              return (
+                <div
+                  key={stage}
+                  className={`rounded-lg border px-3 py-3 ${complete ? "border-primary/40 bg-primary/10" : "bg-background"}`}
+                >
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Step {index + 1}</p>
+                  <p className="mt-1 text-sm font-medium">{orderStageLabels[stage]}</p>
+                </div>
+              );
+            })}
+          </div>
+
+          {isCancelled && (
+            <div className="rounded-md border border-rose-300 bg-rose-50 px-3 py-2 text-sm text-rose-800 dark:border-rose-500/40 dark:bg-rose-900/20 dark:text-rose-200">
+              This order has been cancelled.
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-3 md:grid-cols-3">
+        <Card>
+          <CardContent className="pt-5 text-sm">
+            <p className="text-muted-foreground">Customer</p>
+            <p className="mt-1 font-medium">{order.userName || order.customerName || "Guest"}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-5 text-sm">
+            <p className="text-muted-foreground">Payment</p>
+            <p className="mt-1 font-medium capitalize">{order.paymentMethod || "Mobile Money"}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-5 text-sm">
+            <p className="text-muted-foreground">Order Total</p>
+            <p className="mt-1 font-semibold">{formatCurrency(order.totalAmount)}</p>
+          </CardContent>
+        </Card>
       </div>
 
       <div className="grid gap-6 md:grid-cols-3">
@@ -325,9 +392,12 @@ export default function OrderDetailsPage() {
                               Vendor: {fulfillment.vendorName || fulfillment.vendorId}
                             </p>
                           </div>
-                          <span className="text-xs rounded-full bg-muted px-2.5 py-1">
-                            Qty {fulfillment.quantity} • {formatCurrency(fulfillment.totalVendorAmount)}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <StatusPill status={edit.status} className="text-xs" />
+                            <span className="text-xs rounded-full bg-muted px-2.5 py-1">
+                              Qty {fulfillment.quantity} • {formatCurrency(fulfillment.totalVendorAmount)}
+                            </span>
+                          </div>
                         </div>
 
                         <div className="grid gap-3 md:grid-cols-4">

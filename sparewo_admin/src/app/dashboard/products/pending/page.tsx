@@ -3,6 +3,7 @@
 
 import { useState, useEffect } from "react";
 import { getPendingProducts, updateProductStatus } from "@/lib/firebase/products";
+import { auth } from "@/lib/firebase/config";
 import { Product } from "@/lib/types/product";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,7 +23,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { ProductStatusBadge } from "@/components/product/product-status-badge";
 import { DocumentData } from "firebase/firestore";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -42,7 +43,7 @@ export default function PendingProductsPage() {
   const [dialogAction, setDialogAction] = useState<"approve" | "reject">("approve");
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [rejectionReason, setRejectionReason] = useState("");
-  const [showInCatalog, setShowInCatalog] = useState(false);
+  const [retailPrice, setRetailPrice] = useState<number | string>("");
 
   // Fetch pending products on component mount
   useEffect(() => {
@@ -83,7 +84,7 @@ export default function PendingProductsPage() {
   const openApproveDialog = (product: Product) => {
     setSelectedProduct(product);
     setDialogAction("approve");
-    setShowInCatalog(false);
+    setRetailPrice(product.price || product.unitPrice || "");
     setDialogOpen(true);
   };
 
@@ -101,8 +102,36 @@ export default function PendingProductsPage() {
     
     try {
       if (dialogAction === "approve") {
-        await updateProductStatus(selectedProduct.id, "approved", showInCatalog);
-        toast.success(`Product ${selectedProduct.name} has been approved`);
+        const price = Number(retailPrice);
+        if (isNaN(price) || price <= 0) {
+          toast.error("Please enter a valid retail price.");
+          return;
+        }
+
+        const token = await auth.currentUser?.getIdToken();
+        if (!token) {
+          toast.error("You are not authenticated.");
+          return;
+        }
+
+        const response = await fetch("/api/admin/products/approve", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            productId: selectedProduct.id,
+            retailPrice: price,
+          }),
+        });
+
+        const payload = await response.json();
+        if (!response.ok || payload?.success !== true) {
+          throw new Error(payload?.error || "Failed to approve product");
+        }
+
+        toast.success(`Product ${selectedProduct.name} approved and added to catalog`);
       } else {
         await updateProductStatus(selectedProduct.id, "rejected", false, rejectionReason);
         toast.success(`Product ${selectedProduct.name} has been rejected`);
@@ -132,7 +161,7 @@ export default function PendingProductsPage() {
     <div className="space-y-4">
       <div className="flex flex-col gap-1 mb-2">
         <h1 className="text-xl md:text-2xl font-semibold">Pending Products</h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400">
+        <p className="text-sm text-muted-foreground">
           Review and approve product submissions
         </p>
       </div>
@@ -211,14 +240,14 @@ export default function PendingProductsPage() {
                   <TableRow>
                     <TableCell colSpan={6} className="text-center py-6">
                       <div className="flex flex-col items-center gap-1">
-                        <Package className="h-6 w-6 text-gray-400" />
-                        <p className="text-gray-500 text-sm">No pending products</p>
+                        <Package className="h-6 w-6 text-muted-foreground" />
+                        <p className="text-muted-foreground text-sm">No pending products</p>
                       </div>
                     </TableCell>
                   </TableRow>
                 ) : (
                   products.map((product) => (
-                    <TableRow key={product.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                    <TableRow key={product.id} className="hover:bg-muted/40">
                       <TableCell className="font-medium truncate max-w-[120px]">{product.name}</TableCell>
                       <TableCell className="truncate max-w-[100px]">{product.category}</TableCell>
                       <TableCell className="truncate max-w-[100px]">{product.brand}</TableCell>
@@ -245,7 +274,7 @@ export default function PendingProductsPage() {
                             <XCircle size={16} />
                           </Button>
                           <Link href={`/dashboard/products/${product.id}`}>
-                            <Button variant="ghost" size="sm" className="hover:bg-gray-100 dark:hover:bg-gray-700 h-8 w-8 p-0">
+                            <Button variant="ghost" size="sm" className="hover:bg-muted/60 h-8 w-8 p-0">
                               <ChevronRight size={16} />
                             </Button>
                           </Link>
@@ -288,20 +317,17 @@ export default function PendingProductsPage() {
           </DialogHeader>
           
           {dialogAction === "approve" && (
-            <div className="flex items-center space-x-2 mt-2">
-              <Checkbox
-                id="show-in-catalog"
-                checked={showInCatalog}
-                onCheckedChange={(checked: boolean) => 
-                  setShowInCatalog(checked)
-                }
-              />
-              <label
-                htmlFor="show-in-catalog"
-                className="text-sm font-medium leading-none cursor-pointer"
-              >
-                Show in client-facing catalog
+            <div className="space-y-2 mt-2">
+              <label htmlFor="retail-price" className="text-sm font-medium">
+                Client Retail Price (UGX)
               </label>
+              <Input
+                id="retail-price"
+                type="number"
+                placeholder="e.g., 350000"
+                value={retailPrice}
+                onChange={(e) => setRetailPrice(e.target.value)}
+              />
             </div>
           )}
           
@@ -321,10 +347,10 @@ export default function PendingProductsPage() {
             <Button
               onClick={handleConfirm}
               variant={dialogAction === "approve" ? "default" : "destructive"}
-              disabled={dialogAction === "reject" && !rejectionReason.trim()}
+              disabled={(dialogAction === "reject" && !rejectionReason.trim()) || (dialogAction === "approve" && !retailPrice)}
               size="sm"
             >
-              {dialogAction === "approve" ? "Approve" : "Reject"}
+              {dialogAction === "approve" ? "Approve & Add to Catalog" : "Reject"}
             </Button>
           </DialogFooter>
         </DialogContent>

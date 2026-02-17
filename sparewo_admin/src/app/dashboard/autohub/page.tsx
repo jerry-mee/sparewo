@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { StatusPill } from "@/components/ui/status-pill";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -22,23 +23,6 @@ import { formatDate } from "@/lib/utils";
 import Link from "next/link";
 import { ChevronRight, Wrench, Calendar, MapPin, Plus, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
-
-const getStatusColor = (status: string) => {
-  switch (status) {
-    case "pending":
-      return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400";
-    case "confirmed":
-      return "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400";
-    case "in_progress":
-      return "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400";
-    case "completed":
-      return "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400";
-    case "cancelled":
-      return "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400";
-    default:
-      return "bg-gray-100 text-gray-800";
-  }
-};
 
 const providerTypes: Array<ServiceProvider["type"]> = ["mechanic", "garage", "towing"];
 
@@ -247,9 +231,7 @@ export default function AutoHubPage() {
                             </div>
                           </TableCell>
                           <TableCell>
-                            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getStatusColor(item.status)}`}>
-                              {item.status.replace("_", " ").toUpperCase()}
-                            </span>
+                            <StatusPill status={item.status} className="text-xs" />
                           </TableCell>
                           <TableCell className="text-right" onClick={(event) => event.stopPropagation()}>
                             <Link href={"/dashboard/autohub/" + item.id}>

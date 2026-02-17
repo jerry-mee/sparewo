@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { StatusPill } from "@/components/ui/status-pill";
 import { DocumentData } from "firebase/firestore";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import Link from "next/link";
@@ -107,20 +108,6 @@ export default function OrdersPage() {
       return orderNumber.includes(needle) || customerName.includes(needle) || order.id.toLowerCase().includes(needle);
     });
   }, [orders, searchQuery]);
-
-  const getStatusBadge = (status: string) => {
-    const styles: Record<string, string> = {
-      pending: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
-      processing: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
-      shipped: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400",
-      delivered: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400",
-      completed: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
-      cancelled: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
-    };
-
-    const style = styles[status] || "bg-gray-100 text-gray-800";
-    return <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${style}`}>{status}</span>;
-  };
 
   const summaryTiles = [
     {
@@ -252,7 +239,7 @@ export default function OrdersPage() {
                       <TableCell>{order.customerName}</TableCell>
                       <TableCell>{order.items?.length || 0} items</TableCell>
                       <TableCell>{formatCurrency(order.totalAmount)}</TableCell>
-                      <TableCell>{getStatusBadge(order.status)}</TableCell>
+                      <TableCell><StatusPill status={order.status} className="text-xs" /></TableCell>
                       <TableCell className="text-right" onClick={(event) => event.stopPropagation()}>
                         <Link href={`/dashboard/orders/${order.id}`}>
                           <Button variant="ghost" size="icon" aria-label={`Open order ${order.orderNumber}`}>

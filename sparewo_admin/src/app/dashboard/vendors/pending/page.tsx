@@ -129,7 +129,7 @@ export default function PendingVendorsPage() {
     <div className="space-y-4">
       <div className="flex flex-col gap-1 mb-2">
         <h1 className="text-xl md:text-2xl font-semibold">Pending Vendors</h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400">
+        <p className="text-sm text-muted-foreground">
           Review and approve vendor registration requests
         </p>
       </div>
@@ -208,14 +208,14 @@ export default function PendingVendorsPage() {
                   <TableRow>
                     <TableCell colSpan={6} className="text-center py-6">
                       <div className="flex flex-col items-center gap-1">
-                        <Users className="h-6 w-6 text-gray-400" />
-                        <p className="text-gray-500 text-sm">No pending vendors</p>
+                        <Users className="h-6 w-6 text-muted-foreground" />
+                        <p className="text-muted-foreground text-sm">No pending vendors</p>
                       </div>
                     </TableCell>
                   </TableRow>
                 ) : (
                   vendors.map((vendor) => (
-                    <TableRow key={vendor.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                    <TableRow key={vendor.id} className="hover:bg-muted/40">
                       <TableCell className="font-medium truncate max-w-[120px]">{vendor.name}</TableCell>
                       <TableCell className="truncate max-w-[120px]">{vendor.businessName}</TableCell>
                       <TableCell className="truncate max-w-[120px]">{vendor.email}</TableCell>
@@ -242,7 +242,7 @@ export default function PendingVendorsPage() {
                             <XCircle size={16} />
                           </Button>
                           <Link href={`/dashboard/vendors/${vendor.id}`}>
-                            <Button variant="ghost" size="sm" className="hover:bg-gray-100 dark:hover:bg-gray-700 h-8 w-8 p-0">
+                            <Button variant="ghost" size="sm" className="hover:bg-muted/60 h-8 w-8 p-0">
                               <ChevronRight size={16} />
                             </Button>
                           </Link>

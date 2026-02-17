@@ -49,7 +49,7 @@ export function NotificationDropdown() {
         <DropdownMenuSeparator />
         <div className="max-h-[600px] overflow-y-auto">
           {notifications.length === 0 ? (
-            <div className="py-6 text-center text-sm text-gray-500 dark:text-gray-400">
+            <div className="py-6 text-center text-sm text-muted-foreground">
               No notifications yet
             </div>
           ) : (
@@ -69,7 +69,7 @@ export function NotificationDropdown() {
                   <div className="font-medium text-sm">
                     {notification.title}
                   </div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">
+                  <div className="text-xs text-muted-foreground">
                     {notification.message}
                   </div>
                   {notification.link && (

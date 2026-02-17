@@ -38,6 +38,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter();
   const { user, adminData, loading } = useAuth();
   const currentRole = normalizeRole(adminData?.role);
+  const roleForNavigation = currentRole ?? "Administrator";
 
   const [isDesktopSidebarExpanded, setIsDesktopSidebarExpanded] = useState(true);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -61,16 +62,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     []
   );
   const visibleNavItems = useMemo(
-    () => navItems.filter((item) => currentRole && item.roles.includes(currentRole)),
-    [currentRole, navItems]
+    () => navItems.filter((item) => item.roles.includes(roleForNavigation)),
+    [roleForNavigation, navItems]
   );
 
   useEffect(() => {
     if (loading) return;
     if (!pathname.startsWith("/dashboard")) return;
-    if (canAccessDashboardPath(currentRole, pathname)) return;
-    router.replace(getDefaultDashboardPath(currentRole));
-  }, [currentRole, loading, pathname, router]);
+    if (canAccessDashboardPath(roleForNavigation, pathname)) return;
+    router.replace(getDefaultDashboardPath(roleForNavigation));
+  }, [roleForNavigation, loading, pathname, router]);
 
   const currentTitle = useMemo(() => {
     if (pathname === "/dashboard") return "Operations Overview";
@@ -175,7 +176,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <div className={cn("min-w-0 flex-1", !isDesktopSidebarExpanded && "lg:hidden")}>
                 <p className="truncate text-sm font-semibold">{user?.displayName || "Admin User"}</p>
                 <p className="truncate text-xs text-muted-foreground">
-                  {currentRole || adminData?.role || "Unknown"}
+                  {roleForNavigation || adminData?.role || "Unknown"}
                 </p>
               </div>
             </div>

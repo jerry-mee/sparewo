@@ -96,3 +96,29 @@ export function getResetPasswordEmailHtml(name: string, link: string) {
   `;
   return getEmailWrapper("Password Reset Request", content);
 }
+
+export function getProductApprovedEmailHtml(vendorName: string, productName: string) {
+  const content = `
+    <p>Hello <strong>${vendorName}</strong>,</p>
+    <p>Your product submission for <strong>${productName}</strong> has been approved by the SpareWo team.</p>
+    <p>It is now active in the SpareWo catalog and available for client discovery.</p>
+    <div style="margin: 24px 0; padding: 14px 16px; border-radius: 8px; background: #f8fafc; border: 1px solid #e2e8f0;">
+      <p style="margin: 0; color: #334155; font-size: 14px;"><strong>Next step:</strong> Keep your product stock and pricing up to date so clients always see accurate listings.</p>
+    </div>
+  `;
+
+  return getEmailWrapper("Product Approved", content);
+}
+
+export function getAutoHubApprovedEmailHtml(customerName: string, bookingNumber: string) {
+  const content = `
+    <p>Hello <strong>${customerName}</strong>,</p>
+    <p>Your AutoHub request <strong>${bookingNumber}</strong> has been approved and is now being processed.</p>
+    <p>Our team will reach out shortly with the next steps, including service coordination details.</p>
+    <div style="margin: 24px 0; padding: 14px 16px; border-radius: 8px; background: #f8fafc; border: 1px solid #e2e8f0;">
+      <p style="margin: 0; color: #334155; font-size: 14px;">If you need immediate assistance, reply to this email and our operations team will help you.</p>
+    </div>
+  `;
+
+  return getEmailWrapper("AutoHub Request Approved", content);
+}

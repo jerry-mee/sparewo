@@ -1,4 +1,4 @@
-import { Badge } from "@/components/ui/badge";
+import { StatusPill } from "@/components/ui/status-pill";
 import { VENDOR_STATUSES } from "@/lib/types";
 
 interface VendorStatusBadgeProps {
@@ -14,5 +14,5 @@ export function VendorStatusBadge({ status, isSuspended }: VendorStatusBadgeProp
     return null;
   }
 
-  return <Badge className={`${statusConfig.color} text-white`}>{statusConfig.label}</Badge>;
+  return <StatusPill status={effectiveStatus} label={statusConfig.label} />;
 }
