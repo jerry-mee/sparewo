@@ -207,11 +207,14 @@ export const sendAdminCommunication = async (
     chunk.forEach((recipient) => {
       const notificationRef = doc(collection(db, 'notifications'));
       batch.set(notificationRef, {
+        // Keep both legacy and canonical recipient fields for compatibility.
         userId: recipient.id,
+        recipientId: recipient.id,
         title,
         message,
         type: draft.type,
         link: draft.link?.trim() || undefined,
+        isRead: false,
         read: false,
         source: 'admin_communication',
         communicationId: communicationRef.id,

@@ -22,8 +22,12 @@ export const createNotification = async (
   notification: Omit<Notification, 'id' | 'createdAt' | 'updatedAt'>
 ): Promise<string> => {
   try {
+    const recipientId = notification.recipientId || notification.userId;
     const notificationData = {
       ...notification,
+      recipientId,
+      userId: recipientId,
+      isRead: false,
       read: false,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -80,7 +84,7 @@ export const markNotificationAsRead = async (notificationId: string): Promise<vo
   try {
     const docRef = doc(db, 'notifications', notificationId);
     await updateDoc(docRef, {
-      read: true,
+      isRead: true,
       updatedAt: serverTimestamp(),
     });
   } catch (error) {

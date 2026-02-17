@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -9,18 +10,15 @@ import {
   LogOut,
   Menu,
   MessageSquareWarning,
-  Moon,
   Package,
   Search,
   Settings,
   ShoppingCart,
   Store,
-  Sun,
   Users,
   Wrench,
   X,
 } from "lucide-react";
-import { useTheme } from "next-themes";
 import { toast } from "sonner";
 
 import { NotificationDropdown } from "@/components/ui/notification-dropdown";
@@ -29,32 +27,23 @@ import { useAuth } from "@/lib/context/auth-context";
 import { logOut } from "@/lib/firebase/auth";
 import { cn, getInitials } from "@/lib/utils";
 
+const ThemeToggleButton = dynamic(
+  () => import("@/components/ui/theme-toggle-button").then((module) => module.ThemeToggleButton),
+  { ssr: false }
+);
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { resolvedTheme, setTheme } = useTheme();
   const { user, adminData } = useAuth();
 
-  const [mounted, setMounted] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isDesktopSidebarExpanded, setIsDesktopSidebarExpanded] = useState(true);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [searchValue, setSearchValue] = useState("");
 
   useEffect(() => {
-    const media = window.matchMedia("(max-width: 1023px)");
-
-    const syncLayout = (mobile: boolean) => {
-      setIsMobile(mobile);
-      setIsSidebarOpen(!mobile);
-    };
-
-    syncLayout(media.matches);
-    const handleChange = (event: MediaQueryListEvent) => syncLayout(event.matches);
-    media.addEventListener("change", handleChange);
-    setMounted(true);
-
-    return () => media.removeEventListener("change", handleChange);
-  }, []);
+    setIsMobileSidebarOpen(false);
+  }, [pathname]);
 
   const navItems = useMemo(
     () => [
@@ -92,29 +81,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   };
 
-  const isDark = resolvedTheme === "dark";
-
   return (
     <div className="min-h-screen bg-background text-foreground">
-      {isMobile && isSidebarOpen && (
+      {isMobileSidebarOpen && (
         <button
           aria-label="Close sidebar"
-          className="fixed inset-0 z-30 bg-black/45 backdrop-blur-sm"
-          onClick={() => setIsSidebarOpen(false)}
+          className="fixed inset-0 z-30 bg-black/45 backdrop-blur-sm lg:hidden"
+          onClick={() => setIsMobileSidebarOpen(false)}
           type="button"
         />
       )}
 
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 border-r border-sidebar-border bg-sidebar transition-all duration-300 ease-out",
-          isMobile
-            ? isSidebarOpen
-              ? "w-72 translate-x-0"
-              : "w-72 -translate-x-full"
-            : isSidebarOpen
-              ? "w-72 translate-x-0"
-              : "w-20 translate-x-0"
+          "fixed inset-y-0 left-0 z-40 w-72 border-r border-sidebar-border bg-sidebar transition-transform duration-300 ease-out lg:translate-x-0 lg:transition-[width] lg:duration-300",
+          isMobileSidebarOpen ? "translate-x-0" : "-translate-x-full",
+          isDesktopSidebarExpanded ? "lg:w-72" : "lg:w-20"
         )}
       >
         <div className="flex h-full flex-col">
@@ -128,21 +110,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 className="rounded-lg"
                 style={{ width: "auto", height: "auto" }}
               />
-              {isSidebarOpen && (
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold tracking-tight">SpareWo Admin</p>
-                  <p className="truncate text-xs text-muted-foreground">Operations Control Panel</p>
-                </div>
-              )}
+              <div className={cn("min-w-0", !isDesktopSidebarExpanded && "lg:hidden")}>
+                <p className="truncate text-sm font-semibold tracking-tight">SpareWo Admin</p>
+                <p className="truncate text-xs text-muted-foreground">Operations Control Panel</p>
+              </div>
             </Link>
 
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => setIsSidebarOpen((open) => !open)}
+              onClick={() => setIsDesktopSidebarExpanded((open) => !open)}
               className="hidden lg:inline-flex"
             >
-              {isSidebarOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+              {isDesktopSidebarExpanded ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
             </Button>
           </div>
 
@@ -156,44 +136,47 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   key={item.href}
                   href={item.href}
                   onClick={() => {
-                    if (isMobile) setIsSidebarOpen(false);
+                    setIsMobileSidebarOpen(false);
                   }}
                   className={cn(
                     "group flex items-center gap-3 rounded-xl px-4 py-3 text-sm transition-all duration-150",
                     active
                       ? "bg-primary text-primary-foreground shadow-soft"
                       : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-foreground",
-                    !isSidebarOpen && !isMobile && "justify-center px-2"
+                    !isDesktopSidebarExpanded && "lg:justify-center lg:px-2"
                   )}
                 >
                   <Icon className="h-5 w-5 shrink-0" />
-                  {isSidebarOpen && <span className="truncate">{item.title}</span>}
+                  <span className={cn("truncate", !isDesktopSidebarExpanded && "lg:hidden")}>{item.title}</span>
                 </Link>
               );
             })}
           </nav>
 
           <div className="border-t border-sidebar-border p-4">
-            <div className={cn("flex items-center gap-3", !isSidebarOpen && !isMobile && "justify-center")}>
+            <div className={cn("flex items-center gap-3", !isDesktopSidebarExpanded && "lg:justify-center")}>
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary font-semibold text-primary-foreground">
                 {getInitials(user?.displayName || user?.email || "Admin")}
               </div>
 
-              {isSidebarOpen && (
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold">{user?.displayName || "Admin User"}</p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {adminData?.role || "admin"}
-                    {adminData?.role === "viewer" && " (read-only)"}
-                  </p>
-                </div>
-              )}
+              <div className={cn("min-w-0 flex-1", !isDesktopSidebarExpanded && "lg:hidden")}>
+                <p className="truncate text-sm font-semibold">{user?.displayName || "Admin User"}</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {adminData?.role || "admin"}
+                  {adminData?.role === "viewer" && " (read-only)"}
+                </p>
+              </div>
             </div>
           </div>
         </div>
       </aside>
 
-      <div className={cn("min-h-screen transition-all duration-300", isSidebarOpen ? "lg:pl-72" : "lg:pl-20")}>
+      <div
+        className={cn(
+          "min-h-screen transition-[padding] duration-300",
+          isDesktopSidebarExpanded ? "lg:pl-72" : "lg:pl-20"
+        )}
+      >
         <header className="sticky top-0 z-20 border-b border-border/70 bg-card/90 px-4 backdrop-blur-sm md:px-6 lg:px-8">
           <div className="flex h-20 items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-3 md:gap-6">
@@ -201,9 +184,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 variant="ghost"
                 size="icon"
                 className="lg:hidden"
-                onClick={() => setIsSidebarOpen((open) => !open)}
+                onClick={() => setIsMobileSidebarOpen((open) => !open)}
               >
-                <Menu className="h-5 w-5" />
+                {isMobileSidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
               </Button>
 
               <div className="hidden min-w-0 md:block">
@@ -223,19 +206,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
 
             <div className="flex items-center gap-1 md:gap-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setTheme(isDark ? "light" : "dark")}
-                aria-label="Toggle theme"
-                className="rounded-xl"
-              >
-                {mounted ? (
-                  isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />
-                ) : (
-                  <Moon className="h-4 w-4" />
-                )}
-              </Button>
+              <ThemeToggleButton />
 
               <NotificationDropdown />
 

@@ -49,10 +49,17 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
       let unread = 0;
 
       querySnapshot.forEach((doc) => {
-        const notification = { id: doc.id, ...doc.data() } as Notification;
+        const data = doc.data() as Notification;
+        const resolvedRead = data.isRead ?? data.read ?? false;
+        const notification = {
+          id: doc.id,
+          ...data,
+          read: resolvedRead,
+          isRead: resolvedRead,
+        } as Notification;
         notificationList.push(notification);
 
-        if (!notification.read) {
+        if (!resolvedRead) {
           unread++;
         }
       });
