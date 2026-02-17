@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
@@ -12,9 +12,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { confirmPasswordReset, verifyPasswordResetCode, AuthError } from 'firebase/auth';
+import { confirmPasswordReset, verifyPasswordResetCode } from 'firebase/auth';
 import { auth } from '@/lib/firebase/config';
-import { Loader2, Check, X, Eye, EyeOff } from 'lucide-react';
+import { Loader2, Check, Eye, EyeOff } from 'lucide-react';
 
 const passwordSchema = z.object({
     password: z.string()
@@ -31,7 +31,7 @@ const passwordSchema = z.object({
 
 type PasswordFormValues = z.infer<typeof passwordSchema>;
 
-export default function ActionPage() {
+function ActionPageContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const mode = searchParams.get('mode');
@@ -230,5 +230,17 @@ export default function ActionPage() {
                 </CardFooter>
             </Card>
         </div>
+    );
+}
+
+export default function ActionPage() {
+    return (
+        <Suspense fallback={
+            <div className="flex min-h-screen items-center justify-center bg-white dark:bg-gray-950">
+                <Loader2 className="w-10 h-10 animate-spin text-primary" />
+            </div>
+        }>
+            <ActionPageContent />
+        </Suspense>
     );
 }
