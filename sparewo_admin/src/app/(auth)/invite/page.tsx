@@ -144,24 +144,24 @@ function InvitePageContent() {
                             priority
                         />
                     </div>
-                    <CardTitle className="text-2xl font-bold text-center text-blue-600">
+                    <CardTitle className="text-2xl font-bold text-center text-blue-600 dark:text-blue-400">
                         Welcome to SpareWo
                     </CardTitle>
-                    <CardDescription className="break-words text-center text-sm sm:text-base">
+                    <CardDescription className="break-words text-center text-sm sm:text-base dark:text-gray-300">
                         Hi <strong>{email}</strong>, set up your password to activate your admin account.
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="px-5 pb-5 sm:px-6 sm:pb-6">
                     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                         <div className="space-y-2">
-                            <Label htmlFor="password">Create Password</Label>
+                            <Label htmlFor="password" id="password-label" className="dark:text-white">Create Password</Label>
                             <div className="relative">
                                 <Input
                                     id="password"
                                     type={showPassword ? "text" : "password"}
                                     autoComplete="new-password"
                                     {...register('password')}
-                                    className={errors.password ? 'border-destructive pr-10' : 'pr-10'}
+                                    className={errors.password ? 'border-destructive pr-10' : 'pr-10 dark:bg-gray-800 dark:text-white'}
                                 />
                                 <button
                                     type="button"
@@ -178,7 +178,7 @@ function InvitePageContent() {
 
                         {/* Password Strength Meter */}
                         <div className="space-y-2 rounded-lg bg-muted/50 p-3 text-sm">
-                            <p className="font-medium text-xs mb-2">Password Requirements:</p>
+                            <p className="font-medium text-xs mb-2 dark:text-gray-200">Password Requirements:</p>
                             <ul className="space-y-1">
                                 {requirements.map((req, i) => (
                                     <li key={i} className="flex items-center gap-2">
@@ -187,7 +187,7 @@ function InvitePageContent() {
                                         ) : (
                                             <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground/30" />
                                         )}
-                                        <span className={req.met ? "text-green-600 line-through decoration-green-600/50" : "text-muted-foreground"}>
+                                        <span className={req.met ? "text-green-600 line-through decoration-green-600/50" : "text-muted-foreground dark:text-gray-400"}>
                                             {req.label}
                                         </span>
                                     </li>
@@ -196,14 +196,14 @@ function InvitePageContent() {
                         </div>
 
                         <div className="space-y-2">
-                            <Label htmlFor="confirmPassword">Confirm Password</Label>
+                            <Label htmlFor="confirmPassword" id="confirm-password-label" className="dark:text-white">Confirm Password</Label>
                             <div className="relative">
                                 <Input
                                     id="confirmPassword"
                                     type={showConfirmPassword ? "text" : "password"}
                                     autoComplete="new-password"
                                     {...register('confirmPassword')}
-                                    className={errors.confirmPassword ? 'border-destructive pr-10' : 'pr-10'}
+                                    className={errors.confirmPassword ? 'border-destructive pr-10' : 'pr-10 dark:bg-gray-800 dark:text-white'}
                                 />
                                 <button
                                     type="button"
@@ -230,7 +230,7 @@ function InvitePageContent() {
                         </Button>
                     </form>
                 </CardContent>
-                <CardFooter className="flex justify-center text-sm text-gray-500">
+                <CardFooter className="flex justify-center text-sm text-gray-500 dark:text-gray-400">
                     Your account is protected by SpareWo Security
                 </CardFooter>
             </Card>
