@@ -63,31 +63,9 @@ function InvitePageContent() {
             return;
         }
 
-        // Get name from query params if available (preferred to avoid permission errors)
-        const nameFromUrl = searchParams.get('name');
-        if (nameFromUrl) {
-            setFirstName(nameFromUrl);
-        }
-
         verifyPasswordResetCode(auth, oobCode)
-            .then(async (userEmail) => {
+            .then((userEmail) => {
                 setEmail(userEmail);
-
-                // Only fetch name if not already set from URL
-                if (!nameFromUrl) {
-                    try {
-                        const q = query(collection(db, 'adminUsers'), where('email', '==', userEmail));
-                        const querySnapshot = await getDocs(q);
-                        if (!querySnapshot.empty) {
-                            const userData = querySnapshot.docs[0].data();
-                            setFirstName(userData.first_name || null);
-                        }
-                    } catch (error) {
-                        // Silently catch permission errors for unauthenticated users
-                        console.log('Note: Permission restricted for name lookup - using email salutation.');
-                    }
-                }
-
                 setIsVerifying(false);
             })
             .catch((error) => {
@@ -95,7 +73,7 @@ function InvitePageContent() {
                 toast.error('Invitation link is invalid or expired.');
                 setIsVerifying(false);
             });
-    }, [oobCode, searchParams]);
+    }, [oobCode]);
 
 
     const onSubmit = async (data: PasswordFormValues) => {
@@ -180,7 +158,7 @@ function InvitePageContent() {
                         Welcome to SpareWo
                     </CardTitle>
                     <CardDescription className="break-words text-center text-sm sm:text-base dark:text-gray-300">
-                        Hi <strong>{firstName || email}</strong>, set up your password to activate your admin account.
+                        Hi <strong className="text-blue-600 dark:text-blue-400">{email}</strong>, set up your password to activate your admin account.
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="px-5 pb-5 sm:px-6 sm:pb-6">
@@ -204,7 +182,7 @@ function InvitePageContent() {
                                     type={showPassword ? "text" : "password"}
                                     autoComplete="new-password"
                                     {...register('password')}
-                                    className={errors.password ? 'border-destructive pr-10' : 'pr-10 dark:bg-white/5'}
+                                    className={errors.password ? 'border-destructive pr-10 focus:ring-destructive' : 'pr-10 dark:bg-white/5 dark:text-white dark:border-gray-700'}
                                 />
                                 <button
                                     type="button"
@@ -227,7 +205,7 @@ function InvitePageContent() {
                                     type={showConfirmPassword ? "text" : "password"}
                                     autoComplete="new-password"
                                     {...register('confirmPassword')}
-                                    className={errors.confirmPassword ? 'border-destructive pr-10 focus-visible:ring-destructive/50' : 'pr-10 dark:bg-white/5'}
+                                    className={errors.confirmPassword ? 'border-destructive pr-10 focus:ring-destructive' : 'pr-10 dark:bg-white/5 dark:text-white dark:border-gray-700'}
                                 />
                                 <button
                                     type="button"
