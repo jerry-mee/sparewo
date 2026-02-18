@@ -7,6 +7,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:sparewo_client/features/auth/application/auth_provider.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'dart:async';
+import 'package:sparewo_client/core/theme/app_theme.dart';
 import 'package:sparewo_client/core/widgets/responsive_screen.dart';
 
 class EmailVerificationScreen extends ConsumerStatefulWidget {
@@ -208,13 +209,16 @@ class _EmailVerificationScreenState
   @override
   Widget build(BuildContext context) {
     Widget buildScaffold({required bool isDesktop}) {
+      final theme = Theme.of(context);
+      final colorScheme = theme.colorScheme;
+
       return Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: colorScheme.surface,
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           elevation: 0,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back, color: Color(0xFF2B2D5F)),
+            icon: Icon(Icons.arrow_back, color: colorScheme.onSurface),
             onPressed: () => context.go('/signup'),
           ),
         ),
@@ -234,25 +238,24 @@ class _EmailVerificationScreenState
                       width: 80,
                       height: 80,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF47D20).withValues(alpha: 0.1),
+                        color: AppColors.primary.withValues(alpha: 0.1),
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(
                         Icons.email_outlined,
                         size: 40,
-                        color: Color(0xFFF47D20),
+                        color: AppColors.primary,
                       ),
                     ).animate().fadeIn().scale(),
 
                     const SizedBox(height: 32),
 
                     // Title
-                    const Text(
+                    Text(
                       'Verify Your Email',
-                      style: TextStyle(
-                        fontSize: 28,
+                      style: theme.textTheme.headlineMedium?.copyWith(
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFF2B2D5F),
+                        color: colorScheme.onSurface,
                       ),
                     ).animate().fadeIn(delay: 100.ms),
 
@@ -261,7 +264,9 @@ class _EmailVerificationScreenState
                     // Subtitle
                     Text(
                       'Enter the 6-digit code sent to',
-                      style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: colorScheme.onSurface.withValues(alpha: 0.7),
+                      ),
                       textAlign: TextAlign.center,
                     ).animate().fadeIn(delay: 150.ms),
 
@@ -269,10 +274,9 @@ class _EmailVerificationScreenState
 
                     Text(
                       widget.email,
-                      style: const TextStyle(
-                        fontSize: 16,
+                      style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w600,
-                        color: Color(0xFF2B2D5F),
+                        color: colorScheme.onSurface,
                       ),
                     ).animate().fadeIn(delay: 200.ms),
 
@@ -292,38 +296,45 @@ class _EmailVerificationScreenState
                             textAlign: TextAlign.center,
                             maxLength: 1,
                             enabled: !_isVerifying,
-                            style: const TextStyle(
-                              fontSize: 24,
+                            style: theme.textTheme.headlineSmall?.copyWith(
                               fontWeight: FontWeight.bold,
-                              color: Color(0xFF2B2D5F),
+                              color: colorScheme.onSurface,
                             ),
                             decoration: InputDecoration(
                               counterText: '',
                               filled: true,
-                              fillColor: const Color(0xFFFAFAFA),
+                              fillColor: colorScheme.surfaceVariant.withValues(
+                                alpha: 0.5,
+                              ),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(
-                                  color: Color(0xFFE0E0E0),
+                                borderSide: BorderSide(
+                                  color: colorScheme.onSurface.withValues(
+                                    alpha: 0.1,
+                                  ),
                                 ),
                               ),
                               enabledBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(
-                                  color: Color(0xFFE0E0E0),
+                                borderSide: BorderSide(
+                                  color: colorScheme.onSurface.withValues(
+                                    alpha: 0.1,
+                                  ),
                                 ),
                               ),
                               focusedBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
                                 borderSide: const BorderSide(
-                                  color: Color(0xFFF47D20),
+                                  color: AppColors.primary,
                                   width: 2,
                                 ),
                               ),
                               disabledBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
                                 borderSide: BorderSide(
-                                  color: Colors.grey[300]!,
+                                  color: colorScheme.onSurface.withValues(
+                                    alpha: 0.05,
+                                  ),
                                   width: 1,
                                 ),
                               ),
@@ -365,7 +376,7 @@ class _EmailVerificationScreenState
                       child: FilledButton(
                         onPressed: _isVerifying ? null : _verifyCode,
                         style: FilledButton.styleFrom(
-                          backgroundColor: const Color(0xFFF47D20),
+                          backgroundColor: AppColors.primary,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(24),
                           ),
@@ -397,7 +408,10 @@ class _EmailVerificationScreenState
                     if (!_canResend)
                       Text(
                         'Resend code in $_secondsRemaining seconds',
-                        style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                        style: TextStyle(
+                          color: colorScheme.onSurface.withValues(alpha: 0.6),
+                          fontSize: 14,
+                        ),
                       ).animate().fadeIn(delay: 350.ms)
                     else
                       TextButton(
@@ -405,7 +419,7 @@ class _EmailVerificationScreenState
                         child: const Text(
                           'Resend Code',
                           style: TextStyle(
-                            color: Color(0xFFF47D20),
+                            color: AppColors.primary,
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
                           ),
@@ -418,7 +432,7 @@ class _EmailVerificationScreenState
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF47D20).withValues(alpha: 0.05),
+                        color: AppColors.primary.withValues(alpha: 0.05),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Column(
@@ -429,14 +443,16 @@ class _EmailVerificationScreenState
                               const Icon(
                                 Icons.info_outline,
                                 size: 20,
-                                color: Color(0xFFF47D20),
+                                color: AppColors.primary,
                               ),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Text(
                                   'Check your spam folder if you don\'t see the email in your inbox',
                                   style: TextStyle(
-                                    color: Colors.grey[700],
+                                    color: colorScheme.onSurface.withValues(
+                                      alpha: 0.7,
+                                    ),
                                     fontSize: 13,
                                   ),
                                 ),
@@ -447,7 +463,9 @@ class _EmailVerificationScreenState
                           Text(
                             'Code will auto-paste from your clipboard',
                             style: TextStyle(
-                              color: Colors.grey[600],
+                              color: colorScheme.onSurface.withValues(
+                                alpha: 0.5,
+                              ),
                               fontSize: 12,
                               fontStyle: FontStyle.italic,
                             ),

@@ -10,6 +10,8 @@ import 'package:sparewo_client/core/widgets/desktop_scaffold.dart';
 import 'package:sparewo_client/core/widgets/desktop_section.dart';
 import 'package:sparewo_client/core/widgets/responsive_screen.dart';
 import 'package:sparewo_client/core/widgets/site_footer.dart';
+import 'package:sparewo_client/features/auth/application/auth_provider.dart';
+import 'package:sparewo_client/features/auth/presentation/widgets/auth_guard_modal.dart';
 import 'package:sparewo_client/features/my_car/application/car_provider.dart';
 import 'package:sparewo_client/features/my_car/domain/car_model.dart';
 
@@ -31,6 +33,7 @@ class _MobileMyCarsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final carsAsync = ref.watch(carsProvider);
+    final currentUser = ref.watch(currentUserProvider).asData?.value;
     final theme = Theme.of(context);
 
     return Scaffold(
@@ -57,6 +60,7 @@ class _MobileMyCarsScreen extends ConsumerWidget {
       ),
       body: carsAsync.when(
         data: (cars) {
+          if (currentUser == null) return _buildGuestGaragePrompt(context);
           if (cars.isEmpty) return _buildEmptyGarage(context);
 
           return CustomScrollView(
@@ -97,6 +101,7 @@ class _DesktopMyCarsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final carsAsync = ref.watch(carsProvider);
+    final currentUser = ref.watch(currentUserProvider).asData?.value;
 
     return carsAsync.when(
       data: (cars) {
@@ -108,7 +113,9 @@ class _DesktopMyCarsScreen extends ConsumerWidget {
                 title: 'My Garage',
                 subtitle:
                     'Vehicle photos, service readiness, and insurance status.',
-                child: cars.isEmpty
+                child: currentUser == null
+                    ? _buildGuestGaragePrompt(context, isDesktop: true)
+                    : cars.isEmpty
                     ? _buildEmptyGarage(context)
                     : Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -261,6 +268,77 @@ Widget _buildEmptyGarage(BuildContext context) {
   );
 }
 
+Widget _buildGuestGaragePrompt(BuildContext context, {bool isDesktop = false}) {
+  final theme = Theme.of(context);
+  return Center(
+    child: Padding(
+      padding: EdgeInsets.symmetric(horizontal: isDesktop ? 0 : 20),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 620),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: theme.cardColor,
+            borderRadius: BorderRadius.circular(22),
+            boxShadow: AppShadows.cardShadow,
+            border: Border.all(
+              color: theme.dividerColor.withValues(alpha: 0.5),
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.primary.withValues(alpha: 0.12),
+                ),
+                child: const Icon(
+                  Icons.garage_outlined,
+                  color: AppColors.primary,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                'Build your digital garage',
+                textAlign: TextAlign.center,
+                style: AppTextStyles.h3,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Log in to save your vehicles, upload photos, and track service and insurance details in one place.',
+                textAlign: TextAlign.center,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: theme.hintColor,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 18),
+              FilledButton.icon(
+                onPressed: () {
+                  showDialog(
+                    context: context,
+                    barrierColor: Colors.black.withValues(alpha: 0.6),
+                    builder: (context) => AuthGuardModal(
+                      title: 'Log in to use My Garage',
+                      message:
+                          'Create an account to save your vehicles and maintenance history.',
+                      returnTo: GoRouterState.of(context).uri.toString(),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.login),
+                label: const Text('Log in / Register'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
 Widget _buildAddCarButton(BuildContext context) {
   final theme = Theme.of(context);
   return InkWell(
@@ -395,7 +473,7 @@ class _GarageCarCard extends ConsumerWidget {
                   Text(
                     (car.plateNumber?.trim().isNotEmpty ?? false)
                         ? car.plateNumber!.toUpperCase()
-                        : 'No Plate Number',
+                        : 'No Number Plate',
                     style: AppTextStyles.labelLarge.copyWith(
                       letterSpacing: 0.6,
                       color: theme.textTheme.bodyLarge?.color,

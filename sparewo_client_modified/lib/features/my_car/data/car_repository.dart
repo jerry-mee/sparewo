@@ -130,11 +130,19 @@ class CarRepository {
         'plateNumber': plateNumber,
         'vin': vin,
         'color': color,
+        'colour': color,
         'engineType': engineType,
+        'engineSize': engineType,
         'transmission': transmission,
         'mileage': mileage,
         'frontImageUrl': frontImageUrl,
         'sideImageUrl': sideImageUrl,
+        'photoUrls': <String>[
+          if (frontImageUrl != null && frontImageUrl.trim().isNotEmpty)
+            frontImageUrl.trim(),
+          if (sideImageUrl != null && sideImageUrl.trim().isNotEmpty)
+            sideImageUrl.trim(),
+        ],
         'lastServiceDate': lastServiceDate != null
             ? Timestamp.fromDate(lastServiceDate)
             : null,
@@ -270,6 +278,23 @@ class CarRepository {
   Map<String, dynamic> _prepareCarUpdateData(Map<String, dynamic> data) {
     final mapped = Map<String, dynamic>.from(data);
 
+    final mileage = mapped['mileage'];
+    if (mileage is String) {
+      mapped['mileage'] = _parseMileage(mileage);
+    }
+
+    final colour = mapped['color'];
+    if (colour is String && colour.trim().isNotEmpty) {
+      mapped['color'] = colour.trim();
+      mapped['colour'] = colour.trim();
+    }
+
+    final engineSize = mapped['engineType'];
+    if (engineSize is String && engineSize.trim().isNotEmpty) {
+      mapped['engineType'] = engineSize.trim();
+      mapped['engineSize'] = engineSize.trim();
+    }
+
     final lastService = mapped['lastServiceDate'];
     if (lastService is DateTime) {
       mapped['lastServiceDate'] = Timestamp.fromDate(lastService);
@@ -280,6 +305,15 @@ class CarRepository {
       mapped['insuranceExpiryDate'] = Timestamp.fromDate(insurance);
     }
 
+    final front = mapped['frontImageUrl'];
+    final side = mapped['sideImageUrl'];
+    if (front is String || side is String) {
+      mapped['photoUrls'] = <String>[
+        if (front is String && front.trim().isNotEmpty) front.trim(),
+        if (side is String && side.trim().isNotEmpty) side.trim(),
+      ];
+    }
+
     mapped.removeWhere((key, value) => value == null);
     return mapped;
   }
@@ -288,14 +322,7 @@ class CarRepository {
     String docId,
     Map<String, dynamic> rawData,
   ) {
-    final rawPhotoUrls = rawData['photoUrls'];
-    final photoUrls = rawPhotoUrls is List
-        ? rawPhotoUrls
-              .whereType<String>()
-              .map((e) => e.trim())
-              .where((e) => e.isNotEmpty)
-              .toList()
-        : const <String>[];
+    final photoUrls = _extractStringList(rawData['photoUrls']);
 
     String? extractImage(List<String> keys) {
       for (final key in keys) {
@@ -322,12 +349,57 @@ class CarRepository {
       return null;
     }
 
+    String? firstString(List<String> keys) {
+      for (final key in keys) {
+        final value = rawData[key];
+        if (value is String && value.trim().isNotEmpty) return value.trim();
+      }
+      return null;
+    }
+
+    final normalisedMileage = _parseMileage(
+      rawData['mileage'] ??
+          rawData['odometer'] ??
+          rawData['mileageKm'] ??
+          rawData['mileage_km'],
+    );
+
+    final plateNumber = firstString([
+      'plateNumber',
+      'plate',
+      'plate_number',
+      'numberPlate',
+      'number_plate',
+      'licencePlate',
+      'licence_plate',
+      'licensePlate',
+      'license_plate',
+    ]);
+
+    final vin = firstString(['vin', 'VIN']);
+    final colour = firstString(['color', 'colour']);
+    final transmission = firstString(['transmission', 'gearbox', 'gear_box']);
+    final engineSize = firstString([
+      'engineType',
+      'engine_type',
+      'engineSize',
+      'engine_size',
+      'engineCapacity',
+      'engine_capacity',
+    ]);
+
     return {
       ...rawData,
       'id': docId,
       'userId': userId,
       'createdAt': rawData['createdAt'] ?? Timestamp.now(),
       'updatedAt': rawData['updatedAt'],
+      'plateNumber': plateNumber ?? rawData['plateNumber'],
+      'vin': vin ?? rawData['vin'],
+      'color': colour ?? rawData['color'],
+      'engineType': engineSize ?? rawData['engineType'],
+      'transmission': transmission ?? rawData['transmission'],
+      'mileage': normalisedMileage,
       'frontImageUrl':
           extractImage([
             'frontImageUrl',
@@ -357,5 +429,25 @@ class CarRepository {
           ]) ??
           (photoUrls.length > 1 ? photoUrls[1] : null),
     };
+  }
+
+  int? _parseMileage(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is! String) return null;
+
+    final cleaned = value.replaceAll(RegExp(r'[^0-9]'), '');
+    if (cleaned.isEmpty) return null;
+    return int.tryParse(cleaned);
+  }
+
+  List<String> _extractStringList(dynamic value) {
+    if (value is! List) return const <String>[];
+    return value
+        .whereType<String>()
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
   }
 }

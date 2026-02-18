@@ -44,9 +44,9 @@ class DefaultFirebaseOptions {
     projectId: 'sparewoapp',
     storageBucket: 'sparewoapp.firebasestorage.app',
     androidClientId:
-        '858998050859-046une0jqhbpd3r3d1qukurakcdik55b.apps.googleusercontent.com',
+        '858998050859-0gr6qk1ap6laoj9k3rnou8l73g2hlnam.apps.googleusercontent.com',
     iosClientId:
-        '858998050859-qk2u2ugomvkju1t3cigln9ul5mhki76a.apps.googleusercontent.com',
+        '858998050859-pfidlt9ikcvvf8ndqh21tol3omrc2edf.apps.googleusercontent.com',
     iosBundleId: 'com.sparewo.client',
   );
 }

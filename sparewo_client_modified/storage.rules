@@ -1,0 +1,68 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        (
+          exists(/databases/(default)/documents/adminUsers/$(request.auth.uid)) &&
+          (
+            get(/databases/(default)/documents/adminUsers/$(request.auth.uid)).data.role == 'admin' ||
+            get(/databases/(default)/documents/adminUsers/$(request.auth.uid)).data.role == 'super_admin'
+          )
+        ) ||
+        (
+          exists(/databases/(default)/documents/user_roles/$(request.auth.uid)) &&
+          (
+            get(/databases/(default)/documents/user_roles/$(request.auth.uid)).data.role == 'admin' ||
+            get(/databases/(default)/documents/user_roles/$(request.auth.uid)).data.role == 'super_admin'
+          )
+        )
+      );
+    }
+
+    function isImageUpload() {
+      return request.resource != null &&
+        request.resource.contentType.matches('image/.*') &&
+        request.resource.size < 8 * 1024 * 1024;
+    }
+
+    // Admin access first
+    match /{allPaths=**} {
+      allow read, write: if isAdmin();
+    }
+
+    // Vendor product images
+    match /vendors/{vendorId}/products/{fileName} {
+      allow read: if true;
+      allow write: if
+        (isSignedIn() && request.auth.uid == vendorId && (request.resource == null || isImageUpload())) ||
+        (request.resource != null &&
+         request.resource.metadata != null &&
+         request.resource.metadata.vendorId == vendorId &&
+         isImageUpload());
+    }
+
+    // Public catalog product images
+    match /products/{productId}/{fileName} {
+      allow read: if true;
+      allow write: if isSignedIn() && (request.resource == null || isImageUpload());
+    }
+
+    // Client garage vehicle images (private to owner/admin)
+    match /cars/{userId}/{fileName} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow write: if isSignedIn() &&
+        request.auth.uid == userId &&
+        (request.resource == null || isImageUpload());
+    }
+
+    // Default deny
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

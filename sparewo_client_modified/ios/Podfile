@@ -1,6 +1,7 @@
 # ios/Podfile
 platform :ios, '17.0'
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
+require 'fileutils'
 
 project 'Runner', {
   'Debug'   => :debug,
@@ -38,6 +39,9 @@ post_install do |installer|
     # Enforce iOS 17+ on every Pod config
     target.build_configurations.each do |bc|
       bc.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '17.0'
+      if target.name == 'gRPC-Core'
+        bc.build_settings['MODULEMAP_FILE'] = 'Target Support Files/gRPC-Core/gRPC-Core.modulemap'
+      end
     end
   end
 
@@ -53,6 +57,26 @@ post_install do |installer|
         end
       end
     end
+  end
+
+  # gRPC modulemap location workaround:
+  # Some CocoaPods/Xcode combinations reference Headers/Private/grpc/gRPC-Core.modulemap
+  # even when CocoaPods only generates Target Support Files/gRPC-Core/gRPC-Core.modulemap.
+  grpc_old_ref = 'Headers/Private/grpc/gRPC-Core.modulemap'
+  grpc_new_ref = 'Target Support Files/gRPC-Core/gRPC-Core.modulemap'
+
+  # Rewrite generated xcconfigs that still point to the old gRPC modulemap location.
+  Dir.glob(File.join(__dir__, 'Pods', 'Target Support Files', '**', '*.xcconfig')).each do |xcconfig|
+    content = File.read(xcconfig)
+    next unless content.include?(grpc_old_ref)
+    File.write(xcconfig, content.gsub(grpc_old_ref, grpc_new_ref))
+  end
+
+  # Also rewrite remaining generated references for safety.
+  pods_pbxproj = File.join(__dir__, 'Pods', 'Pods.xcodeproj', 'project.pbxproj')
+  if File.exist?(pods_pbxproj)
+    pbxproj = File.read(pods_pbxproj)
+    File.write(pods_pbxproj, pbxproj.gsub(grpc_old_ref, grpc_new_ref)) if pbxproj.include?(grpc_old_ref)
   end
   # ----------------------------------------------------------------
 end

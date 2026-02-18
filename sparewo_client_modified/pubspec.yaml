@@ -1,7 +1,7 @@
 name: sparewo_client
 description: SpareWo - Car Parts and Service App
 publish_to: 'none'
-version: 3.5.0+4
+version: 3.8.0+2
 
 environment:
   sdk: '>=3.8.0 <4.0.0'
@@ -85,3 +85,28 @@ flutter:
     - assets/icons/
     - assets/animations/
     - .env
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/logo/app_icon_appstore_1024.png"
+  remove_alpha_ios: true
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/logo/app_icon_playstore_512.png"
+  web:
+    generate: true
+    image_path: "assets/logo/app_icon_playstore_512.png"
+    background_color: "#0F1235"
+    theme_color: "#F47D20"
+
+flutter_native_splash:
+  color: "#0F1235"
+  color_dark: "#0F1235"
+  image: assets/logo/app_icon_playstore_512.png
+  image_dark: assets/logo/app_icon_playstore_512.png
+  android_12:
+    color: "#0F1235"
+    color_dark: "#0F1235"
+    image: assets/logo/app_icon_playstore_512.png
+    image_dark: assets/logo/app_icon_playstore_512.png
+  web: true

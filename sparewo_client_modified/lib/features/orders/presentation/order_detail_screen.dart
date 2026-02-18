@@ -177,6 +177,8 @@ class OrderDetailScreen extends ConsumerWidget {
   }
 
   Widget _buildStatusCard(BuildContext context, String status) {
+    final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
     Color color;
     IconData icon;
     String text;
@@ -214,16 +216,20 @@ class OrderDetailScreen extends ConsumerWidget {
         text = 'Pending';
     }
 
+    final foregroundColor = isDarkMode
+        ? Colors.white
+        : const Color(0xFF111827); // Dark text in light mode.
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
+        color: color.withValues(alpha: isDarkMode ? 0.22 : 0.14),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withValues(alpha: 0.2)),
+        border: Border.all(color: color.withValues(alpha: isDarkMode ? 0.4 : 0.3)),
       ),
       child: Row(
         children: [
-          Icon(icon, color: color, size: 32),
+          Icon(icon, color: foregroundColor, size: 32),
           const SizedBox(width: 16),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -231,14 +237,14 @@ class OrderDetailScreen extends ConsumerWidget {
               Text(
                 'Status',
                 style: TextStyle(
-                  color: color.withValues(alpha: 0.8),
+                  color: foregroundColor.withValues(alpha: 0.85),
                   fontSize: 12,
                 ),
               ),
               Text(
                 text,
                 style: TextStyle(
-                  color: color,
+                  color: foregroundColor,
                   fontWeight: FontWeight.bold,
                   fontSize: 18,
                 ),

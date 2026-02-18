@@ -131,118 +131,67 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
             const SizedBox(height: 24),
 
-            _buildSectionHeader(context, 'Security'),
-            _buildSettingContainer(
-              context,
-              children: [
-                _buildListTile(
-                  context,
-                  title: 'Change Password',
-                  icon: Icons.lock_outline,
-                  onTap: () async {
-                    if (!isLoggedIn) {
-                      AuthGuardModal.check(
-                        context: context,
-                        ref: ref,
-                        title: 'Sign in to update password',
-                        message: 'Please sign in to change your password.',
-                        onAuthenticated: () async {
-                          try {
-                            await ref
-                                .read(authNotifierProvider.notifier)
-                                .sendPasswordResetEmail();
-                            if (context.mounted) {
-                              _showSuccess(
-                                context,
-                                'Password reset email sent',
-                              );
-                            }
-                          } catch (e) {
-                            if (context.mounted) {
-                              _showError(context, e.toString());
-                            }
-                          }
-                        },
-                      );
-                      return;
-                    }
-                    try {
-                      await ref
-                          .read(authNotifierProvider.notifier)
-                          .sendPasswordResetEmail();
-                      if (context.mounted) {
-                        _showSuccess(context, 'Password reset email sent');
+            _buildSectionHeader(context, isLoggedIn ? 'Security' : 'Account'),
+            if (isLoggedIn)
+              _buildSettingContainer(
+                context,
+                children: [
+                  _buildListTile(
+                    context,
+                    title: 'Change Password',
+                    icon: Icons.lock_outline,
+                    onTap: () async {
+                      try {
+                        await ref
+                            .read(authNotifierProvider.notifier)
+                            .sendPasswordResetEmail();
+                        if (context.mounted) {
+                          _showSuccess(context, 'Password reset email sent');
+                        }
+                      } catch (e) {
+                        if (context.mounted) _showError(context, e.toString());
                       }
-                    } catch (e) {
-                      if (context.mounted) _showError(context, e.toString());
-                    }
-                  },
-                ),
-                Divider(
-                  height: 1,
-                  indent: 60,
-                  color: theme.dividerColor.withValues(alpha: 0.5),
-                ),
-                // --- SMART GOOGLE LINKING LOGIC ---
-                _buildListTile(
-                  context,
-                  title: _isGoogleLinked
-                      ? 'Google Account Linked'
-                      : 'Link Google Account',
-                  icon: Icons.link,
-                  enabled:
-                      !_isGoogleLinked &&
-                      isLoggedIn, // Disabled if already linked
-                  trailing: _isGoogleLinked
-                      ? const Icon(Icons.check_circle, color: AppColors.success)
-                      : null,
-                  onTap: () async {
-                    if (!isLoggedIn) {
-                      AuthGuardModal.check(
-                        context: context,
-                        ref: ref,
-                        title: 'Link your account',
-                        message:
-                            'Sign in to link your Google account securely.',
-                        onAuthenticated: () async {
-                          try {
-                            await ref
-                                .read(authNotifierProvider.notifier)
-                                .linkGoogleAccount();
-                            if (context.mounted) {
-                              _showSuccess(
-                                context,
-                                'Google account linked successfully',
-                              );
-                              setState(() {}); // Refresh UI
-                            }
-                          } catch (e) {
-                            if (context.mounted) {
-                              _showError(context, e.toString());
-                            }
-                          }
-                        },
-                      );
-                      return;
-                    }
-                    try {
-                      await ref
-                          .read(authNotifierProvider.notifier)
-                          .linkGoogleAccount();
-                      if (context.mounted) {
-                        _showSuccess(
-                          context,
-                          'Google account linked successfully',
-                        );
-                        setState(() {}); // Refresh UI
+                    },
+                  ),
+                  Divider(
+                    height: 1,
+                    indent: 60,
+                    color: theme.dividerColor.withValues(alpha: 0.5),
+                  ),
+                  _buildListTile(
+                    context,
+                    title: _isGoogleLinked
+                        ? 'Google Account Linked'
+                        : 'Link Google Account',
+                    icon: Icons.link,
+                    enabled: !_isGoogleLinked,
+                    trailing: _isGoogleLinked
+                        ? const Icon(
+                            Icons.check_circle,
+                            color: AppColors.success,
+                          )
+                        : null,
+                    onTap: () async {
+                      try {
+                        await ref
+                            .read(authNotifierProvider.notifier)
+                            .linkGoogleAccount();
+                        if (context.mounted) {
+                          _showSuccess(
+                            context,
+                            'Google account linked successfully',
+                          );
+                          setState(() {});
+                        }
+                      } catch (e) {
+                        if (context.mounted) _showError(context, e.toString());
                       }
-                    } catch (e) {
-                      if (context.mounted) _showError(context, e.toString());
-                    }
-                  },
-                ),
-              ],
-            ),
+                    },
+                  ),
+                ],
+              )
+            else
+              _buildGuestSecurityPrompt(context),
             const SizedBox(height: 100),
           ],
         ),
@@ -307,122 +256,88 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           ),
                         ]),
                         const SizedBox(height: 24),
-                        _buildDesktopGroup(context, 'Security', [
-                          _buildListTile(
-                            context,
-                            title: 'Change Password',
-                            icon: Icons.lock_outline,
-                            onTap: () async {
-                              if (!isLoggedIn) {
-                                AuthGuardModal.check(
-                                  context: context,
-                                  ref: ref,
-                                  title: 'Sign in to update password',
-                                  message:
-                                      'Please sign in to change your password.',
-                                  onAuthenticated: () async {
-                                    try {
-                                      await ref
-                                          .read(authNotifierProvider.notifier)
-                                          .sendPasswordResetEmail();
-                                      if (context.mounted) {
-                                        _showSuccess(
-                                          context,
-                                          'Password reset email sent',
-                                        );
-                                      }
-                                    } catch (e) {
-                                      if (context.mounted) {
-                                        _showError(context, e.toString());
-                                      }
-                                    }
-                                  },
-                                );
-                                return;
-                              }
-                              try {
-                                await ref
-                                    .read(authNotifierProvider.notifier)
-                                    .sendPasswordResetEmail();
-                                if (context.mounted) {
-                                  _showSuccess(
+                        _buildDesktopGroup(
+                          context,
+                          isLoggedIn ? 'Security' : 'Account',
+                          isLoggedIn
+                              ? [
+                                  _buildListTile(
                                     context,
-                                    'Password reset email sent',
-                                  );
-                                }
-                              } catch (e) {
-                                if (context.mounted) {
-                                  _showError(context, e.toString());
-                                }
-                              }
-                            },
-                          ),
-                          Divider(
-                            height: 1,
-                            indent: 60,
-                            color: theme.dividerColor.withValues(alpha: 0.5),
-                          ),
-                          _buildListTile(
-                            context,
-                            title: _isGoogleLinked
-                                ? 'Google Account Linked'
-                                : 'Link Google Account',
-                            icon: Icons.link,
-                            enabled: !_isGoogleLinked && isLoggedIn,
-                            trailing: _isGoogleLinked
-                                ? const Icon(
-                                    Icons.check_circle,
-                                    color: AppColors.success,
-                                  )
-                                : null,
-                            onTap: () async {
-                              if (!isLoggedIn) {
-                                AuthGuardModal.check(
-                                  context: context,
-                                  ref: ref,
-                                  title: 'Link your account',
-                                  message:
-                                      'Sign in to link your Google account securely.',
-                                  onAuthenticated: () async {
-                                    try {
-                                      await ref
-                                          .read(authNotifierProvider.notifier)
-                                          .linkGoogleAccount();
-                                      if (context.mounted) {
-                                        _showSuccess(
-                                          context,
-                                          'Google account linked successfully',
-                                        );
-                                        setState(() {});
+                                    title: 'Change Password',
+                                    icon: Icons.lock_outline,
+                                    onTap: () async {
+                                      try {
+                                        await ref
+                                            .read(authNotifierProvider.notifier)
+                                            .sendPasswordResetEmail();
+                                        if (context.mounted) {
+                                          _showSuccess(
+                                            context,
+                                            'Password reset email sent',
+                                          );
+                                        }
+                                      } catch (e) {
+                                        if (context.mounted) {
+                                          _showError(context, e.toString());
+                                        }
                                       }
-                                    } catch (e) {
-                                      if (context.mounted) {
-                                        _showError(context, e.toString());
-                                      }
-                                    }
-                                  },
-                                );
-                                return;
-                              }
-                              try {
-                                await ref
-                                    .read(authNotifierProvider.notifier)
-                                    .linkGoogleAccount();
-                                if (context.mounted) {
-                                  _showSuccess(
+                                    },
+                                  ),
+                                  Divider(
+                                    height: 1,
+                                    indent: 60,
+                                    color: theme.dividerColor.withValues(
+                                      alpha: 0.5,
+                                    ),
+                                  ),
+                                  _buildListTile(
                                     context,
-                                    'Google account linked successfully',
-                                  );
-                                  setState(() {});
-                                }
-                              } catch (e) {
-                                if (context.mounted) {
-                                  _showError(context, e.toString());
-                                }
-                              }
-                            },
-                          ),
-                        ]),
+                                    title: _isGoogleLinked
+                                        ? 'Google Account Linked'
+                                        : 'Link Google Account',
+                                    icon: Icons.link,
+                                    enabled: !_isGoogleLinked,
+                                    trailing: _isGoogleLinked
+                                        ? const Icon(
+                                            Icons.check_circle,
+                                            color: AppColors.success,
+                                          )
+                                        : null,
+                                    onTap: () async {
+                                      try {
+                                        await ref
+                                            .read(authNotifierProvider.notifier)
+                                            .linkGoogleAccount();
+                                        if (context.mounted) {
+                                          _showSuccess(
+                                            context,
+                                            'Google account linked successfully',
+                                          );
+                                          setState(() {});
+                                        }
+                                      } catch (e) {
+                                        if (context.mounted) {
+                                          _showError(context, e.toString());
+                                        }
+                                      }
+                                    },
+                                  ),
+                                ]
+                              : [
+                                  Padding(
+                                    padding: const EdgeInsets.fromLTRB(
+                                      16,
+                                      8,
+                                      16,
+                                      16,
+                                    ),
+                                    child: _buildGuestSecurityPrompt(
+                                      context,
+                                      embedded: true,
+                                    ),
+                                  ),
+                                ],
+                        ),
                       ],
                     ),
                   ),
@@ -496,6 +411,63 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ),
           ...children,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGuestSecurityPrompt(
+    BuildContext context, {
+    bool embedded = false,
+  }) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: embedded
+            ? theme.scaffoldBackgroundColor
+            : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: theme.dividerColor.withValues(alpha: 0.45)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.shield_outlined, color: AppColors.primary),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Unlock account security options',
+                  style: AppTextStyles.labelLarge,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Log in to manage password recovery and connected sign-in providers.',
+            style: AppTextStyles.bodySmall.copyWith(
+              color: theme.hintColor,
+              height: 1.35,
+            ),
+          ),
+          const SizedBox(height: 14),
+          FilledButton.icon(
+            onPressed: () {
+              AuthGuardModal.check(
+                context: context,
+                ref: ref,
+                title: 'Log in for account controls',
+                message:
+                    'Sign in to access security settings and connected accounts.',
+                onAuthenticated: () {},
+              );
+            },
+            icon: const Icon(Icons.login),
+            label: const Text('Log in / Register'),
+          ),
         ],
       ),
     );

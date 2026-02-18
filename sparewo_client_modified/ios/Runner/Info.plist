@@ -4,67 +4,24 @@
 <dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
-
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
-
 	<key>CFBundleDisplayName</key>
 	<string>SpareWo</string>
-
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
-
 	<key>CFBundleIdentifier</key>
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
-
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
-
 	<key>CFBundleName</key>
 	<string>sparewo_client</string>
-
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
-
 	<key>CFBundleShortVersionString</key>
 	<string>$(FLUTTER_BUILD_NAME)</string>
-
 	<key>CFBundleSignature</key>
 	<string>????</string>
-
-	<key>CFBundleVersion</key>
-	<string>$(FLUTTER_BUILD_NUMBER)</string>
-
-	<key>LSRequiresIPhoneOS</key>
-	<true/>
-
-	<!-- ========= PERMISSIONS (ADDED) ========= -->
-	<key>NSCameraUsageDescription</key>
-	<string>We need camera access to let you add photos of your vehicle so we can match parts perfectly.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>We need access to your photos to let you select vehicle images.</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>We need microphone access if you record videos of engine noise for diagnostics.</string>
-	<!-- ======================================= -->
-
-	<key>UIApplicationSupportsIndirectInputEvents</key>
-	<true/>
-
-	<key>UILaunchStoryboardName</key>
-	<string>LaunchScreen</string>
-
-	<key>UIMainStoryboardFile</key>
-	<string>Main</string>
-
-	<key>UISupportedInterfaceOrientations</key>
-	<array>
-		<string>UIInterfaceOrientationPortrait</string>
-	</array>
-
-	<!-- ========= GOOGLE SIGN-IN (iOS) ========= -->
-	<key>GIDClientID</key>
-	<string>858998050859-qk2u2ugomvkju1t3cigln9ul5mhki76a.apps.googleusercontent.com</string>
-
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -72,11 +29,39 @@
 			<string>Editor</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>com.googleusercontent.apps.858998050859-qk2u2ugomvkju1t3cigln9ul5mhki76a</string>
+				<string>com.googleusercontent.apps.858998050859-pfidlt9ikcvvf8ndqh21tol3omrc2edf</string>
 			</array>
 		</dict>
 	</array>
-	<!-- ========= END GOOGLE SIGN-IN ========= -->
-
+	<key>CFBundleVersion</key>
+	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>GIDClientID</key>
+	<string>858998050859-pfidlt9ikcvvf8ndqh21tol3omrc2edf.apps.googleusercontent.com</string>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>We need camera access to let you add photos of your vehicle so we can match parts perfectly.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>We need microphone access if you record videos of engine noise for diagnostics.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>We need access to your photos to let you select vehicle images.</string>
+	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+		<string>fetch</string>
+		<string>processing</string>
+	</array>
+	<key>UILaunchStoryboardName</key>
+	<string>LaunchScreen</string>
+	<key>UIMainStoryboardFile</key>
+	<string>Main</string>
+	<key>UIStatusBarHidden</key>
+	<false/>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
 </dict>
 </plist>

@@ -82,7 +82,7 @@ class CarDetailScreen extends ConsumerWidget {
             children: [
               DesktopSection(
                 title: data.displayName,
-                subtitle: (data.plateNumber ?? 'No Plate Number').toUpperCase(),
+                subtitle: (data.plateNumber ?? 'No Number Plate').toUpperCase(),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -98,8 +98,11 @@ class CarDetailScreen extends ConsumerWidget {
                           flex: 6,
                           child: Column(
                             children: [
-                              _VehicleDetailsCard(car: data),
-                              if (gallery.length > 1) ...[
+                              _VehicleDetailsCard(
+                                car: data,
+                                onEdit: () => _openCarEditor(context, data),
+                              ),
+                              if (gallery.isNotEmpty) ...[
                                 const SizedBox(height: 16),
                                 _VehicleGalleryCard(gallery: gallery),
                               ],
@@ -152,7 +155,7 @@ class CarDetailScreen extends ConsumerWidget {
             icon: const Icon(Icons.edit_outlined),
             onPressed: () {
               final current = carAsync.asData?.value ?? initialCar;
-              if (current != null) context.push('/add-car', extra: current);
+              if (current != null) _openCarEditor(context, current);
             },
           ),
           const SizedBox(width: 4),
@@ -178,8 +181,11 @@ class CarDetailScreen extends ConsumerWidget {
                 data,
               ).animate().fadeIn(delay: 120.ms).slideY(begin: 0.06, end: 0),
               const SizedBox(height: 16),
-              _VehicleDetailsCard(car: data).animate().fadeIn(delay: 180.ms),
-              if (gallery.length > 1) ...[
+              _VehicleDetailsCard(
+                car: data,
+                onEdit: () => _openCarEditor(context, data),
+              ).animate().fadeIn(delay: 180.ms),
+              if (gallery.isNotEmpty) ...[
                 const SizedBox(height: 16),
                 _VehicleGalleryCard(gallery: gallery),
               ],
@@ -231,63 +237,71 @@ class CarDetailScreen extends ConsumerWidget {
         boxShadow: AppShadows.cardShadow,
         border: Border.all(color: theme.dividerColor.withValues(alpha: 0.45)),
       ),
-      child: GridView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: metrics.length,
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          crossAxisSpacing: 10,
-          mainAxisSpacing: 10,
-          childAspectRatio: 2.25,
-        ),
-        itemBuilder: (context, index) {
-          final metric = metrics[index];
-          final color = metric.highlight
-              ? AppColors.warning
-              : AppColors.primary;
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isNarrow = constraints.maxWidth < 360;
+          return GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: metrics.length,
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+              childAspectRatio: isNarrow ? 1.75 : 2.25,
+            ),
+            itemBuilder: (context, index) {
+              final metric = metrics[index];
+              final color = metric.highlight
+                  ? AppColors.warning
+                  : AppColors.primary;
 
-          return Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest.withValues(
-                alpha: 0.36,
-              ),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Row(
-              children: [
-                Icon(metric.icon, size: 18, color: color),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        metric.value,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.labelLarge.copyWith(
-                          color: metric.highlight
-                              ? AppColors.warning
-                              : theme.textTheme.bodyLarge?.color,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        metric.label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.labelSmall.copyWith(
-                          color: theme.hintColor,
-                        ),
-                      ),
-                    ],
-                  ),
+              return Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: isNarrow ? 8 : 10,
+                  vertical: 8,
                 ),
-              ],
-            ),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest.withValues(
+                    alpha: 0.36,
+                  ),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
+                  children: [
+                    Icon(metric.icon, size: 18, color: color),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            metric.value,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTextStyles.labelLarge.copyWith(
+                              color: metric.highlight
+                                  ? AppColors.warning
+                                  : theme.textTheme.bodyLarge?.color,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            metric.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTextStyles.labelSmall.copyWith(
+                              color: theme.hintColor,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
           );
         },
       ),
@@ -394,6 +408,10 @@ class CarDetailScreen extends ConsumerWidget {
   }
 
   String _number(int value) => NumberFormat('#,###').format(value);
+
+  void _openCarEditor(BuildContext context, CarModel car) {
+    context.push('/add-car', extra: car);
+  }
 }
 
 class _HeroVehicleCard extends StatelessWidget {
@@ -453,7 +471,7 @@ class _HeroVehicleCard extends StatelessWidget {
               icon: Icons.badge_outlined,
               text: (car.plateNumber?.trim().isNotEmpty ?? false)
                   ? car.plateNumber!.toUpperCase()
-                  : 'No Plate',
+                  : 'No Number Plate',
             ),
           ),
           Positioned(
@@ -568,12 +586,17 @@ class _HeroChip extends StatelessWidget {
 
 class _VehicleDetailsCard extends StatelessWidget {
   final CarModel car;
+  final VoidCallback onEdit;
 
-  const _VehicleDetailsCard({required this.car});
+  const _VehicleDetailsCard({required this.car, required this.onEdit});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final mileage = car.mileage != null
+        ? '${NumberFormat('#,###').format(car.mileage)} km'
+        : null;
+
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -585,16 +608,27 @@ class _VehicleDetailsCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Vehicle Details', style: AppTextStyles.h4),
+          Row(
+            children: [
+              Text('Vehicle Details', style: AppTextStyles.h4),
+              const Spacer(),
+              TextButton.icon(
+                onPressed: onEdit,
+                icon: const Icon(Icons.edit_outlined, size: 16),
+                label: const Text('Edit'),
+              ),
+            ],
+          ),
           const SizedBox(height: 12),
           _DetailRow(label: 'Make', value: car.make),
           _DetailRow(label: 'Model', value: car.model),
           _DetailRow(label: 'Year', value: '${car.year}'),
           _DetailRow(label: 'Plate', value: car.plateNumber),
           _DetailRow(label: 'VIN', value: car.vin),
-          _DetailRow(label: 'Color', value: car.color),
+          _DetailRow(label: 'Colour', value: car.color),
           _DetailRow(label: 'Transmission', value: car.transmission),
-          _DetailRow(label: 'Engine', value: car.engineType),
+          _DetailRow(label: 'Engine Size', value: car.engineType),
+          _DetailRow(label: 'Mileage', value: mileage),
         ],
       ),
     );
@@ -660,6 +694,11 @@ class _VehicleGalleryCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('Vehicle Photos', style: AppTextStyles.h4),
+          const SizedBox(height: 4),
+          Text(
+            'Tap to view full screen',
+            style: AppTextStyles.bodySmall.copyWith(color: theme.hintColor),
+          ),
           const SizedBox(height: 12),
           SizedBox(
             height: 96,
@@ -670,17 +709,32 @@ class _VehicleGalleryCard extends StatelessWidget {
               itemBuilder: (context, index) {
                 return AspectRatio(
                   aspectRatio: 16 / 10,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: CachedNetworkImage(
-                      imageUrl: gallery[index],
-                      fit: BoxFit.cover,
-                      errorWidget: (_, __, ___) => Container(
-                        color: theme.colorScheme.surfaceContainerHighest,
-                        child: const Icon(Icons.broken_image_outlined),
-                      ),
-                      placeholder: (_, __) => Container(
-                        color: theme.colorScheme.surfaceContainerHighest,
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: () {
+                        showDialog(
+                          context: context,
+                          builder: (_) => _VehiclePhotoViewerDialog(
+                            images: gallery,
+                            initialIndex: index,
+                          ),
+                        );
+                      },
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: CachedNetworkImage(
+                          imageUrl: gallery[index],
+                          fit: BoxFit.cover,
+                          errorWidget: (_, __, ___) => Container(
+                            color: theme.colorScheme.surfaceContainerHighest,
+                            child: const Icon(Icons.broken_image_outlined),
+                          ),
+                          placeholder: (_, __) => Container(
+                            color: theme.colorScheme.surfaceContainerHighest,
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -689,6 +743,80 @@ class _VehicleGalleryCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _VehiclePhotoViewerDialog extends StatefulWidget {
+  final List<String> images;
+  final int initialIndex;
+
+  const _VehiclePhotoViewerDialog({
+    required this.images,
+    required this.initialIndex,
+  });
+
+  @override
+  State<_VehiclePhotoViewerDialog> createState() =>
+      _VehiclePhotoViewerDialogState();
+}
+
+class _VehiclePhotoViewerDialogState extends State<_VehiclePhotoViewerDialog> {
+  late final PageController _controller;
+  late int _index;
+
+  @override
+  void initState() {
+    super.initState();
+    _index = widget.initialIndex;
+    _controller = PageController(initialPage: widget.initialIndex);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog.fullscreen(
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        appBar: AppBar(
+          backgroundColor: Colors.black,
+          elevation: 0,
+          iconTheme: const IconThemeData(color: Colors.white),
+          title: Text(
+            'Photo ${_index + 1} of ${widget.images.length}',
+            style: AppTextStyles.bodyMedium.copyWith(color: Colors.white),
+          ),
+        ),
+        body: PageView.builder(
+          controller: _controller,
+          itemCount: widget.images.length,
+          onPageChanged: (value) => setState(() => _index = value),
+          itemBuilder: (context, index) {
+            return InteractiveViewer(
+              minScale: 1,
+              maxScale: 4,
+              child: Center(
+                child: CachedNetworkImage(
+                  imageUrl: widget.images[index],
+                  fit: BoxFit.contain,
+                  errorWidget: (_, __, ___) => const Icon(
+                    Icons.broken_image_outlined,
+                    color: Colors.white54,
+                    size: 56,
+                  ),
+                  placeholder: (_, __) =>
+                      const CircularProgressIndicator(color: Colors.white70),
+                ),
+              ),
+            );
+          },
+        ),
       ),
     );
   }

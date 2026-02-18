@@ -528,6 +528,8 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen>
   }
 
   Widget _buildStatusChip(String status) {
+    final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
     Color color;
     IconData icon = Icons.access_time;
     String label = status.toUpperCase();
@@ -558,22 +560,26 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen>
         label = "PENDING";
     }
 
+    final foregroundColor = isDarkMode
+        ? Colors.white
+        : const Color(0xFF111827); // Dark text for readability in light mode.
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
+        color: color.withValues(alpha: isDarkMode ? 0.26 : 0.18),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.2)),
+        border: Border.all(color: color.withValues(alpha: isDarkMode ? 0.45 : 0.32)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 12, color: color),
+          Icon(icon, size: 12, color: foregroundColor),
           const SizedBox(width: 4),
           Text(
             label,
             style: TextStyle(
-              color: color,
+              color: foregroundColor,
               fontSize: 10,
               fontWeight: FontWeight.bold,
             ),

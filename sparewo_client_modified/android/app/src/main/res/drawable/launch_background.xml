@@ -1,20 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Brand navy splash background -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-
-    <!-- Solid navy background (SpareWo secondary: #0F1235) -->
     <item>
-        <shape android:shape="rectangle">
-            <solid android:color="#FF0F1235" />
-        </shape>
+        <bitmap android:gravity="fill" android:src="@drawable/background"/>
     </item>
-
-    <!-- Optional centred logo (uncomment + change name if you add one) -->
-    <!--
     <item>
-        <bitmap
-            android:gravity="center"
-            android:src="@mipmap/launch_image" />
+        <bitmap android:gravity="center" android:src="@drawable/splash"/>
     </item>
-    -->
 </layer-list>

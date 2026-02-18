@@ -1,3 +1,95 @@
-Launching lib/main.dart on sdk gphone64 arm64 in release mode...
-Running Gradle task 'assembleRelease'...                        
-Using release keystore from key.properties
+Launching lib/main.dart on Test Device in debug mode...
+Automatically signing iOS for device deployment using specified development team in Xcode project: 582TZW69DU
+Running Xcode build...                                          
+Xcode build done.                                           24.6s
+Installing and launching...                                     
+https://firebase.google.com/docs/cloud-messaging/ios/client#method_swizzling_in_firebase_messaging
+to ensure proper integration.
+flutter: 🚀 [AppLogger] Initializing logger...
+flutter: [12:06:04.425] [INFO] [Firebase] Initialized successfully
+flutter: 📂 [AppLogger] File logging active at: /var/mobile/Containers/Data/Application/6E2AC26D-2121-449C-90AF-48409E8FFB64/Documents/logs/app_log_2026-02-18.log
+Installing and launching...                                        35.3s
+flutter: [12:06:05.893] [WARN] [FirebaseAppCheck] Activation failed; continuing with placeholder token | data: {error: [firebase_app_check/unknown] The operation couldn’t be completed. The server responded with an error: 
+flutter:  - URL: https://firebaseappcheck.googleapis.com/v1/projects/sparewoapp/apps/1:858998050859:ios:fe08857b21acf4d8071a6e:exchangeDeviceCheckToken 
+flutter:  - HTTP status code: 400 
+flutter:  - Response body: {
+flutter:   "error": {
+flutter:     "code": 400,
+flutter:     "message": "App not registered: 1:858998050859:ios:fe08857b21acf4d8071a6e.",
+flutter:     "status": "FAILED_PRECONDITION"
+flutter:   }
+flutter: }
+flutter: }
+flutter: [12:06:08.791] [WARN] [NotificationService] APNS token not ready yet; skipping initial FCM token fetch
+flutter: [12:06:08.808] [INFO] [MyApp] Services wired up
+Syncing files to device Test Device...                             225ms
+
+Flutter run key commands.
+r Hot reload. 🔥🔥🔥
+R Hot restart.
+h List all available interactive commands.
+d Detach (terminate "flutter run" but leave application running).
+c Clear the screen
+q Quit (terminate the application on the device).
+
+A Dart VM Service on Test Device is available at: http://127.0.0.1:57090/mkal0G0UFjI=/
+The Flutter DevTools debugger and profiler on Test Device is available at: http://127.0.0.1:57090/mkal0G0UFjI=/devtools/?uri=ws://127.0.0.1:57090/mkal0G0UFjI=/ws
+flutter: [12:06:14.705] [UI] [HomeScreen] Dashboard loaded
+flutter: [12:06:14.709] [WARN] [CarRepository] userId is null in getUserCars
+flutter: [12:06:19.023] [UI] [SettingsScreen] Viewed settings
+ - URL: https://firebaseappcheck.googleapis.com/v1/projects/sparewoapp/apps/1:858998050859:ios:fe08857b21acf4d8071a6e:exchangeDeviceCheckToken 
+ - HTTP status code: 400 
+ - Response body: {
+  "error": {
+    "code": 400,
+    "message": "App not registered: 1:858998050859:ios:fe08857b21acf4d8071a6e.",
+    "status": "FAILED_PRECONDITION"
+  }
+}
+" UserInfo={NSLocalizedFailureReason=Too many attempts. Underlying error: The operation couldn’t be completed. The server responded with an error: 
+ - URL: https://firebaseappcheck.googleapis.com/v1/projects/sparewoapp/apps/1:858998050859:ios:fe08857b21acf4d8071a6e:exchangeDeviceCheckToken 
+ - HTTP status code: 400 
+ - Response body: {
+  "error": {
+    "code": 400,
+    "message": "App not registered: 1:858998050859:ios:fe08857b21acf4d8071a6e.",
+    "status": "FAILED_PRECONDITION"
+  }
+}
+}
+ - URL: https://firebaseappcheck.googleapis.com/v1/projects/sparewoapp/apps/1:858998050859:ios:fe08857b21acf4d8071a6e:exchangeDeviceCheckToken 
+ - HTTP status code: 400 
+ - Response body: {
+  "error": {
+    "code": 400,
+    "message": "App not registered: 1:858998050859:ios:fe08857b21acf4d8071a6e.",
+    "status": "FAILED_PRECONDITION"
+  }
+}
+" UserInfo={NSLocalizedFailureReason=Too many attempts. Underlying error: The operation couldn’t be completed. The server responded with an error: 
+ - URL: https://firebaseappcheck.googleapis.com/v1/projects/sparewoapp/apps/1:858998050859:ios:fe08857b21acf4d8071a6e:exchangeDeviceCheckToken 
+ - HTTP status code: 400 
+ - Response body: {
+  "error": {
+    "code": 400,
+    "message": "App not registered: 1:858998050859:ios:fe08857b21acf4d8071a6e.",
+    "status": "FAILED_PRECONDITION"
+  }
+}
+}
+flutter: [12:06:37.327] [UI] [HomeScreen] Dashboard loaded
+ - URL: https://firebaseappcheck.googleapis.com/v1/projects/sparewoapp/apps/1:858998050859:ios:fe08857b21acf4d8071a6e:exchangeDeviceCheckToken 
+ - HTTP status code: 400 
+ - Response body: {
+  "error": {
+    "code": 400,
+    "message": "App not registered: 1:858998050859:ios:fe08857b21acf4d8071a6e.",
+    "status": "FAILED_PRECONDITION"
+  }
+}
+'
+flutter: [12:06:38.249] [WARN] [NotificationService] APNS token not ready yet; skipping initial FCM token fetch
+flutter: [12:06:38.254] [DEBUG] [CarRepository] Subscribing to user cars | data: {userId: tisqpBuQD4b9k1gxJytIAwWcOd03}
+flutter: [12:06:38.701] [DEBUG] [CarRepository] Received snapshot | data: {userId: tisqpBuQD4b9k1gxJytIAwWcOd03, count: 0}
+flutter: [12:06:41.810] [UI] [ProfileScreen] Viewed profile
+Lost connection to device.

@@ -423,11 +423,26 @@ class _MobileHomeScreenState extends ConsumerState<MobileHomeScreen> {
   Widget _buildCategoriesGrid(BuildContext context) {
     final categories = [
       {'name': 'Tyres', 'img': 'assets/images/tyrecat.png'},
-      {'name': 'Body', 'img': 'assets/images/body_kit.jpg'},
-      {'name': 'Engine', 'img': 'assets/images/Engine Category Icon.jpg'},
-      {'name': 'Electrical', 'img': 'assets/images/Electricals.jpg'},
-      {'name': 'Chassis', 'img': 'assets/images/Chasis Icon.webp'},
-      {'name': 'More', 'img': 'assets/images/Accessories Icon.webp'},
+      {
+        'name': 'Body',
+        'img': 'assets/images/body_kit_hi_def.png',
+      },
+      {
+        'name': 'Engine',
+        'img': 'assets/images/Engine Category Icon_hi_def.png',
+      },
+      {
+        'name': 'Electrical',
+        'img': 'assets/images/Electricals_hi_def.png',
+      },
+      {
+        'name': 'Chassis',
+        'img': 'assets/images/Chasis Icon_hi_def.png',
+      },
+      {
+        'name': 'More',
+        'img': 'assets/images/Accessories Icon_hi_def.png',
+      },
     ];
 
     return GridView.builder(
@@ -463,10 +478,12 @@ class _MobileHomeScreenState extends ConsumerState<MobileHomeScreen> {
                   ),
                   child: Center(
                     child: SizedBox(
-                      width: 72,
-                      height: 72,
-                      child: ClipOval(
-                        child: Image.asset(cat['img']!, fit: BoxFit.cover),
+                      width: 104,
+                      height: 104,
+                      child: Image.asset(
+                        cat['img']!,
+                        fit: BoxFit.contain,
+                        filterQuality: FilterQuality.high,
                       ),
                     ),
                   ),
@@ -1176,12 +1193,36 @@ class DesktopHomeScreen extends ConsumerWidget {
 
   Widget _buildDesktopCategoriesGrid(BuildContext context) {
     final categories = [
-      {'name': 'Tyres', 'icon': Icons.tire_repair_rounded},
-      {'name': 'Body', 'icon': Icons.directions_car_filled_rounded},
-      {'name': 'Engine', 'icon': Icons.precision_manufacturing_rounded},
-      {'name': 'Electrical', 'icon': Icons.battery_charging_full_rounded},
-      {'name': 'Chassis', 'icon': Icons.car_repair_rounded},
-      {'name': 'More', 'icon': Icons.apps_rounded},
+      {
+        'name': 'Tyres',
+        'icon': Icons.tire_repair_rounded,
+        'img': 'assets/images/tyrecat.png',
+      },
+      {
+        'name': 'Body',
+        'icon': Icons.directions_car_filled_rounded,
+        'img': 'assets/images/body_kit_hi_def.png',
+      },
+      {
+        'name': 'Engine',
+        'icon': Icons.precision_manufacturing_rounded,
+        'img': 'assets/images/Engine Category Icon_hi_def.png',
+      },
+      {
+        'name': 'Electrical',
+        'icon': Icons.battery_charging_full_rounded,
+        'img': 'assets/images/Electricals_hi_def.png',
+      },
+      {
+        'name': 'Chassis',
+        'icon': Icons.car_repair_rounded,
+        'img': 'assets/images/Chasis Icon_hi_def.png',
+      },
+      {
+        'name': 'More',
+        'icon': Icons.apps_rounded,
+        'img': 'assets/images/Accessories Icon_hi_def.png',
+      },
     ];
 
     return LayoutBuilder(
@@ -1226,17 +1267,28 @@ class DesktopHomeScreen extends ConsumerWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Container(
-                        width: 98,
-                        height: 98,
+                        width: kIsWeb ? 124 : 98,
+                        height: kIsWeb ? 124 : 98,
                         decoration: BoxDecoration(
-                          color: const Color(0xFFE3AA00),
+                          color: kIsWeb
+                              ? Colors.transparent
+                              : const Color(0xFFE3AA00),
                           borderRadius: BorderRadius.circular(999),
                         ),
-                        child: Icon(
-                          cat['icon']! as IconData,
-                          size: 52,
-                          color: const Color(0xFF0F1235),
-                        ),
+                        child: kIsWeb
+                            ? Padding(
+                                padding: const EdgeInsets.all(2),
+                                child: Image.asset(
+                                  cat['img']! as String,
+                                  fit: BoxFit.contain,
+                                  filterQuality: FilterQuality.high,
+                                ),
+                              )
+                            : Icon(
+                                cat['icon']! as IconData,
+                                size: 52,
+                                color: const Color(0xFF0F1235),
+                              ),
                       ),
                       Text(
                         cat['name']! as String,
