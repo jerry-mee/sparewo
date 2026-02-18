@@ -16,6 +16,8 @@ import { confirmPasswordReset, verifyPasswordResetCode } from 'firebase/auth';
 import { auth } from '@/lib/firebase/config';
 import { signIn } from '@/lib/firebase/auth';
 import { Loader2, Check, Eye, EyeOff } from 'lucide-react';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '@/lib/firebase/config';
 
 const passwordSchema = z.object({
     password: z.string()
@@ -41,6 +43,7 @@ function ActionPageContent() {
     const [isLoading, setIsLoading] = useState(false);
     const [isVerifying, setIsVerifying] = useState(true);
     const [email, setEmail] = useState<string | null>(null);
+    const [firstName, setFirstName] = useState<string | null>(null);
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
@@ -63,8 +66,21 @@ function ActionPageContent() {
 
         if (mode === 'resetPassword') {
             verifyPasswordResetCode(auth, oobCode)
-                .then((email) => {
-                    setEmail(email);
+                .then(async (userEmail) => {
+                    setEmail(userEmail);
+
+                    // Try to fetch the user's first name from adminUsers collection
+                    try {
+                        const q = query(collection(db, 'adminUsers'), where('email', '==', userEmail));
+                        const querySnapshot = await getDocs(q);
+                        if (!querySnapshot.empty) {
+                            const userData = querySnapshot.docs[0].data();
+                            setFirstName(userData.first_name || null);
+                        }
+                    } catch (error) {
+                        console.error('Error fetching admin name:', error);
+                    }
+
                     setIsVerifying(false);
                 })
                 .catch((error) => {
@@ -147,7 +163,16 @@ function ActionPageContent() {
                             alt="SpareWo"
                             width={100}
                             height={100}
-                            className="h-20 w-auto"
+                            className="h-20 w-auto dark:hidden"
+                            style={{ width: "auto", height: "auto" }}
+                            priority
+                        />
+                        <Image
+                            src="/images/logo_light.png"
+                            alt="SpareWo"
+                            width={100}
+                            height={100}
+                            className="h-20 w-auto hidden dark:block"
                             style={{ width: "auto", height: "auto" }}
                             priority
                         />
@@ -156,7 +181,7 @@ function ActionPageContent() {
                         Reset Password
                     </CardTitle>
                     <CardDescription className="break-words text-center text-sm sm:text-base dark:text-gray-300">
-                        {email ? `Create a new password for ${email}` : 'Loading reset details...'}
+                        {firstName ? `Create a new password for ${firstName}` : (email ? `Create a new password for ${email}` : 'Loading reset details...')}
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="px-5 pb-5 sm:px-6 sm:pb-6">
@@ -185,25 +210,6 @@ function ActionPageContent() {
                                 )}
                             </div>
 
-                            {/* Password Strength Meter */}
-                            <div className="space-y-2 rounded-lg bg-muted/50 p-3 text-sm">
-                                <p className="font-medium text-xs mb-2 dark:text-gray-200">Password Requirements:</p>
-                                <ul className="space-y-1">
-                                    {requirements.map((req, i) => (
-                                        <li key={i} className="flex items-center gap-2">
-                                            {req.met ? (
-                                                <Check className="h-3 w-3 text-green-500" />
-                                            ) : (
-                                                <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground/30" />
-                                            )}
-                                            <span className={req.met ? "text-green-600 line-through decoration-green-600/50" : "text-muted-foreground dark:text-gray-400"}>
-                                                {req.label}
-                                            </span>
-                                        </li>
-                                    ))}
-                                </ul>
-                            </div>
-
                             <div className="space-y-2">
                                 <Label htmlFor="confirmPassword" title="Confirm Password" id="confirm-password-label" className="dark:text-white">Confirm Password</Label>
                                 <div className="relative">
@@ -225,6 +231,25 @@ function ActionPageContent() {
                                 {errors.confirmPassword && (
                                     <p className="text-xs text-destructive">{errors.confirmPassword.message}</p>
                                 )}
+                            </div>
+
+                            {/* Password Strength Meter */}
+                            <div className="space-y-2 rounded-lg bg-muted/50 p-3 text-sm">
+                                <p className="font-medium text-xs mb-2 dark:text-gray-200">Password Requirements:</p>
+                                <ul className="space-y-1">
+                                    {requirements.map((req, i) => (
+                                        <li key={i} className="flex items-center gap-2">
+                                            {req.met ? (
+                                                <Check className="h-3 w-3 text-green-500" />
+                                            ) : (
+                                                <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground/30" />
+                                            )}
+                                            <span className={req.met ? "text-green-600 line-through decoration-green-600/50" : "text-muted-foreground dark:text-gray-400"}>
+                                                {req.label}
+                                            </span>
+                                        </li>
+                                    ))}
+                                </ul>
                             </div>
 
                             <Button type="submit" className="w-full" disabled={isLoading}>
