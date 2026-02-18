@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:sparewo_client/core/logging/app_logger.dart';
 import 'package:sparewo_client/features/auth/domain/user_model.dart';
 import 'package:sparewo_client/features/shared/services/email_service.dart';
 
@@ -239,7 +240,8 @@ class AuthRepository {
         throw Exception('Google sign in failed: ${e.message}');
       }
     } catch (e) {
-      throw Exception('Google sign in failed. Please try again.');
+      AppLogger.error('AUTH', 'Google sign in catch-all error', error: e);
+      throw Exception('Google sign in error: ${e.toString()}');
     }
   }
 

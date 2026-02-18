@@ -37,12 +37,12 @@ class LoginScreen extends ConsumerWidget {
             context.go('/home');
           }
         } else if (state.hasError) {
+          final error = state.error.toString().replaceAll('Exception: ', '');
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(
-                state.error.toString().replaceAll('Exception: ', ''),
-              ),
+              content: Text(error),
               backgroundColor: AppColors.error,
+              behavior: SnackBarBehavior.floating,
             ),
           );
         }

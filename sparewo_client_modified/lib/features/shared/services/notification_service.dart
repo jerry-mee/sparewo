@@ -2,6 +2,7 @@
 import 'dart:convert';
 import 'dart:async';
 import 'dart:io';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -13,16 +14,9 @@ import 'package:sparewo_client/core/theme/app_theme.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
-@pragma('vm:entry-point')
-Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  if (kDebugMode) {
-    AppLogger.info(
-      'NotificationService',
-      'Handling background FCM message',
-      extra: {'messageId': message.messageId},
-    );
-  }
-}
+import 'package:sparewo_client/core/notifications/fcm_background_handler.dart';
+
+// Removed local background handler as it is now in core/notifications/fcm_background_handler.dart
 
 class NotificationService {
   final FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
@@ -33,6 +27,9 @@ class NotificationService {
       StreamController<RemoteMessage>.broadcast();
   Stream<RemoteMessage> get foregroundStream =>
       _foregroundMessageController.stream;
+
+  String? _currentUserId;
+  StreamSubscription? _firestoreNotifSubscription;
 
   // Preferences Keys
   static const String _prefKeyHideAddCar = 'notification_hide_add_car_nudge';
@@ -48,7 +45,7 @@ class NotificationService {
     tz.initializeTimeZones();
 
     // Setup Firebase Background Handler
-    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
     // Request Permissions (Android 13+)
     if (Platform.isAndroid) {
@@ -80,13 +77,16 @@ class NotificationService {
       sound: true,
     );
 
-    await _initMessagingToken();
+    await updateToken();
     _firebaseMessaging.onTokenRefresh.listen((token) {
       AppLogger.info(
         'NotificationService',
         'FCM token refreshed',
         extra: {'tokenPresent': token.isNotEmpty},
       );
+      if (_currentUserId != null) {
+        saveTokenToFirestore(_currentUserId!, token);
+      }
     });
 
     // Initialize Local Notifications
@@ -156,25 +156,84 @@ class NotificationService {
     });
   }
 
-  Future<void> _initMessagingToken() async {
+  void startFirestoreNotificationListener(String userId) {
+    _firestoreNotifSubscription?.cancel();
+
+    _firestoreNotifSubscription = FirebaseFirestore.instance
+        .collection('notifications')
+        .where('recipientId', isEqualTo: userId)
+        .where('read', isEqualTo: false)
+        .snapshots()
+        .listen((snapshot) {
+          for (var change in snapshot.docChanges) {
+            if (change.type == DocumentChangeType.added) {
+              final data = change.doc.data();
+              if (data != null) {
+                // Convert Firestore doc to a RemoteMessage-like structure for the UI
+                final title = data['title'] ?? 'SpareWo Update';
+                final body = data['message'] ?? '';
+
+                // Show local notification
+                showLocalNotification(
+                  id: change.doc.id.hashCode,
+                  title: title,
+                  body: body,
+                  payload: jsonEncode(data),
+                );
+
+                // Also broadcast to the foreground stream so the in-app SnackBar shows up
+                _foregroundMessageController.add(
+                  RemoteMessage(
+                    notification: RemoteNotification(title: title, body: body),
+                    data: Map<String, String>.from(
+                      data.map((key, value) => MapEntry(key, value.toString())),
+                    ),
+                  ),
+                );
+              }
+            }
+          }
+        });
+  }
+
+  Future<void> updateToken([String? userId]) async {
+    if (userId != null) _currentUserId = userId;
+
     try {
       if (Platform.isIOS) {
-        final apnsToken = await _firebaseMessaging.getAPNSToken();
+        var apnsToken = await _firebaseMessaging.getAPNSToken();
+
+        // Retry logic for iOS APNS timing
         if (apnsToken == null || apnsToken.isEmpty) {
           AppLogger.warn(
             'NotificationService',
-            'APNS token not ready yet; skipping initial FCM token fetch',
+            'APNS not ready. Waiting 5s...',
+          );
+          await Future.delayed(const Duration(seconds: 5));
+          apnsToken = await _firebaseMessaging.getAPNSToken();
+        }
+
+        if (apnsToken == null || apnsToken.isEmpty) {
+          AppLogger.warn(
+            'NotificationService',
+            'APNS token still not ready; skipping FCM fetch',
           );
           return;
         }
       }
 
       final token = await _firebaseMessaging.getToken();
-      AppLogger.info(
-        'NotificationService',
-        'Initial FCM token fetched',
-        extra: {'tokenPresent': token != null && token.isNotEmpty},
-      );
+      if (token != null && token.isNotEmpty) {
+        AppLogger.info(
+          'NotificationService',
+          'Initial FCM token fetched',
+          extra: {'tokenPresent': true},
+        );
+
+        if (userId != null) {
+          await saveTokenToFirestore(userId, token);
+        }
+      }
     } catch (error, stackTrace) {
       final message = error.toString();
       final isApnsRace =
@@ -192,6 +251,31 @@ class NotificationService {
         'Failed to fetch FCM token',
         error: error,
         stackTrace: stackTrace,
+      );
+    }
+  }
+
+  Future<void> saveTokenToFirestore(String userId, String token) async {
+    try {
+      final tokenRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('tokens')
+          .doc(token);
+
+      await tokenRef.set({
+        'token': token,
+        'createdAt': FieldValue.serverTimestamp(),
+        'platform': Platform.operatingSystem,
+        'lastUsed': FieldValue.serverTimestamp(),
+      });
+
+      AppLogger.info('NotificationService', 'FCM token saved to Firestore');
+    } catch (e) {
+      AppLogger.error(
+        'NotificationService',
+        'Failed to save FCM token',
+        error: e,
       );
     }
   }
@@ -453,6 +537,7 @@ class NotificationService {
 
   void dispose() {
     _foregroundMessageController.close();
+    _firestoreNotifSubscription?.cancel();
   }
 }
 

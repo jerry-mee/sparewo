@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb_auth;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -31,9 +32,8 @@ class AuthGuardModal extends ConsumerStatefulWidget {
     String? title,
     String? message,
   }) {
-    final authUser = ref.read(authStateChangesProvider).asData?.value;
-    final profileUser = ref.read(currentUserProvider).asData?.value;
-    final isAuthenticated = authUser != null || profileUser != null;
+    // Check local FirebaseAuth instance directly - this is sync and not blocked by App Check
+    final isAuthenticated = fb_auth.FirebaseAuth.instance.currentUser != null;
 
     if (isAuthenticated) {
       onAuthenticated();
@@ -101,7 +101,11 @@ class _AuthGuardModalState extends ConsumerState<AuthGuardModal> {
         if (!mounted) return;
         final message = e.toString().replaceAll('Exception: ', '');
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(message), backgroundColor: AppColors.error),
+          SnackBar(
+            content: Text(message),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+          ),
         );
       }
     }
@@ -135,7 +139,11 @@ class _AuthGuardModalState extends ConsumerState<AuthGuardModal> {
         if (!mounted) return;
         final message = e.toString().replaceAll('Exception: ', '');
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(message), backgroundColor: AppColors.error),
+          SnackBar(
+            content: Text(message),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+          ),
         );
       }
     }
@@ -149,7 +157,11 @@ class _AuthGuardModalState extends ConsumerState<AuthGuardModal> {
       if (!mounted) return;
       final message = e.toString().replaceAll('Exception: ', '');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message), backgroundColor: AppColors.error),
+        SnackBar(
+          content: Text(message),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+        ),
       );
     }
   }

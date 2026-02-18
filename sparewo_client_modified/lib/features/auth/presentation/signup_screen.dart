@@ -26,10 +26,12 @@ class SignUpScreen extends ConsumerWidget {
       } else {
         EasyLoading.dismiss();
         if (state.hasError) {
+          final error = state.error.toString().replaceAll('Exception: ', '');
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(state.error.toString()),
+              content: Text(error),
               backgroundColor: AppColors.error,
+              behavior: SnackBarBehavior.floating,
             ),
           );
         }
@@ -192,17 +194,6 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
           ),
 
           SizedBox(height: widget.compact ? 18 : 32),
-          TextButton(
-            onPressed: _continueAsGuest,
-            child: Text(
-              'Continue as Guest',
-              style: TextStyle(
-                color: theme.hintColor,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          SizedBox(height: widget.compact ? 10 : 16),
 
           TextFormField(
             controller: _nameController,
@@ -380,14 +371,7 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
 
           Center(
             child: TextButton(
-              onPressed: () {
-                ref.read(hasSeenWelcomeProvider.notifier).completeWelcome();
-                if (widget.returnTo != null) {
-                  context.go(widget.returnTo!);
-                } else {
-                  context.go('/home');
-                }
-              },
+              onPressed: _continueAsGuest,
               child: Text(
                 'Continue as Guest',
                 style: TextStyle(

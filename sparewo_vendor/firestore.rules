@@ -1,168 +1,359 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
+
+    // ----------------------------------------------------------------------
     // Helper functions
+    // ----------------------------------------------------------------------
     function isSignedIn() {
       return request.auth != null;
     }
-    
-    function isRateLimited() {
-      return request.time < resource.data.lastAccess + duration.value(1, 's');
+
+    function roleFromAdminUsers() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/adminUsers/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/adminUsers/$(request.auth.uid)).data.role
+        : null;
     }
-    
+
+    function roleFromUserRolesSnake() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/user_roles/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/user_roles/$(request.auth.uid)).data.role
+        : null;
+    }
+
+    function roleFromUserRolesCamel() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/userRoles/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/userRoles/$(request.auth.uid)).data.role
+        : null;
+    }
+
+    function isAdminRole(role) {
+      return role == 'admin' || role == 'super_admin' || role == 'superAdmin' || role == 'Administrator';
+    }
+
+    function isStaffRole(role) {
+      return isAdminRole(role) || role == 'viewer' || role == 'Manager' || role == 'Mechanic';
+    }
+
     function isAdmin() {
-      return isSignedIn() && 
-        exists(/databases/$(database)/documents/user_roles/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/user_roles/$(request.auth.uid)).data.isAdmin == true;
+      return isSignedIn() && (
+        isAdminRole(roleFromAdminUsers()) ||
+        isAdminRole(roleFromUserRolesSnake()) ||
+        isAdminRole(roleFromUserRolesCamel())
+      );
     }
-    
+
+    function isStaff() {
+      return isSignedIn() && (
+        isStaffRole(roleFromAdminUsers()) ||
+        isStaffRole(roleFromUserRolesSnake()) ||
+        isStaffRole(roleFromUserRolesCamel())
+      );
+    }
+
+    function isClient(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isVendorOwner(vendorId) {
+      return isSignedIn() && request.auth.uid == vendorId;
+    }
+
     function isVendor() {
       return isSignedIn() && (
-        exists(/databases/$(database)/documents/vendors/$(request.auth.uid)) || 
-        isAdmin()
+        exists(/databases/$(database)/documents/vendors/$(request.auth.uid)) ||
+        isStaff()
       );
     }
-    
-    function isVerifiedVendor() {
-      return isSignedIn() && (
-        (exists(/databases/$(database)/documents/vendors/$(request.auth.uid)) &&
-         get(/databases/$(database)/documents/vendors/$(request.auth.uid)).data.isEmailVerified == true) ||
-        isAdmin()
-      );
-    }
-    
-    function getVendorId() {
-      return request.auth.uid;
-    }
-    
-    // Base rule - deny by default
-    match /{document=**} {
-      allow read, write: if false;
-    }
-    
-    // User Roles collection
-    match /user_roles/{userId} {
-      allow read: if true;
-      // Allow creation during signup
+
+    // ----------------------------------------------------------------------
+    // CLIENT DATA
+    // ----------------------------------------------------------------------
+    match /users/{userId} {
+      allow read: if isClient(userId) || isStaff();
       allow create: if isSignedIn() && request.auth.uid == userId;
-      // Admin can write to any user role
+      allow update: if (
+        isClient(userId) &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['createdAt', 'email'])
+      ) || isAdmin();
+      allow delete: if isAdmin();
+
+      match /cart/{productId} {
+        allow read, write: if isClient(userId) || isStaff();
+      }
+
+      match /cars/{carId} {
+        allow read, write: if isClient(userId) || isStaff();
+      }
+
+      match /addresses/{addressId} {
+        allow read, write: if isClient(userId) || isStaff();
+      }
+
+      match /transactions/{transactionId} {
+        allow read: if isClient(userId) || isStaff();
+        allow create: if isClient(userId);
+        allow update: if isAdmin();
+      }
+
+      match /service_history/{historyId} {
+        allow read: if isClient(userId) || isStaff();
+        allow create: if isClient(userId);
+        allow update: if isClient(userId) || isStaff();
+      }
+
+      match /wishlist/{productId} {
+        allow read, write: if isClient(userId) || isStaff();
+      }
+      
+      match /tokens/{tokenId} {
+        allow read, write: if isClient(userId) || isStaff();
+      }
+    }
+
+    // Legacy
+    match /clients/{clientId} {
+      allow list: if isStaff() || request.query.limit == 1;
+      allow read: if isClient(clientId) || isStaff();
+      allow create: if isSignedIn() &&
+        request.auth.uid == clientId &&
+        request.resource.data.keys().hasAll(['email', 'name', 'createdAt']);
+      allow update: if (
+        isClient(clientId) &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['createdAt', 'email'])
+      ) || isAdmin();
+      allow delete: if isAdmin();
+
+      match /cart/{productId} {
+        allow read, write: if isClient(clientId) || isStaff();
+      }
+
+      match /cars/{carId} {
+        allow read, write: if isClient(clientId) || isStaff();
+      }
+
+      match /addresses/{addressId} {
+        allow read, write: if isClient(clientId) || isStaff();
+      }
+    }
+
+    match /user_settings/{clientId} {
+      allow read, write: if isClient(clientId) || isStaff();
+    }
+
+    // ----------------------------------------------------------------------
+    // PRODUCT DATA
+    // ----------------------------------------------------------------------
+    match /catalog_products/{productId} {
+      allow get, list: if true;
       allow write: if isAdmin();
     }
-    
-    // Users collection (if you have one separate from vendors)
-    match /users/{userId} {
-      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
-      allow write: if isAdmin() || (isSignedIn() && request.auth.uid == userId);
+
+    match /vendor_products/{productId} {
+      allow read: if isAdmin() || (
+        isVendor() && resource.data.vendorId == request.auth.uid
+      );
+      allow create: if isVendor() &&
+        request.resource.data.vendorId == request.auth.uid;
+      allow update: if isAdmin() || (
+        isVendor() && resource.data.vendorId == request.auth.uid
+      );
+      allow delete: if isAdmin() || (
+        isVendor() && resource.data.vendorId == request.auth.uid
+      );
     }
-    
-    // Vendors collection
-    match /vendors/{vendorId} {
+
+    match /product_mappings/{mappingId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /product_drafts/{draftId} {
+      allow read: if isAdmin() || (
+        isVendor() && resource.data.vendorId == request.auth.uid
+      );
+      allow create: if isVendor() &&
+        request.resource.data.vendorId == request.auth.uid;
+      allow update, delete: if isAdmin() || (
+        isVendor() && resource.data.vendorId == request.auth.uid
+      );
+    }
+
+    // ----------------------------------------------------------------------
+    // ORDERS & FULFILMENT
+    // ----------------------------------------------------------------------
+    match /orders/{orderId} {
+      allow read: if isSignedIn() && (
+        resource.data.userId == request.auth.uid || isStaff()
+      );
+      allow create: if isSignedIn() &&
+        request.auth.uid == request.resource.data.userId;
+      allow update, delete: if isAdmin();
+    }
+
+    match /order_fulfillments/{fulfillmentId} {
+      allow read: if isAdmin() || (
+        isVendor() && resource.data.vendorId == request.auth.uid
+      );
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ----------------------------------------------------------------------
+    // SERVICE BOOKINGS (AutoHub)
+    // ----------------------------------------------------------------------
+    match /service_bookings/{bookingId} {
+      allow read: if isSignedIn() && (
+        resource.data.userId == request.auth.uid || isStaff()
+      );
+      allow create: if isSignedIn() &&
+        (request.auth.uid == request.resource.data.userId || isStaff());
+      allow update: if isSignedIn() && (
+        resource.data.userId == request.auth.uid || isStaff()
+      );
+      allow delete: if isAdmin();
+    }
+
+    match /service_providers/{providerId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /service_types/{typeId} {
       allow read: if true;
-      // KEY FIX: Allow vendor creation without requiring prior authentication
-      // This is critical for the signup flow
-      allow create: if request.resource.data.keys().hasAll(['email', 'name', 'phone', 'businessName', 'businessAddress']) &&
-                    (request.auth == null || request.auth.uid == vendorId || isAdmin());
-      allow update: if isSignedIn() && 
+      allow write: if isAdmin();
+    }
+
+    // ----------------------------------------------------------------------
+    // VEHICLE DATA
+    // ----------------------------------------------------------------------
+    match /car_brand/{brandId} {
+      allow get, list: if true;
+      allow write: if isAdmin();
+    }
+
+    match /car_models/{modelId} {
+      allow get, list: if true;
+      allow write: if isAdmin();
+    }
+
+    match /vehicle_maintenance/{vehicleId} {
+      allow read: if isSignedIn() && (
+        resource.data.userId == request.auth.uid || isStaff()
+      );
+      allow create: if isSignedIn() &&
+        request.auth.uid == request.resource.data.userId;
+      allow update: if isSignedIn() &&
+        (resource.data.userId == request.auth.uid || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    // ----------------------------------------------------------------------
+    // USER MANAGEMENT
+    // ----------------------------------------------------------------------
+    match /vendors/{vendorId} {
+      allow list: if isStaff() || request.query.limit == 1;
+      allow get: if true;
+      allow create: if isSignedIn() &&
+        request.auth.uid == vendorId &&
+        request.resource.data.keys().hasAll(['email', 'name', 'phone', 'businessName', 'businessAddress']);
+      allow update: if isSignedIn() &&
         (request.auth.uid == vendorId || isAdmin());
       allow delete: if isAdmin();
     }
-    
-    // Product drafts collection
-    match /product_drafts/{draftId} {
-      allow read: if isSignedIn() && 
-        (resource.data.vendorId == request.auth.uid || isAdmin());
-      
-      allow create, update: if isSignedIn() && 
-        (request.resource.data.vendorId == request.auth.uid || isAdmin());
-        
-      allow delete: if isSignedIn() && 
-        (resource.data.vendorId == request.auth.uid || isAdmin());
+
+    match /adminUsers/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId || isStaff());
+      allow list: if isStaff();
+      allow write: if isAdmin();
     }
-    
-    // Products collection (vendor_products)
-    match /vendor_products/{productId} {
+
+    match /userRoles/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId || isStaff());
+      allow list: if isStaff();
+      allow create: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow update, delete: if isAdmin();
+    }
+
+    match /user_roles/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId || isStaff());
+      allow list: if isStaff();
+      allow write: if isAdmin();
+    }
+
+    // ----------------------------------------------------------------------
+    // METRICS & STATS
+    // ----------------------------------------------------------------------
+    match /dashboard_stats/{statId} {
+      allow get: if isSignedIn() && (request.auth.uid == statId || isStaff());
+      allow list: if isStaff();
+      allow create: if isSignedIn() && (request.auth.uid == statId || isStaff());
+      allow update, delete: if isAdmin();
+    }
+
+    match /vendor_metrics/{metricId} {
+      allow read: if isAdmin() || (
+        isVendor() && resource.data.vendorId == request.auth.uid
+      );
+      allow write: if isAdmin();
+    }
+
+    // ----------------------------------------------------------------------
+    // COMMUNICATIONS
+    // ----------------------------------------------------------------------
+    match /admin_communications/{commId} {
+      allow read: if isStaff();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /notifications/{notificationId} {
+      function notifOwner() {
+        return isSignedIn() && (
+          resource.data.userId == request.auth.uid ||
+          resource.data.recipientId == request.auth.uid ||
+          resource.data.vendorId == request.auth.uid
+        );
+      }
+
+      allow get, list: if isStaff() || notifOwner();
+      allow create, delete: if isStaff();
+
+      // Support both "read" (current app) and "isRead" (legacy)
+      allow update: if isStaff() || (
+        notifOwner() &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'isRead', 'updatedAt'])
+      );
+    }
+
+    // ----------------------------------------------------------------------
+    // SETTINGS / REVIEWS
+    // ----------------------------------------------------------------------
+    match /settings/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId || isStaff());
+      allow list: if isStaff();
+      allow write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+    }
+
+    match /reviews/{reviewId} {
       allow read: if true;
-      
-      allow create: if isVendor() &&
-        request.resource.data.keys().hasAll([
-          'vendorId',
-          'partName',
-          'description',
-          'brand',
-          'condition',
-          'stockQuantity',
-          'unitPrice'
-        ]) &&
-        (request.resource.data.vendorId == request.auth.uid || isAdmin());
-      
-      allow update: if isVendor() &&
-        (resource.data.vendorId == request.auth.uid || isAdmin());
-      
-      allow delete: if isVendor() &&
-        (resource.data.vendorId == request.auth.uid || isAdmin());
-    }
-    
-    // Orders collection
-    match /orders/{orderId} {
-      allow read: if isSignedIn() && (
-        resource.data.vendorId == request.auth.uid ||
-        isAdmin()
-      );
       allow create: if isSignedIn();
-      allow update: if isSignedIn() && (
-        resource.data.vendorId == request.auth.uid ||
-        isAdmin()
-      );
+      allow update: if isSignedIn() &&
+        (resource.data.customerId == request.auth.uid || isAdmin());
       allow delete: if isAdmin();
     }
-    
-    // Verification Codes collection
-    match /verification_codes/{email} {
-      // Allow anyone to create, read, update, and delete verification codes
-      allow create, read, update, delete: if true;
+
+    // ----------------------------------------------------------------------
+    // VERIFICATION CODES (hardened)
+    // ----------------------------------------------------------------------
+    match /verificationCodes/{docId} {
+      allow create: if isSignedIn();
+      allow read, update, delete: if isAdmin();
     }
-    
-    // Car Brand collection
-    match /car_brand/{brandId} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-    
-    // Car Models collection
-    match /car_models/{modelId} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-    
-    // Settings collection
-    match /settings/{userId} {
-      allow read, write: if request.auth.uid == userId || isAdmin();
-    }
-    
-    // Notifications collection
-    match /notifications/{notificationId} {
-      allow read: if isSignedIn() && (
-        isAdmin() || 
-        resource.data.vendorId == request.auth.uid ||
-        resource.data.target == 'all' || 
-        resource.data.target == request.auth.uid ||
-        (isVendor() && resource.data.target == 'vendors')
-      );
-      allow write: if isAdmin();
-      // Allow users to mark their notifications as read
-      allow update: if isSignedIn() && 
-        (resource.data.vendorId == request.auth.uid ||
-         resource.data.target == 'all' || 
-         resource.data.target == request.auth.uid ||
-         (isVendor() && resource.data.target == 'vendors')) &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
-    }
-    
-    // Dashboard Stats Collection - FIX: Add explicit read permission for vendors
-    match /dashboard_stats/{vendorId} {
-      allow read: if isSignedIn() && (request.auth.uid == vendorId || isAdmin());
-      allow write: if isAdmin();
+
+    match /verification_codes/{docId} {
+      allow create: if isSignedIn();
+      allow read, update, delete: if isAdmin();
     }
   }
 }
