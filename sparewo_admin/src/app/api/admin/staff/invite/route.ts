@@ -80,7 +80,7 @@ export async function POST(req: Request) {
         // Construct custom link pointing to /invite
         const host = req.headers.get('host');
         const protocol = host?.includes('localhost') ? 'http' : 'https';
-        const inviteLink = `${protocol}://${host}/invite?oobCode=${oobCode}`;
+        const inviteLink = `${protocol}://${host}/invite?oobCode=${oobCode}&name=${encodeURIComponent(first_name)}`;
 
         // Send Email using Nodemailer
         let emailSent = false;

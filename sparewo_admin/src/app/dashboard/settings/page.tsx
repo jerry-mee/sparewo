@@ -752,7 +752,7 @@ export default function SettingsPage() {
                         </Badge>
                       ) : member.pending_activation || (!member.last_sign_in_at && !member.is_active) ? (
                         <Badge variant="secondary" className="bg-blue-100 text-blue-700 hover:bg-blue-200 border-blue-200">
-                          Pending Invite
+                          Pending Onboarding
                         </Badge>
                       ) : (
                         <Badge variant={member.is_active ? "default" : "secondary"}>

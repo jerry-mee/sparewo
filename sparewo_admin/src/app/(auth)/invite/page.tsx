@@ -63,20 +63,29 @@ function InvitePageContent() {
             return;
         }
 
+        // Get name from query params if available (preferred to avoid permission errors)
+        const nameFromUrl = searchParams.get('name');
+        if (nameFromUrl) {
+            setFirstName(nameFromUrl);
+        }
+
         verifyPasswordResetCode(auth, oobCode)
             .then(async (userEmail) => {
                 setEmail(userEmail);
 
-                // Try to fetch the user's first name from adminUsers collection
-                try {
-                    const q = query(collection(db, 'adminUsers'), where('email', '==', userEmail));
-                    const querySnapshot = await getDocs(q);
-                    if (!querySnapshot.empty) {
-                        const userData = querySnapshot.docs[0].data();
-                        setFirstName(userData.first_name || null);
+                // Only fetch name if not already set from URL
+                if (!nameFromUrl) {
+                    try {
+                        const q = query(collection(db, 'adminUsers'), where('email', '==', userEmail));
+                        const querySnapshot = await getDocs(q);
+                        if (!querySnapshot.empty) {
+                            const userData = querySnapshot.docs[0].data();
+                            setFirstName(userData.first_name || null);
+                        }
+                    } catch (error) {
+                        // Silently catch permission errors for unauthenticated users
+                        console.log('Note: Permission restricted for name lookup - using email salutation.');
                     }
-                } catch (error) {
-                    console.error('Error fetching admin name:', error);
                 }
 
                 setIsVerifying(false);
@@ -86,7 +95,7 @@ function InvitePageContent() {
                 toast.error('Invitation link is invalid or expired.');
                 setIsVerifying(false);
             });
-    }, [oobCode]);
+    }, [oobCode, searchParams]);
 
 
     const onSubmit = async (data: PasswordFormValues) => {
@@ -149,23 +158,21 @@ function InvitePageContent() {
 
             <Card className="relative z-10 w-full max-w-md border-none bg-white/80 shadow-2xl backdrop-blur-sm dark:bg-gray-900/80">
                 <CardHeader className="space-y-3 px-5 pb-2 pt-5 sm:space-y-4 sm:px-6 sm:pt-6">
-                    <div className="mx-auto flex justify-center mb-4">
+                    <div className="mx-auto flex justify-center mb-6">
                         <Image
                             src="/images/logo.png"
                             alt="SpareWo"
-                            width={100}
-                            height={100}
-                            className="h-20 w-auto dark:hidden"
-                            style={{ width: "auto", height: "auto" }}
+                            width={240}
+                            height={80}
+                            className="h-16 w-auto dark:hidden sm:h-20"
                             priority
                         />
                         <Image
                             src="/images/logo_light.png"
                             alt="SpareWo"
-                            width={100}
-                            height={100}
-                            className="h-20 w-auto hidden dark:block"
-                            style={{ width: "auto", height: "auto" }}
+                            width={240}
+                            height={80}
+                            className="h-16 w-auto hidden dark:block sm:h-20"
                             priority
                         />
                     </div>
@@ -177,7 +184,18 @@ function InvitePageContent() {
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="px-5 pb-5 sm:px-6 sm:pb-6">
-                    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+                    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" method="POST">
+                        {/* Hidden username field for browser password managers */}
+                        <input
+                            type="text"
+                            name="email"
+                            value={email || ''}
+                            readOnly
+                            autoComplete="username"
+                            className="hidden"
+                            aria-hidden="true"
+                        />
+
                         <div className="space-y-2">
                             <Label htmlFor="password" id="password-label" className="dark:text-white">Create Password</Label>
                             <div className="relative">
@@ -186,6 +204,7 @@ function InvitePageContent() {
                                     type={showPassword ? "text" : "password"}
                                     autoComplete="new-password"
                                     {...register('password')}
+                                    name="password"
                                     className={errors.password ? 'border-destructive pr-10' : 'pr-10 dark:bg-gray-800 dark:text-white'}
                                 />
                                 <button
@@ -209,6 +228,7 @@ function InvitePageContent() {
                                     type={showConfirmPassword ? "text" : "password"}
                                     autoComplete="new-password"
                                     {...register('confirmPassword')}
+                                    name="confirm-password"
                                     className={errors.confirmPassword ? 'border-destructive pr-10' : 'pr-10 dark:bg-gray-800 dark:text-white'}
                                 />
                                 <button
