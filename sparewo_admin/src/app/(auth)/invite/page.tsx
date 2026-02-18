@@ -176,7 +176,7 @@ function InvitePageContent() {
                             priority
                         />
                     </div>
-                    <CardTitle className="text-2xl font-bold text-center text-blue-600 dark:text-blue-400">
+                    <CardTitle className="text-2xl font-bold text-center text-blue-600 dark:text-white">
                         Welcome to SpareWo
                     </CardTitle>
                     <CardDescription className="break-words text-center text-sm sm:text-base dark:text-gray-300">
@@ -204,8 +204,7 @@ function InvitePageContent() {
                                     type={showPassword ? "text" : "password"}
                                     autoComplete="new-password"
                                     {...register('password')}
-                                    name="password"
-                                    className={errors.password ? 'border-destructive pr-10' : 'pr-10 dark:bg-gray-800 dark:text-white'}
+                                    className={errors.password ? 'border-destructive pr-10' : 'pr-10 dark:bg-white/5'}
                                 />
                                 <button
                                     type="button"
@@ -228,8 +227,7 @@ function InvitePageContent() {
                                     type={showConfirmPassword ? "text" : "password"}
                                     autoComplete="new-password"
                                     {...register('confirmPassword')}
-                                    name="confirm-password"
-                                    className={errors.confirmPassword ? 'border-destructive pr-10' : 'pr-10 dark:bg-gray-800 dark:text-white'}
+                                    className={errors.confirmPassword ? 'border-destructive pr-10 focus-visible:ring-destructive/50' : 'pr-10 dark:bg-white/5'}
                                 />
                                 <button
                                     type="button"
@@ -245,8 +243,8 @@ function InvitePageContent() {
                         </div>
 
                         {/* Password Strength Meter */}
-                        <div className="space-y-2 rounded-lg bg-muted/50 p-3 text-sm">
-                            <p className="font-medium text-xs mb-2 dark:text-gray-200">Password Requirements:</p>
+                        <div className="space-y-2 rounded-lg bg-muted/50 dark:bg-white/5 p-3 text-sm">
+                            <p className="font-medium text-xs mb-2 dark:text-white">Password Requirements:</p>
                             <ul className="space-y-1">
                                 {requirements.map((req, i) => (
                                     <li key={i} className="flex items-center gap-2">
@@ -255,7 +253,7 @@ function InvitePageContent() {
                                         ) : (
                                             <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground/30" />
                                         )}
-                                        <span className={req.met ? "text-green-600 line-through decoration-green-600/50" : "text-muted-foreground dark:text-gray-400"}>
+                                        <span className={req.met ? "text-green-600 dark:text-green-400 line-through decoration-green-600/50 dark:decoration-green-400/50" : "text-muted-foreground dark:text-gray-400"}>
                                             {req.label}
                                         </span>
                                     </li>
@@ -263,7 +261,7 @@ function InvitePageContent() {
                             </ul>
                         </div>
 
-                        <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700" disabled={isLoading}>
+                        <Button type="submit" className="w-full bg-[#F47D20] hover:bg-[#E66D12] text-white" disabled={isLoading}>
                             {isLoading ? (
                                 <>
                                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
