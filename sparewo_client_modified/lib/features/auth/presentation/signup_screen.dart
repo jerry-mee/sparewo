@@ -1,8 +1,10 @@
 // lib/features/auth/presentation/signup_screen.dart
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sparewo_client/features/shared/widgets/legal_modal.dart';
 import 'package:sparewo_client/features/auth/application/auth_provider.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
@@ -103,8 +105,41 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
   bool _obscure = true;
+  bool _obscureConfirm = true;
   bool _agreedToTerms = false;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
+    super.dispose();
+  }
+
+  int _passwordScore(String password) {
+    var score = 0;
+    if (password.length >= 8) score++;
+    if (RegExp(r'[A-Z]').hasMatch(password)) score++;
+    if (RegExp(r'[a-z]').hasMatch(password)) score++;
+    if (RegExp(r'[0-9]').hasMatch(password)) score++;
+    if (RegExp(r'[^A-Za-z0-9]').hasMatch(password)) score++;
+    return score;
+  }
+
+  Color _strengthColor(int score) {
+    if (score <= 2) return AppColors.error;
+    if (score <= 3) return AppColors.warning;
+    return AppColors.success;
+  }
+
+  String _strengthLabel(int score) {
+    if (score <= 2) return 'Weak password';
+    if (score <= 3) return 'Good password';
+    return 'Strong password';
+  }
 
   Future<void> _openTermsAndConditions() async {
     LegalModal.showTermsAndConditions(context);
@@ -150,6 +185,35 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
       return;
     }
     await ref.read(authNotifierProvider.notifier).signInWithGoogle();
+    await _routeAfterAuth();
+  }
+
+  Future<void> _routeAfterAuth() async {
+    if (!mounted) return;
+
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid != null && uid.isNotEmpty) {
+      final prefs = await SharedPreferences.getInstance();
+      final perUserKey = 'hasSeenOnboarding_$uid';
+      final hasSeenOnboarding =
+          (prefs.getBool(perUserKey) ?? false) ||
+          (prefs.getBool('hasSeenOnboarding') ?? false);
+
+      if (!hasSeenOnboarding) {
+        await prefs.setBool(perUserKey, true);
+        await prefs.setBool('hasSeenOnboarding', true);
+        if (mounted) {
+          context.go('/add-car?nudge=true');
+        }
+        return;
+      }
+    }
+
+    if (widget.returnTo != null) {
+      context.go(widget.returnTo!);
+    } else {
+      context.go('/home');
+    }
   }
 
   void _continueAsGuest() {
@@ -164,6 +228,8 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final password = _passwordController.text;
+    final strengthScore = _passwordScore(password);
 
     return Form(
       key: _formKey,
@@ -236,7 +302,55 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
                 borderRadius: BorderRadius.circular(20),
               ),
             ),
-            validator: (v) => (v?.length ?? 0) < 6 ? 'Min 6 characters' : null,
+            onChanged: (_) => setState(() {}),
+            validator: (v) {
+              final value = v ?? '';
+              if (value.length < 8) {
+                return 'Use at least 8 characters';
+              }
+              if (!RegExp(r'[A-Z]').hasMatch(value) ||
+                  !RegExp(r'[0-9]').hasMatch(value)) {
+                return 'Add at least 1 uppercase letter and 1 number';
+              }
+              return null;
+            },
+          ),
+          SizedBox(height: widget.compact ? 10 : 14),
+          _PasswordGuide(
+            password: password,
+            score: strengthScore,
+            color: _strengthColor(strengthScore),
+            label: _strengthLabel(strengthScore),
+          ),
+          SizedBox(height: widget.compact ? 14 : 20),
+          TextFormField(
+            controller: _confirmPasswordController,
+            obscureText: _obscureConfirm,
+            decoration: InputDecoration(
+              labelText: 'Confirm Password',
+              prefixIcon: const Icon(Icons.lock_person_outlined),
+              suffixIcon: IconButton(
+                icon: Icon(
+                  _obscureConfirm
+                      ? Icons.visibility_outlined
+                      : Icons.visibility_off_outlined,
+                ),
+                onPressed: () =>
+                    setState(() => _obscureConfirm = !_obscureConfirm),
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+            ),
+            validator: (v) {
+              if ((v ?? '').isEmpty) {
+                return 'Confirm your password';
+              }
+              if (v != _passwordController.text) {
+                return 'Passwords do not match';
+              }
+              return null;
+            },
           ),
 
           SizedBox(height: widget.compact ? 16 : 24),
@@ -395,4 +509,124 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
       ),
     );
   }
+}
+
+class _PasswordGuide extends StatelessWidget {
+  const _PasswordGuide({
+    required this.password,
+    required this.score,
+    required this.color,
+    required this.label,
+  });
+
+  final String password;
+  final int score;
+  final Color color;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final checks = <_PasswordCheck>[
+      _PasswordCheck('8+ characters', password.length >= 8),
+      _PasswordCheck('Uppercase letter', RegExp(r'[A-Z]').hasMatch(password)),
+      _PasswordCheck('Lowercase letter', RegExp(r'[a-z]').hasMatch(password)),
+      _PasswordCheck('Number', RegExp(r'[0-9]').hasMatch(password)),
+      _PasswordCheck(
+        'Special character',
+        RegExp(r'[^A-Za-z0-9]').hasMatch(password),
+      ),
+    ];
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Theme.of(context).dividerColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: LinearProgressIndicator(
+                    minHeight: 8,
+                    value: (score / 5).clamp(0, 1),
+                    color: color,
+                    backgroundColor: Theme.of(
+                      context,
+                    ).dividerColor.withValues(alpha: 0.5),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                label,
+                style: TextStyle(
+                  color: color,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: checks
+                .map(
+                  (check) => Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: check.passed
+                          ? AppColors.success.withValues(alpha: 0.12)
+                          : AppColors.warning.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          check.passed
+                              ? Icons.check_circle
+                              : Icons.info_outline,
+                          size: 14,
+                          color: check.passed
+                              ? AppColors.success
+                              : AppColors.warning,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          check.label,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Theme.of(
+                              context,
+                            ).textTheme.bodyMedium?.color,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+                .toList(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PasswordCheck {
+  const _PasswordCheck(this.label, this.passed);
+  final String label;
+  final bool passed;
 }

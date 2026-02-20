@@ -11,8 +11,6 @@ class EmailService {
   factory EmailService() => _instance;
   EmailService._internal();
 
-  // Load API key from environment
-  static final String? _apiKey = dotenv.env['RESEND_API_KEY'];
   static const String _apiUrl = 'https://api.resend.com/emails';
 
   // The "from" email must be on a domain verified in Resend
@@ -395,11 +393,13 @@ class EmailService {
     required String subject,
     required String htmlContent,
   }) async {
+    final apiKey = _readApiKey();
+
     // Check if the API key was loaded successfully
-    if (_apiKey == null || _apiKey!.isEmpty) {
+    if (apiKey == null || apiKey.isEmpty) {
       AppLogger.warn(
         'EmailService',
-        'Resend API key is not configured. Email not sent.',
+        'Resend API key is not configured or dotenv is not initialized. Email not sent.',
       );
       return false;
     }
@@ -407,7 +407,7 @@ class EmailService {
     // Headers for Resend API
     final headers = {
       'Content-Type': 'application/json',
-      'Authorization': 'Bearer $_apiKey',
+      'Authorization': 'Bearer $apiKey',
     };
 
     // Body structure for Resend API
@@ -453,6 +453,14 @@ class EmailService {
         extra: {'recipients': recipients},
       );
       return false;
+    }
+  }
+
+  String? _readApiKey() {
+    try {
+      return dotenv.env['RESEND_API_KEY'];
+    } catch (_) {
+      return null;
     }
   }
 

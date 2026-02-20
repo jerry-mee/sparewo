@@ -1,9 +1,11 @@
 // lib/features/auth/presentation/login_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sparewo_client/features/auth/application/auth_provider.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:sparewo_client/core/theme/app_theme.dart';
@@ -140,11 +142,41 @@ class _LoginFormState extends ConsumerState<_LoginForm> {
             _emailController.text.trim(),
             _passwordController.text.trim(),
           );
+      await _routeAfterAuth();
     }
   }
 
   Future<void> _handleGoogleLogin() async {
     await ref.read(authNotifierProvider.notifier).signInWithGoogle();
+    await _routeAfterAuth();
+  }
+
+  Future<void> _routeAfterAuth() async {
+    if (!mounted) return;
+
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid != null && uid.isNotEmpty) {
+      final prefs = await SharedPreferences.getInstance();
+      final perUserKey = 'hasSeenOnboarding_$uid';
+      final hasSeenOnboarding =
+          (prefs.getBool(perUserKey) ?? false) ||
+          (prefs.getBool('hasSeenOnboarding') ?? false);
+
+      if (!hasSeenOnboarding) {
+        await prefs.setBool(perUserKey, true);
+        await prefs.setBool('hasSeenOnboarding', true);
+        if (mounted) {
+          context.go('/add-car?nudge=true');
+        }
+        return;
+      }
+    }
+
+    if (widget.returnTo != null) {
+      context.go(widget.returnTo!);
+    } else {
+      context.go('/home');
+    }
   }
 
   void _continueAsGuest() {

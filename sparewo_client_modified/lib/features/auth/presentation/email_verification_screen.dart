@@ -1,12 +1,14 @@
 // lib/features/auth/presentation/email_verification_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:sparewo_client/features/auth/application/auth_provider.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'dart:async';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sparewo_client/core/theme/app_theme.dart';
 import 'package:sparewo_client/core/widgets/responsive_screen.dart';
 
@@ -147,6 +149,23 @@ class _EmailVerificationScreenState
         // Navigate after a brief delay
         await Future.delayed(const Duration(seconds: 1));
         if (mounted) {
+          final uid = FirebaseAuth.instance.currentUser?.uid;
+          if (uid != null && uid.isNotEmpty) {
+            final prefs = await SharedPreferences.getInstance();
+            final perUserKey = 'hasSeenOnboarding_$uid';
+            final hasSeenOnboarding =
+                (prefs.getBool(perUserKey) ?? false) ||
+                (prefs.getBool('hasSeenOnboarding') ?? false);
+            if (!hasSeenOnboarding) {
+              await prefs.setBool(perUserKey, true);
+              await prefs.setBool('hasSeenOnboarding', true);
+              if (mounted) {
+                context.go('/add-car?nudge=true');
+              }
+              return;
+            }
+          }
+
           if (widget.returnTo != null) {
             context.go(widget.returnTo!);
           } else {

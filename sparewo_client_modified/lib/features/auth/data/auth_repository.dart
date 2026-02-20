@@ -80,6 +80,17 @@ class AuthRepository {
         throw Exception('Please enter a valid email address');
       }
 
+      final existingUserByEmail = await _firestore
+          .collection('users')
+          .where('email', isEqualTo: email)
+          .limit(1)
+          .get();
+      if (existingUserByEmail.docs.isNotEmpty) {
+        throw Exception(
+          'This email is already registered. Please login instead.',
+        );
+      }
+
       final code = _generateVerificationCode();
 
       _verificationCodes[email] = code;

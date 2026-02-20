@@ -1,5 +1,6 @@
 // lib/features/home/presentation/widgets/app_guide_modal.dart
 import 'dart:ui';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lottie/lottie.dart';
@@ -17,8 +18,16 @@ class _AppGuideModalState extends State<AppGuideModal> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
 
+  String _onboardingKey() {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null || uid.isEmpty) return 'hasSeenOnboarding';
+    return 'hasSeenOnboarding_$uid';
+  }
+
   Future<void> _completeOnboarding() async {
     final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_onboardingKey(), true);
+    // Keep legacy key aligned for older checks.
     await prefs.setBool('hasSeenOnboarding', true);
   }
 

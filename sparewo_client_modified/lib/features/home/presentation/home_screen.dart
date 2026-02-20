@@ -161,9 +161,18 @@ class _MobileHomeScreenState extends ConsumerState<MobileHomeScreen> {
     final user = ref.read(currentUserProvider).value;
     if (user == null) return;
     final prefs = await SharedPreferences.getInstance();
-    final hasSeenGuide = prefs.getBool('hasSeenOnboarding') ?? false;
+    final perUserKey = 'hasSeenOnboarding_${user.id}';
+    final legacySeen = prefs.getBool('hasSeenOnboarding') ?? false;
+    var hasSeenGuide = prefs.getBool(perUserKey);
 
-    if (!hasSeenGuide && mounted) {
+    // Migration: if the user had already seen the legacy onboarding flag,
+    // preserve that behavior and avoid showing onboarding again.
+    if (hasSeenGuide == null && legacySeen) {
+      hasSeenGuide = true;
+      await prefs.setBool(perUserKey, true);
+    }
+
+    if (!(hasSeenGuide ?? false) && mounted) {
       AppLogger.info('HomeScreen', 'Showing Guide Modal');
       await showDialog(
         context: context,
@@ -423,26 +432,14 @@ class _MobileHomeScreenState extends ConsumerState<MobileHomeScreen> {
   Widget _buildCategoriesGrid(BuildContext context) {
     final categories = [
       {'name': 'Tyres', 'img': 'assets/images/tyrecat.png'},
-      {
-        'name': 'Body',
-        'img': 'assets/images/body_kit_hi_def.png',
-      },
+      {'name': 'Body', 'img': 'assets/images/body_kit_hi_def.png'},
       {
         'name': 'Engine',
         'img': 'assets/images/Engine Category Icon_hi_def.png',
       },
-      {
-        'name': 'Electrical',
-        'img': 'assets/images/Electricals_hi_def.png',
-      },
-      {
-        'name': 'Chassis',
-        'img': 'assets/images/Chasis Icon_hi_def.png',
-      },
-      {
-        'name': 'More',
-        'img': 'assets/images/Accessories Icon_hi_def.png',
-      },
+      {'name': 'Electrical', 'img': 'assets/images/Electricals_hi_def.png'},
+      {'name': 'Chassis', 'img': 'assets/images/Chasis Icon_hi_def.png'},
+      {'name': 'More', 'img': 'assets/images/Accessories Icon_hi_def.png'},
     ];
 
     return GridView.builder(
