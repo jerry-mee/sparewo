@@ -31,6 +31,7 @@ import {
   CheckCircle2,
   ChevronRight,
   ClipboardList,
+  RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
@@ -50,6 +51,13 @@ const trackerLabels: Record<ServiceBooking["status"], string> = {
   cancelled: "Cancelled",
 };
 
+const trackerDescriptions: Record<Exclude<ServiceBooking["status"], "cancelled">, string> = {
+  pending: "Request submitted and awaiting admin review",
+  confirmed: "Approved and assigned to a provider",
+  in_progress: "Vehicle is currently being serviced",
+  completed: "Service completed and closed",
+};
+
 export default function BookingDetailsPage() {
   const { id } = useParams<{ id: string }>();
 
@@ -58,6 +66,9 @@ export default function BookingDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [notes, setNotes] = useState("");
   const [selectedProvider, setSelectedProvider] = useState<string>("");
+  const [draftStatus, setDraftStatus] = useState<ServiceBooking["status"]>("pending");
+  const [savingStatus, setSavingStatus] = useState(false);
+  const [savingAssignment, setSavingAssignment] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -73,6 +84,7 @@ export default function BookingDetailsPage() {
 
         if (bookingData?.adminNotes) setNotes(bookingData.adminNotes);
         if (bookingData?.assignedProviderId) setSelectedProvider(bookingData.assignedProviderId);
+        if (bookingData?.status) setDraftStatus(bookingData.status);
       } catch (error) {
         console.error(error);
         toast.error("Failed to load booking details");
@@ -85,6 +97,7 @@ export default function BookingDetailsPage() {
 
   const handleStatusUpdate = async (newStatus: ServiceBooking["status"]) => {
     if (!booking) return;
+    setSavingStatus(true);
     try {
       const token = await auth.currentUser?.getIdToken();
       if (!token) {
@@ -110,15 +123,19 @@ export default function BookingDetailsPage() {
       }
 
       setBooking({ ...booking, status: newStatus, adminNotes: notes });
+      setDraftStatus(newStatus);
       toast.success(`Status updated to ${newStatus}`);
     } catch (error) {
       console.error(error);
       toast.error("Failed to update status");
+    } finally {
+      setSavingStatus(false);
     }
   };
 
   const handleAssignProvider = async () => {
     if (!booking || !selectedProvider) return;
+    setSavingAssignment(true);
     try {
       const provider = providers.find((p) => p.id === selectedProvider);
       if (provider) {
@@ -158,6 +175,8 @@ export default function BookingDetailsPage() {
     } catch (error) {
       console.error(error);
       toast.error("Failed to assign provider");
+    } finally {
+      setSavingAssignment(false);
     }
   };
 
@@ -199,16 +218,33 @@ export default function BookingDetailsPage() {
             <StatusPill status={booking.status} />
           </div>
 
-          <div className="grid gap-3 md:grid-cols-4">
+          <div className="grid gap-4 md:grid-cols-4">
             {trackerStages.map((stage, index) => {
-              const complete = !cancelled && stageIndex >= index;
+              const complete = !cancelled && stageIndex > index;
+              const active = !cancelled && stageIndex === index;
               return (
-                <div
-                  key={stage}
-                  className={`rounded-lg border px-3 py-3 ${complete ? "border-primary/40 bg-primary/10" : "bg-background"}`}
-                >
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Step {index + 1}</p>
-                  <p className="mt-1 text-sm font-medium">{trackerLabels[stage]}</p>
+                <div key={stage} className="relative rounded-lg border bg-background px-3 py-3">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`inline-flex h-7 w-7 items-center justify-center rounded-full border text-xs font-semibold ${
+                        complete || active
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-muted-foreground/40 text-muted-foreground"
+                      }`}
+                    >
+                      {complete ? <CheckCircle2 className="h-4 w-4" /> : index + 1}
+                    </span>
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-muted-foreground">Step {index + 1}</p>
+                      <p className="text-sm font-medium">{trackerLabels[stage]}</p>
+                    </div>
+                  </div>
+                  <p className="mt-2 text-xs text-muted-foreground">{trackerDescriptions[stage]}</p>
+                  {index < trackerStages.length - 1 && (
+                    <div className="pointer-events-none absolute -right-2 top-6 hidden md:block">
+                      <ChevronRight className="h-4 w-4 text-muted-foreground/60" />
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -334,46 +370,39 @@ export default function BookingDetailsPage() {
                       ))}
                     </SelectContent>
                   </Select>
-                  <Button size="icon" variant="outline" onClick={handleAssignProvider}>
-                    <CheckCircle2 className="h-4 w-4" />
+                  <Button
+                    variant="outline"
+                    onClick={handleAssignProvider}
+                    disabled={savingAssignment || !selectedProvider}
+                  >
+                    {savingAssignment ? "Saving..." : "Update Assignment"}
                   </Button>
                 </div>
               </div>
 
               <div className="space-y-2">
                 <label className="text-sm font-medium">Status</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <Button
-                    variant={booking.status === "confirmed" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => handleStatusUpdate("confirmed")}
-                    className="w-full"
+                <div className="flex gap-2">
+                  <Select
+                    value={draftStatus}
+                    onValueChange={(value) => setDraftStatus(value as ServiceBooking["status"])}
                   >
-                    Confirm
-                  </Button>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="pending">Pending</SelectItem>
+                      <SelectItem value="confirmed">Confirmed</SelectItem>
+                      <SelectItem value="in_progress">In Progress</SelectItem>
+                      <SelectItem value="completed">Completed</SelectItem>
+                      <SelectItem value="cancelled">Cancelled</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <Button
-                    variant={booking.status === "in_progress" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => handleStatusUpdate("in_progress")}
-                    className="w-full"
+                    onClick={() => handleStatusUpdate(draftStatus)}
+                    disabled={savingStatus || draftStatus === booking.status}
                   >
-                    In Progress
-                  </Button>
-                  <Button
-                    variant={booking.status === "completed" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => handleStatusUpdate("completed")}
-                    className="w-full"
-                  >
-                    Complete
-                  </Button>
-                  <Button
-                    variant={booking.status === "cancelled" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => handleStatusUpdate("cancelled")}
-                    className="w-full"
-                  >
-                    Cancel
+                    {savingStatus ? "Updating..." : "Update Status"}
                   </Button>
                 </div>
               </div>
@@ -390,8 +419,16 @@ export default function BookingDetailsPage() {
                   size="sm"
                   className="w-full"
                   onClick={() => handleStatusUpdate(booking.status)}
+                  disabled={savingStatus}
                 >
-                  Save Notes
+                  {savingStatus ? (
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    "Save Notes"
+                  )}
                 </Button>
               </div>
             </CardContent>

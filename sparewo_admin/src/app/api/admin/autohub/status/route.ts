@@ -85,7 +85,8 @@ export async function POST(req: Request) {
 
     await bookingRef.update(updatePayload);
 
-    if (CUSTOMER_NOTIFIABLE_STATUSES.includes(status)) {
+    const previousStatus = bookingData.status as BookingStatus | undefined;
+    if (previousStatus !== status && CUSTOMER_NOTIFIABLE_STATUSES.includes(status)) {
       const userId = bookingData.userId as string | undefined;
       const userName = (bookingData.userName as string | undefined) || 'Customer';
       const bookingNumber = (bookingData.bookingNumber as string | undefined) || bookingId;
@@ -116,6 +117,7 @@ export async function POST(req: Request) {
           title: titleByStatus[status],
           message: messageByStatus[status],
           type: status === 'cancelled' ? 'warning' : 'success',
+          id: bookingId,
           entityType: 'booking',
           status,
           bookingId,

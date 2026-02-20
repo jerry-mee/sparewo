@@ -155,6 +155,15 @@ class BookingDetailScreen extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildStatusCard(context, booking.status),
+        const SizedBox(height: 12),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            onPressed: () => _refreshBookingStatus(context),
+            icon: const Icon(Icons.sync),
+            label: const Text('Update Status'),
+          ),
+        ),
         const SizedBox(height: 24),
         Text('Vehicle', style: AppTextStyles.h4),
         const SizedBox(height: 12),
@@ -234,7 +243,9 @@ class BookingDetailScreen extends ConsumerWidget {
       decoration: BoxDecoration(
         color: color.withValues(alpha: isDarkMode ? 0.22 : 0.14),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withValues(alpha: isDarkMode ? 0.4 : 0.3)),
+        border: Border.all(
+          color: color.withValues(alpha: isDarkMode ? 0.4 : 0.3),
+        ),
       ),
       child: Row(
         children: [
@@ -398,5 +409,29 @@ class BookingDetailScreen extends ConsumerWidget {
         );
       }).toList(),
     );
+  }
+
+  Future<void> _refreshBookingStatus(BuildContext context) async {
+    final scaffold = ScaffoldMessenger.of(context);
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('service_bookings')
+          .doc(bookingId)
+          .get();
+      final status = (doc.data()?['status'] as String?) ?? 'pending';
+      scaffold.showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text('Latest status: ${status.toUpperCase()}'),
+        ),
+      );
+    } catch (error) {
+      scaffold.showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text('Could not refresh status: $error'),
+        ),
+      );
+    }
   }
 }

@@ -33,8 +33,15 @@ class AuthGuardModal extends ConsumerStatefulWidget {
     String? title,
     String? message,
   }) {
-    // Check local FirebaseAuth instance directly - this is sync and not blocked by App Check
-    final isAuthenticated = fb_auth.FirebaseAuth.instance.currentUser != null;
+    final user = fb_auth.FirebaseAuth.instance.currentUser;
+    final profileState = ref.read(currentUserProvider);
+    final profile = profileState.asData?.value;
+    final hasCompletedProfile = profile != null && profile.isEmailVerified;
+    final isAuthenticated =
+        user != null &&
+        (profileState.isLoading ||
+            profileState.hasError ||
+            hasCompletedProfile);
 
     if (isAuthenticated) {
       onAuthenticated();
@@ -79,6 +86,15 @@ class _AuthGuardModalState extends ConsumerState<AuthGuardModal> {
   bool _signupObscure = true;
   bool _loginObscure = true;
   bool _agreedToTerms = false;
+  bool _isBusy = false;
+  String _busyLabel = '';
+
+  void _goSafely(String route) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.go(route);
+    });
+  }
 
   @override
   void dispose() {
@@ -91,12 +107,147 @@ class _AuthGuardModalState extends ConsumerState<AuthGuardModal> {
   }
 
   Future<void> _handleLogin() async {
+    if (_isBusy) return;
     TextInput.finishAutofillContext();
     if (_loginFormKey.currentState?.validate() ?? false) {
+      await _withBusy('Signing you in...', () async {
+        try {
+          await ref
+              .read(authNotifierProvider.notifier)
+              .signIn(_loginEmail.text.trim(), _loginPassword.text.trim());
+          _completeAuthSuccess();
+        } catch (e) {
+          if (!mounted) return;
+          final message = e.toString().replaceAll('Exception: ', '');
+          if (message.contains('__INCOMPLETE_SETUP__') ||
+              message.toLowerCase().contains('setup incomplete')) {
+            await _resumeIncompleteSetup(
+              message.replaceAll('__INCOMPLETE_SETUP__', '').trim(),
+            );
+            return;
+          }
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(message),
+              backgroundColor: AppColors.error,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      });
+    }
+  }
+
+  Future<void> _handleSignup() async {
+    if (_isBusy) return;
+    if (!_agreedToTerms) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please agree to the Terms & Conditions')),
+      );
+      return;
+    }
+    if (_signupFormKey.currentState?.validate() ?? false) {
+      await _withBusy('Creating your account...', () async {
+        try {
+          await ref
+              .read(authNotifierProvider.notifier)
+              .signUp(
+                email: _signupEmail.text.trim(),
+                password: _signupPassword.text.trim(),
+                name: _signupName.text.trim(),
+              );
+          if (!mounted) return;
+          final normalizedEmail = _signupEmail.text.trim().toLowerCase();
+          final wasPartial = ref
+              .read(authRepositoryProvider)
+              .takeLastRegistrationWasPartial();
+          final returnTo = widget.returnTo;
+          Navigator.of(context).pop();
+          final encodedEmail = Uri.encodeComponent(normalizedEmail);
+          final partialParam = wasPartial ? '&partial=1' : '';
+          final returnParam = returnTo != null
+              ? '&returnTo=${Uri.encodeComponent(returnTo)}'
+              : '';
+          _goSafely(
+            '/verify-email?email=$encodedEmail$partialParam$returnParam',
+          );
+        } catch (e) {
+          if (!mounted) return;
+          final message = e.toString().replaceAll('Exception: ', '');
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(message),
+              backgroundColor: AppColors.error,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      });
+    }
+  }
+
+  Future<void> _resumeIncompleteSetup(String message) async {
+    final cleanMessage = message.isEmpty
+        ? 'Your account setup is incomplete. Verify your email to continue.'
+        : message;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Finish your setup'),
+          content: Text(cleanMessage),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                final email = _loginEmail.text.trim().toLowerCase();
+                final password = _loginPassword.text.trim();
+                if (email.isEmpty || password.isEmpty) return;
+                Navigator.of(dialogContext).pop();
+                try {
+                  await ref
+                      .read(authNotifierProvider.notifier)
+                      .resumeIncompleteOnboarding(
+                        email: email,
+                        password: password,
+                      );
+                  if (!mounted) return;
+                  final returnTo = widget.returnTo;
+                  final returnParam = returnTo != null
+                      ? '&returnTo=${Uri.encodeComponent(returnTo)}'
+                      : '';
+                  Navigator.of(context).pop();
+                  _goSafely(
+                    '/verify-email?email=${Uri.encodeComponent(email)}&partial=1$returnParam',
+                  );
+                } catch (e) {
+                  if (!mounted) return;
+                  final error = e.toString().replaceAll('Exception: ', '');
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(error),
+                      backgroundColor: AppColors.error,
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
+              },
+              child: const Text('Resume Verification'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _handleGoogle() async {
+    if (_isBusy) return;
+    await _withBusy('Connecting to Google...', () async {
       try {
-        await ref
-            .read(authNotifierProvider.notifier)
-            .signIn(_loginEmail.text.trim(), _loginPassword.text.trim());
+        await ref.read(authNotifierProvider.notifier).signInWithGoogle();
         _completeAuthSuccess();
       } catch (e) {
         if (!mounted) return;
@@ -109,66 +260,24 @@ class _AuthGuardModalState extends ConsumerState<AuthGuardModal> {
           ),
         );
       }
-    }
+    });
   }
 
-  Future<void> _handleSignup() async {
-    if (!_agreedToTerms) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please agree to the Terms & Conditions')),
-      );
-      return;
-    }
-    if (_signupFormKey.currentState?.validate() ?? false) {
-      try {
-        await ref
-            .read(authNotifierProvider.notifier)
-            .signUp(
-              email: _signupEmail.text.trim(),
-              password: _signupPassword.text.trim(),
-              name: _signupName.text.trim(),
-            );
-        if (!mounted) return;
-        final normalizedEmail = _signupEmail.text.trim().toLowerCase();
-        final isLinkMode = ref
-            .read(authRepositoryProvider)
-            .isLinkVerificationMode(normalizedEmail);
-        final returnTo = widget.returnTo;
-        Navigator.of(context).pop();
-        final encodedEmail = Uri.encodeComponent(normalizedEmail);
-        final modeParam = isLinkMode ? '&mode=link' : '';
-        final returnParam = returnTo != null
-            ? '&returnTo=${Uri.encodeComponent(returnTo)}'
-            : '';
-        context.go('/verify-email?email=$encodedEmail$modeParam$returnParam');
-      } catch (e) {
-        if (!mounted) return;
-        final message = e.toString().replaceAll('Exception: ', '');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(message),
-            backgroundColor: AppColors.error,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    }
-  }
-
-  Future<void> _handleGoogle() async {
+  Future<void> _withBusy(String label, Future<void> Function() action) async {
+    if (!mounted) return;
+    setState(() {
+      _isBusy = true;
+      _busyLabel = label;
+    });
     try {
-      await ref.read(authNotifierProvider.notifier).signInWithGoogle();
-      _completeAuthSuccess();
-    } catch (e) {
-      if (!mounted) return;
-      final message = e.toString().replaceAll('Exception: ', '');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: AppColors.error,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      await action();
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isBusy = false;
+          _busyLabel = '';
+        });
+      }
     }
   }
 
@@ -190,6 +299,7 @@ class _AuthGuardModalState extends ConsumerState<AuthGuardModal> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final maxHeight = MediaQuery.of(context).size.height * 0.88;
 
     return BackdropFilter(
       filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
@@ -197,7 +307,7 @@ class _AuthGuardModalState extends ConsumerState<AuthGuardModal> {
         backgroundColor: Colors.transparent,
         insetPadding: const EdgeInsets.all(20),
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 420),
+          constraints: BoxConstraints(maxWidth: 420, maxHeight: maxHeight),
           child: Container(
             width: double.infinity,
             padding: const EdgeInsets.all(28),
@@ -210,86 +320,119 @@ class _AuthGuardModalState extends ConsumerState<AuthGuardModal> {
                 width: 1,
               ),
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.12),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.lock_outline_rounded,
-                    size: 32,
-                    color: AppColors.primary,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  widget.title,
-                  textAlign: TextAlign.center,
-                  style: AppTextStyles.h2.copyWith(fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  widget.message,
-                  textAlign: TextAlign.center,
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: theme.hintColor,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Container(
-                  decoration: BoxDecoration(
-                    color: theme.cardColor,
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: theme.dividerColor),
-                  ),
-                  padding: const EdgeInsets.all(4),
-                  child: Row(
-                    children: [
-                      _AuthToggle(
-                        label: 'Sign In',
-                        active: _mode == _AuthMode.login,
-                        onTap: () => setState(() => _mode = _AuthMode.login),
-                      ),
-                      _AuthToggle(
-                        label: 'Create Account',
-                        active: _mode == _AuthMode.signup,
-                        onTap: () => setState(() => _mode = _AuthMode.signup),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-                if (_mode == _AuthMode.login) _buildLoginForm(theme),
-                if (_mode == _AuthMode.signup) _buildSignupForm(theme),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: OutlinedButton.icon(
-                    onPressed: _handleGoogle,
-                    icon: Image.asset(
-                      'assets/icons/Google Logo Icon.png',
-                      width: 20,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
                     ),
-                    label: const Text('Continue with Google'),
+                    child: const Icon(
+                      Icons.lock_outline_rounded,
+                      size: 32,
+                      color: AppColors.primary,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 8),
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: Text(
-                    'Maybe later',
-                    style: TextStyle(
+                  const SizedBox(height: 16),
+                  Text(
+                    widget.title,
+                    textAlign: TextAlign.center,
+                    style: AppTextStyles.h2.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    widget.message,
+                    textAlign: TextAlign.center,
+                    style: AppTextStyles.bodyMedium.copyWith(
                       color: theme.hintColor,
-                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 20),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: theme.cardColor,
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: theme.dividerColor),
+                    ),
+                    padding: const EdgeInsets.all(4),
+                    child: Row(
+                      children: [
+                        _AuthToggle(
+                          label: 'Sign In',
+                          active: _mode == _AuthMode.login,
+                          onTap: () {
+                            if (_isBusy) return;
+                            setState(() => _mode = _AuthMode.login);
+                          },
+                        ),
+                        _AuthToggle(
+                          label: 'Create Account',
+                          active: _mode == _AuthMode.signup,
+                          onTap: () {
+                            if (_isBusy) return;
+                            setState(() => _mode = _AuthMode.signup);
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  if (_mode == _AuthMode.login) _buildLoginForm(theme),
+                  if (_mode == _AuthMode.signup) _buildSignupForm(theme),
+                  if (_isBusy) ...[
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            _busyLabel,
+                            style: AppTextStyles.bodySmall.copyWith(
+                              color: theme.hintColor,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: OutlinedButton.icon(
+                      onPressed: _isBusy ? null : _handleGoogle,
+                      icon: Image.asset(
+                        'assets/icons/Google Logo Icon.png',
+                        width: 20,
+                      ),
+                      label: const Text('Continue with Google'),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: _isBusy
+                        ? null
+                        : () => Navigator.of(context).pop(),
+                    child: Text(
+                      'Maybe later',
+                      style: TextStyle(
+                        color: theme.hintColor,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -304,6 +447,7 @@ class _AuthGuardModalState extends ConsumerState<AuthGuardModal> {
         children: [
           TextFormField(
             controller: _loginEmail,
+            enabled: !_isBusy,
             autofillHints: const [AutofillHints.email],
             keyboardType: TextInputType.emailAddress,
             decoration: InputDecoration(
@@ -318,6 +462,7 @@ class _AuthGuardModalState extends ConsumerState<AuthGuardModal> {
           const SizedBox(height: 12),
           TextFormField(
             controller: _loginPassword,
+            enabled: !_isBusy,
             obscureText: _loginObscure,
             autofillHints: const [AutofillHints.password],
             decoration: InputDecoration(
@@ -343,7 +488,7 @@ class _AuthGuardModalState extends ConsumerState<AuthGuardModal> {
             width: double.infinity,
             height: 52,
             child: FilledButton(
-              onPressed: _handleLogin,
+              onPressed: _isBusy ? null : _handleLogin,
               child: const Text('Sign In'),
             ),
           ),
@@ -359,6 +504,7 @@ class _AuthGuardModalState extends ConsumerState<AuthGuardModal> {
         children: [
           TextFormField(
             controller: _signupName,
+            enabled: !_isBusy,
             decoration: InputDecoration(
               labelText: 'Full Name',
               prefixIcon: const Icon(Icons.person_outline),
@@ -371,6 +517,7 @@ class _AuthGuardModalState extends ConsumerState<AuthGuardModal> {
           const SizedBox(height: 12),
           TextFormField(
             controller: _signupEmail,
+            enabled: !_isBusy,
             keyboardType: TextInputType.emailAddress,
             decoration: InputDecoration(
               labelText: 'Email',
@@ -384,6 +531,7 @@ class _AuthGuardModalState extends ConsumerState<AuthGuardModal> {
           const SizedBox(height: 12),
           TextFormField(
             controller: _signupPassword,
+            enabled: !_isBusy,
             obscureText: _signupObscure,
             decoration: InputDecoration(
               labelText: 'Password',
@@ -408,7 +556,9 @@ class _AuthGuardModalState extends ConsumerState<AuthGuardModal> {
             children: [
               Checkbox(
                 value: _agreedToTerms,
-                onChanged: (v) => setState(() => _agreedToTerms = v ?? false),
+                onChanged: _isBusy
+                    ? null
+                    : (v) => setState(() => _agreedToTerms = v ?? false),
                 activeColor: AppColors.primary,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(4),
@@ -416,7 +566,9 @@ class _AuthGuardModalState extends ConsumerState<AuthGuardModal> {
               ),
               Expanded(
                 child: GestureDetector(
-                  onTap: () => LegalModal.showTermsAndConditions(context),
+                  onTap: _isBusy
+                      ? null
+                      : () => LegalModal.showTermsAndConditions(context),
                   child: RichText(
                     text: TextSpan(
                       text: 'I agree to the ',
@@ -445,7 +597,7 @@ class _AuthGuardModalState extends ConsumerState<AuthGuardModal> {
             width: double.infinity,
             height: 52,
             child: FilledButton(
-              onPressed: _handleSignup,
+              onPressed: _isBusy ? null : _handleSignup,
               child: const Text('Create Account'),
             ),
           ),

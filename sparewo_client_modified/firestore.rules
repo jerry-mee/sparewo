@@ -350,12 +350,14 @@ service cloud.firestore {
         return isSignedIn() && (
           resource.data.userId == request.auth.uid ||
           resource.data.recipientId == request.auth.uid ||
-          resource.data.vendorId == request.auth.uid
+          resource.data.vendorId == request.auth.uid ||
+          resource.data.recipientUid == request.auth.uid
         );
       }
 
       allow get, list: if isStaff() || notifOwner();
-      allow create, delete: if isStaff();
+      allow create: if isStaff();
+      allow delete: if isStaff() || notifOwner();
 
       // Support both "read" (current app) and "isRead" (legacy)
       allow update: if isStaff() || (

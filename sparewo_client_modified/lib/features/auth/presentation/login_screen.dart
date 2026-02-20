@@ -11,6 +11,7 @@ import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:sparewo_client/core/theme/app_theme.dart';
 import 'package:sparewo_client/core/router/app_router.dart';
 import 'package:sparewo_client/core/widgets/responsive_screen.dart';
+import 'package:sparewo_client/core/logging/app_logger.dart';
 
 class LoginScreen extends ConsumerWidget {
   const LoginScreen({super.key});
@@ -20,6 +21,7 @@ class LoginScreen extends ConsumerWidget {
     final theme = Theme.of(context);
     final mediaQuery = MediaQuery.of(context);
     final returnTo = GoRouterState.of(context).uri.queryParameters['returnTo'];
+    final reason = GoRouterState.of(context).uri.queryParameters['reason'];
     final compactAuthLayout =
         theme.platform == TargetPlatform.iOS && mediaQuery.size.height <= 860;
 
@@ -29,16 +31,6 @@ class LoginScreen extends ConsumerWidget {
         EasyLoading.show(status: 'Signing in...');
       } else {
         EasyLoading.dismiss();
-        if (state.hasError) {
-          final error = state.error.toString().replaceAll('Exception: ', '');
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(error),
-              backgroundColor: AppColors.error,
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
       }
     });
 
@@ -64,6 +56,25 @@ class LoginScreen extends ConsumerWidget {
               'Enter your credentials to continue.',
               style: TextStyle(color: theme.hintColor, fontSize: 16),
             ).animate().fadeIn(delay: 100.ms),
+
+            if (reason == 'auth_required') ...[
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  'Sign in to continue with the page you requested.',
+                  style: TextStyle(
+                    color: theme.colorScheme.onSurface,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
 
             SizedBox(height: compactAuthLayout ? 24 : 48),
 
@@ -133,22 +144,135 @@ class _LoginFormState extends ConsumerState<_LoginForm> {
   final _passwordController = TextEditingController();
   bool _obscure = true;
 
+  String _cleanError(Object error) =>
+      error.toString().replaceAll('Exception: ', '').trim();
+
+  bool _isIncompleteSetupError(String message) {
+    return message.contains('__INCOMPLETE_SETUP__') ||
+        message.toLowerCase().contains('setup incomplete');
+  }
+
+  String _stripIncompletePrefix(String message) =>
+      message.replaceAll('__INCOMPLETE_SETUP__', '').trim();
+
+  void _goSafely(String route) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.go(route);
+    });
+  }
+
+  void _showFeedback(String message) {
+    final theme = Theme.of(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: theme.colorScheme.surfaceContainerHighest,
+        content: Text(
+          message,
+          style: TextStyle(color: theme.colorScheme.onSurface),
+        ),
+      ),
+    );
+  }
+
   Future<void> _handleLogin() async {
     TextInput.finishAutofillContext();
     if (_formKey.currentState?.validate() ?? false) {
-      await ref
-          .read(authNotifierProvider.notifier)
-          .signIn(
-            _emailController.text.trim(),
-            _passwordController.text.trim(),
+      try {
+        await ref
+            .read(authNotifierProvider.notifier)
+            .signIn(
+              _emailController.text.trim(),
+              _passwordController.text.trim(),
+            );
+        await _routeAfterAuth();
+      } catch (error) {
+        if (!mounted) return;
+        final message = _cleanError(error);
+        if (_isIncompleteSetupError(message)) {
+          AppLogger.info(
+            'LoginScreen',
+            'Detected incomplete setup during login',
+            extra: {'email': _emailController.text.trim().toLowerCase()},
           );
-      await _routeAfterAuth();
+          await _showIncompleteSetupDialog(
+            _stripIncompletePrefix(message).isEmpty
+                ? 'Your account exists, but setup is incomplete. Please verify your email to continue.'
+                : _stripIncompletePrefix(message),
+          );
+          return;
+        }
+        _showFeedback(message);
+      }
     }
   }
 
   Future<void> _handleGoogleLogin() async {
-    await ref.read(authNotifierProvider.notifier).signInWithGoogle();
-    await _routeAfterAuth();
+    try {
+      await ref.read(authNotifierProvider.notifier).signInWithGoogle();
+      await _routeAfterAuth();
+    } catch (error) {
+      if (!mounted) return;
+      _showFeedback(_cleanError(error));
+    }
+  }
+
+  Future<void> _showIncompleteSetupDialog(String message) async {
+    final theme = Theme.of(context);
+    final email = _emailController.text.trim().toLowerCase();
+    final password = _passwordController.text.trim();
+    final returnParam = widget.returnTo != null
+        ? '&returnTo=${Uri.encodeComponent(widget.returnTo!)}'
+        : '';
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          title: const Text('Finish your setup'),
+          content: Text(
+            message,
+            style: TextStyle(color: theme.colorScheme.onSurface),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                if (email.isEmpty || password.isEmpty) {
+                  _showFeedback(
+                    'Enter your email and password first, then continue.',
+                  );
+                  return;
+                }
+                Navigator.of(dialogContext).pop();
+                try {
+                  await ref
+                      .read(authNotifierProvider.notifier)
+                      .resumeIncompleteOnboarding(
+                        email: email,
+                        password: password,
+                      );
+                  if (!mounted) return;
+                  _goSafely(
+                    '/verify-email?email=${Uri.encodeComponent(email)}&partial=1$returnParam',
+                  );
+                } catch (error) {
+                  if (!mounted) return;
+                  _showFeedback(_cleanError(error));
+                }
+              },
+              child: const Text('Resume Verification'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Future<void> _routeAfterAuth() async {
@@ -165,26 +289,25 @@ class _LoginFormState extends ConsumerState<_LoginForm> {
       if (!hasSeenOnboarding) {
         await prefs.setBool(perUserKey, true);
         await prefs.setBool('hasSeenOnboarding', true);
-        if (mounted) {
-          context.go('/add-car?nudge=true');
-        }
+        _goSafely('/add-car?nudge=true');
         return;
       }
     }
 
+    if (!mounted) return;
     if (widget.returnTo != null) {
-      context.go(widget.returnTo!);
+      _goSafely(widget.returnTo!);
     } else {
-      context.go('/home');
+      _goSafely('/home');
     }
   }
 
   void _continueAsGuest() {
     ref.read(hasSeenWelcomeProvider.notifier).completeWelcome();
     if (widget.returnTo != null) {
-      context.go(widget.returnTo!);
+      _goSafely(widget.returnTo!);
     } else {
-      context.go('/home');
+      _goSafely('/home');
     }
   }
 

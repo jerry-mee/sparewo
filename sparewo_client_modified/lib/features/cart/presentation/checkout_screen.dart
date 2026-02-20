@@ -39,6 +39,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     super.dispose();
   }
 
+  double _toAmount(dynamic value) {
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? 0.0;
+    return 0.0;
+  }
+
   Future<void> _placeOrder({CheckoutBuyNowArgs? buyNowArgs}) async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -89,7 +95,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           );
         }
 
-        final price = (data['price'] ?? 0).toDouble();
+        final legacyPrice = _toAmount(data['price']);
+        final catalogPrice = _toAmount(data['unitPrice']);
+        final price = legacyPrice > 0 ? legacyPrice : catalogPrice;
         final name = (data['partName'] as String?) ?? 'Unknown product';
         final quantity = buyNowArgs.quantity <= 0 ? 1 : buyNowArgs.quantity;
         final lineTotal = price * quantity;
@@ -122,7 +130,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             );
           }
 
-          final price = (data['price'] ?? 0).toDouble();
+          final legacyPrice = _toAmount(data['price']);
+          final catalogPrice = _toAmount(data['unitPrice']);
+          final price = legacyPrice > 0 ? legacyPrice : catalogPrice;
           final name = (data['partName'] as String?) ?? 'Unknown product';
           final lineTotal = price * item.quantity;
 

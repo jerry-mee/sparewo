@@ -244,7 +244,7 @@ class CartScreen extends ConsumerWidget {
             const SizedBox(height: 8),
             _summaryRow(
               context,
-              label: 'Shipping',
+              label: 'Delivery',
               value: shipping == 0
                   ? 'Free'
                   : 'UGX ${_formatCurrency(shipping)}',

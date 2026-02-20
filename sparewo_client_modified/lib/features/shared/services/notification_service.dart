@@ -33,6 +33,7 @@ class NotificationService {
   StreamSubscription? _firestoreNotifSubscription;
   StreamSubscription<String>? _tokenRefreshSubscription;
   GoRouter? _router;
+  bool _hasLoggedApnsPending = false;
 
   // Preferences Keys
   static const String _prefKeyHideAddCar = 'notification_hide_add_car_nudge';
@@ -209,6 +210,17 @@ class NotificationService {
             }
           },
           onError: (error, stack) {
+            if (error is FirebaseException &&
+                (error.code == 'permission-denied' ||
+                    error.code == 'unauthenticated')) {
+              AppLogger.warn(
+                'NotificationService',
+                'Notifications listener stopped due to auth state change',
+                extra: {'userId': userId, 'code': error.code},
+              );
+              stopFirestoreNotificationListener();
+              return;
+            }
             AppLogger.error(
               'NotificationService',
               'Firestore notifications listener failed',
@@ -231,29 +243,23 @@ class NotificationService {
 
     try {
       if (Platform.isIOS) {
-        var apnsToken = await _firebaseMessaging.getAPNSToken();
-
-        // Retry logic for iOS APNS timing
+        final apnsToken = await _firebaseMessaging.getAPNSToken();
         if (apnsToken == null || apnsToken.isEmpty) {
-          AppLogger.warn(
-            'NotificationService',
-            'APNS not ready. Waiting 5s...',
-          );
-          await Future.delayed(const Duration(seconds: 5));
-          apnsToken = await _firebaseMessaging.getAPNSToken();
-        }
-
-        if (apnsToken == null || apnsToken.isEmpty) {
-          AppLogger.warn(
-            'NotificationService',
-            'APNS token still not ready; skipping FCM fetch',
-          );
+          if (!_hasLoggedApnsPending) {
+            AppLogger.info(
+              'NotificationService',
+              'APNS token not ready yet; waiting for iOS registration callback',
+            );
+            _hasLoggedApnsPending = true;
+          }
           return;
         }
+        _hasLoggedApnsPending = false;
       }
 
       final token = await _firebaseMessaging.getToken();
       if (token != null && token.isNotEmpty) {
+        _hasLoggedApnsPending = false;
         AppLogger.info(
           'NotificationService',
           'Initial FCM token fetched',
@@ -269,10 +275,13 @@ class NotificationService {
       final isApnsRace =
           Platform.isIOS && message.contains('apns-token-not-set');
       if (isApnsRace) {
-        AppLogger.warn(
-          'NotificationService',
-          'APNS token not set yet; token fetch will retry on refresh',
-        );
+        if (!_hasLoggedApnsPending) {
+          AppLogger.info(
+            'NotificationService',
+            'APNS token not set yet; token fetch will retry on refresh',
+          );
+          _hasLoggedApnsPending = true;
+        }
         return;
       }
 

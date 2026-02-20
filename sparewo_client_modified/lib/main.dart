@@ -1,6 +1,7 @@
 // lib/main.dart
 
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
@@ -40,7 +41,7 @@ Future<void> main() async {
       try {
         await dotenv.load(fileName: ".env");
       } catch (e) {
-        AppLogger.warn(
+        AppLogger.info(
           'Env',
           'Skipping .env load',
           extra: {'error': e.toString()},
@@ -110,7 +111,7 @@ Future<void> _activateAppCheck() async {
           ? AndroidProvider.playIntegrity
           : AndroidProvider.debug,
       appleProvider: kReleaseMode
-          ? AppleProvider.appAttest
+          ? AppleProvider.appAttestWithDeviceCheckFallback
           : AppleProvider.debug,
     );
 
@@ -169,13 +170,19 @@ class MyApp extends ConsumerStatefulWidget {
 class _MyAppState extends ConsumerState<MyApp> {
   StreamSubscription? _notificationSubscription;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
-  _bookingApprovalSubscription;
+  _bookingStatusSubscription;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
+  _orderStatusSubscription;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
   ProviderSubscription<AsyncValue<fb_auth.User?>>? _authStateListener;
   ProviderSubscription<AsyncValue<fb_auth.User?>>? _easyLoadingListener;
   final Map<String, String> _knownBookingStatuses = <String, String>{};
-  String? _bookingListenerUserId;
+  final Map<String, String> _knownOrderStatuses = <String, String>{};
+  String? _statusListenerUserId;
+  String? _pendingNotificationUserId;
   bool _isOffline = false;
+  bool _notificationsReady = false;
+  late final NotificationService _notificationService;
 
   @override
   void initState() {
@@ -185,42 +192,12 @@ class _MyAppState extends ConsumerState<MyApp> {
 
   Future<void> _initServices() async {
     try {
-      final notifService = ref.read(notificationServiceProvider);
-      await notifService.init();
-
-      // Wire up the Foreground Stream to the Aesthetic UI
-      _notificationSubscription = notifService.foregroundStream.listen((
-        message,
-      ) {
-        if (message.notification != null) {
-          _showAestheticInAppNotification(message);
-        }
-      });
-
-      // Handle App Opening from Notification
-      final router = ref.read(routerProvider);
-      await notifService.setupInteractedMessage(router);
+      _notificationService = ref.read(notificationServiceProvider);
 
       _authStateListener = ref.listenManual<AsyncValue<fb_auth.User?>>(
         authStateChangesProvider,
         (previous, next) {
-          final userId = next.asData?.value?.uid;
-          if (userId != null) {
-            _syncBookingApprovalListener(
-              userId: userId,
-              notificationService: notifService,
-            );
-
-            notifService.updateToken(userId);
-            notifService.startFirestoreNotificationListener(userId);
-            return;
-          }
-
-          _syncBookingApprovalListener(
-            userId: null,
-            notificationService: notifService,
-          );
-          notifService.stopFirestoreNotificationListener();
+          _onAuthStateChanged(next.asData?.value?.uid);
         },
         fireImmediately: true,
       );
@@ -234,11 +211,72 @@ class _MyAppState extends ConsumerState<MyApp> {
         },
       );
 
-      AppLogger.info('MyApp', 'Services wired up');
-      _startConnectivityMonitoring();
+      unawaited(_startConnectivityMonitoring());
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        unawaited(_initNotificationLayer());
+      });
+      AppLogger.info('MyApp', 'Service pipelines initialized');
     } catch (e, st) {
       AppLogger.error('MyApp', 'Service Init Failed', error: e, stackTrace: st);
     }
+  }
+
+  Future<void> _initNotificationLayer() async {
+    try {
+      await _notificationService.init();
+      _notificationsReady = true;
+
+      // Wire up the Foreground Stream to the Aesthetic UI
+      _notificationSubscription = _notificationService.foregroundStream.listen((
+        message,
+      ) {
+        if (message.notification != null) {
+          _showAestheticInAppNotification(message);
+        }
+      });
+
+      // Handle App Opening from Notification
+      final router = ref.read(routerProvider);
+      await _notificationService.setupInteractedMessage(router);
+
+      _applyPendingNotificationAuth();
+      AppLogger.info('MyApp', 'Notification layer ready');
+    } catch (e, st) {
+      AppLogger.error(
+        'MyApp',
+        'Notification layer init failed',
+        error: e,
+        stackTrace: st,
+      );
+    }
+  }
+
+  void _onAuthStateChanged(String? userId) {
+    _syncStatusChangeListeners(
+      userId: userId,
+      notificationService: _notificationService,
+    );
+
+    if (!_notificationsReady) {
+      _pendingNotificationUserId = userId;
+      return;
+    }
+
+    if (userId != null && userId.isNotEmpty) {
+      unawaited(_notificationService.updateToken(userId));
+      _notificationService.startFirestoreNotificationListener(userId);
+      return;
+    }
+
+    _notificationService.stopFirestoreNotificationListener();
+  }
+
+  void _applyPendingNotificationAuth() {
+    final userId =
+        _pendingNotificationUserId ??
+        ref.read(authStateChangesProvider).asData?.value?.uid;
+    _pendingNotificationUserId = null;
+    _onAuthStateChanged(userId);
   }
 
   Future<void> _startConnectivityMonitoring() async {
@@ -292,28 +330,34 @@ class _MyAppState extends ConsumerState<MyApp> {
     );
   }
 
-  void _syncBookingApprovalListener({
+  void _syncStatusChangeListeners({
     required String? userId,
     required NotificationService notificationService,
   }) {
     if (userId == null || userId.isEmpty) {
-      _bookingApprovalSubscription?.cancel();
-      _bookingApprovalSubscription = null;
-      _bookingListenerUserId = null;
+      _bookingStatusSubscription?.cancel();
+      _bookingStatusSubscription = null;
+      _orderStatusSubscription?.cancel();
+      _orderStatusSubscription = null;
+      _statusListenerUserId = null;
       _knownBookingStatuses.clear();
+      _knownOrderStatuses.clear();
       return;
     }
 
-    if (_bookingListenerUserId == userId &&
-        _bookingApprovalSubscription != null) {
+    if (_statusListenerUserId == userId &&
+        _bookingStatusSubscription != null &&
+        _orderStatusSubscription != null) {
       return;
     }
 
-    _bookingApprovalSubscription?.cancel();
+    _bookingStatusSubscription?.cancel();
+    _orderStatusSubscription?.cancel();
     _knownBookingStatuses.clear();
-    _bookingListenerUserId = userId;
+    _knownOrderStatuses.clear();
+    _statusListenerUserId = userId;
 
-    _bookingApprovalSubscription = FirebaseFirestore.instance
+    _bookingStatusSubscription = FirebaseFirestore.instance
         .collection('service_bookings')
         .where('userId', isEqualTo: userId)
         .snapshots()
@@ -329,12 +373,12 @@ class _MyAppState extends ConsumerState<MyApp> {
               final previousStatus = _knownBookingStatuses[bookingId];
               if (previousStatus != null &&
                   previousStatus != status &&
-                  status == 'confirmed') {
+                  status.trim().isNotEmpty) {
                 notificationService.showLocalNotification(
                   id: bookingId.hashCode,
-                  title: 'AutoHub Request Approved',
-                  body:
-                      'Your request $bookingNumber is approved. We shall reach out shortly.',
+                  title: 'Booking Status Updated',
+                  body: _bookingStatusMessage(status, bookingNumber),
+                  payload: jsonEncode({'type': 'booking', 'id': bookingId}),
                 );
               }
 
@@ -344,13 +388,85 @@ class _MyAppState extends ConsumerState<MyApp> {
           onError: (error, stack) {
             AppLogger.error(
               'MyApp',
-              'Booking approval listener failed',
+              'Booking status listener failed',
               error: error,
               stackTrace: stack,
               extra: {'userId': userId},
             );
           },
         );
+
+    _orderStatusSubscription = FirebaseFirestore.instance
+        .collection('orders')
+        .where('userId', isEqualTo: userId)
+        .snapshots()
+        .listen(
+          (snapshot) {
+            for (final doc in snapshot.docs) {
+              final data = doc.data();
+              final orderId = doc.id;
+              final status = (data['status'] as String?) ?? '';
+              final orderRef = orderId.substring(0, 8).toUpperCase();
+
+              final previousStatus = _knownOrderStatuses[orderId];
+              if (previousStatus != null &&
+                  previousStatus != status &&
+                  status.trim().isNotEmpty) {
+                notificationService.showLocalNotification(
+                  id: orderId.hashCode,
+                  title: 'Order Status Updated',
+                  body: _orderStatusMessage(status, orderRef),
+                  payload: jsonEncode({'type': 'order', 'id': orderId}),
+                );
+              }
+
+              _knownOrderStatuses[orderId] = status;
+            }
+          },
+          onError: (error, stack) {
+            AppLogger.error(
+              'MyApp',
+              'Order status listener failed',
+              error: error,
+              stackTrace: stack,
+              extra: {'userId': userId},
+            );
+          },
+        );
+  }
+
+  String _bookingStatusMessage(String status, String bookingNumber) {
+    switch (status.toLowerCase()) {
+      case 'confirmed':
+        return 'Booking $bookingNumber is confirmed. Our team will contact you shortly.';
+      case 'mechanic_assigned':
+      case 'in_progress':
+        return 'Booking $bookingNumber is now in progress.';
+      case 'completed':
+        return 'Booking $bookingNumber has been completed.';
+      case 'cancelled':
+        return 'Booking $bookingNumber was cancelled. Contact support if this is unexpected.';
+      default:
+        return 'Booking $bookingNumber status is now ${status.toUpperCase()}.';
+    }
+  }
+
+  String _orderStatusMessage(String status, String orderRef) {
+    switch (status.toLowerCase()) {
+      case 'confirmed':
+        return 'Order #$orderRef has been confirmed.';
+      case 'processing':
+        return 'Order #$orderRef is now being processed.';
+      case 'shipped':
+        return 'Order #$orderRef has been shipped.';
+      case 'delivered':
+      case 'completed':
+        return 'Order #$orderRef has been delivered successfully.';
+      case 'cancelled':
+        return 'Order #$orderRef was cancelled. Contact support if needed.';
+      default:
+        return 'Order #$orderRef status is now ${status.toUpperCase()}.';
+    }
   }
 
   /// Shows a custom styled SnackBar that matches the app aesthetic
@@ -424,7 +540,8 @@ class _MyAppState extends ConsumerState<MyApp> {
   @override
   void dispose() {
     _notificationSubscription?.cancel();
-    _bookingApprovalSubscription?.cancel();
+    _bookingStatusSubscription?.cancel();
+    _orderStatusSubscription?.cancel();
     _connectivitySubscription?.cancel();
     _authStateListener?.close();
     _easyLoadingListener?.close();

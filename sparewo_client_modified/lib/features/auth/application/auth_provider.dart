@@ -29,12 +29,7 @@ final authStateChangesProvider = StreamProvider<fb_auth.User?>((ref) {
 /// Rich UserModel stream – for screens that need profile data.
 final currentUserProvider = StreamProvider<UserModel?>((ref) {
   final repo = ref.watch(authRepositoryProvider);
-
-  // When Firebase user changes, map to Firestore UserModel (or null).
-  return repo.authStateChanges.asyncMap((fbUser) async {
-    if (fbUser == null) return null;
-    return repo.getCurrentUserData();
-  });
+  return repo.userProfileChanges;
 });
 
 /// ---------------------------------------------------------------------------
@@ -106,6 +101,25 @@ class AuthNotifier extends AsyncNotifier<UserModel?> {
 
   Future<void> resendVerificationCode({required String email}) async {
     await _repo.resendVerificationCode(email: email);
+  }
+
+  Future<void> resumeIncompleteOnboarding({
+    required String email,
+    required String password,
+    String? name,
+  }) async {
+    state = const AsyncLoading();
+    try {
+      await _repo.resumeIncompleteOnboarding(
+        email: email,
+        password: password,
+        name: name,
+      );
+      state = const AsyncData(null);
+    } catch (e, st) {
+      state = AsyncError(e, st);
+      rethrow;
+    }
   }
 
   Future<void> signInWithGoogle() async {

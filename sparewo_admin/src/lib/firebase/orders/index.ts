@@ -28,13 +28,18 @@ type FirebaseUpdateData = {
 interface Order {
   id: string;
   orderNumber: string;
-  customerId: string;
+  customerId?: string;
+  userId?: string;
   items: OrderItem[];
   status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'completed' | 'cancelled';
   totalAmount: number;
   deliveryAddress?: DeliveryAddress;
   customerPhone: string;
   adminNotes?: string;
+  paymentMethod?: string;
+  paymentStatus?: 'pending' | 'received';
+  paymentReceived?: boolean;
+  paymentReceivedAt?: Timestamp;
   createdAt: Timestamp;
   updatedAt: Timestamp;
   completedAt?: Timestamp;
@@ -44,10 +49,15 @@ interface Order {
 }
 
 interface OrderItem {
-  catalogProductId: string;
-  quantity: number;
-  price: number;
-  productName: string;
+  catalogProductId?: string;
+  quantity?: number;
+  price?: number;
+  unitPrice?: number;
+  lineTotal?: number;
+  productName?: string;
+  name?: string;
+  partName?: string;
+  brand?: string;
 }
 
 interface DeliveryAddress {
@@ -199,6 +209,7 @@ export const updateOrderStatus = async (
 ): Promise<void> => {
   try {
     const docRef = doc(db, 'orders', orderId);
+    const currentOrder = await getOrderById(orderId);
     
     const updateData: FirebaseUpdateData = {
       status,
@@ -226,8 +237,78 @@ export const updateOrderStatus = async (
     }
     
     await updateDoc(docRef, updateData);
+
+    if (currentOrder && currentOrder.status !== status) {
+      await createOrderStatusNotification(currentOrder, status);
+    }
   } catch (error) {
     console.error('Error updating order status:', error);
+    throw error;
+  }
+};
+
+const createOrderStatusNotification = async (
+  order: Order,
+  status: Order['status']
+): Promise<void> => {
+  const recipientId = order.userId || order.customerId;
+  if (!recipientId) return;
+
+  const orderNumber = order.orderNumber || order.id;
+  const statusLabel = status.replace(/_/g, ' ');
+  const titleByStatus: Record<Order['status'], string> = {
+    pending: 'Order Received',
+    processing: 'Order Processing',
+    shipped: 'Order Shipped',
+    delivered: 'Order Delivered',
+    completed: 'Order Completed',
+    cancelled: 'Order Cancelled',
+  };
+  const messageByStatus: Record<Order['status'], string> = {
+    pending: `Order ${orderNumber} has been received.`,
+    processing: `Order ${orderNumber} is now being prepared.`,
+    shipped: `Order ${orderNumber} has been shipped and is on the way.`,
+    delivered: `Order ${orderNumber} was delivered.`,
+    completed: `Order ${orderNumber} has been completed.`,
+    cancelled: `Order ${orderNumber} was cancelled. Contact support if needed.`,
+  };
+
+  await addDoc(collection(db, 'notifications'), {
+    userId: recipientId,
+    recipientId,
+    title: titleByStatus[status],
+    message: messageByStatus[status],
+    type: status === 'cancelled' ? 'warning' : 'info',
+    id: order.id,
+    entityType: 'order',
+    status,
+    statusLabel,
+    orderId: order.id,
+    orderNumber,
+    link: `/order/${order.id}`,
+    read: false,
+    isRead: false,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+};
+
+export const updateOrderPaymentStatus = async (
+  orderId: string,
+  paymentStatus: 'pending' | 'received'
+): Promise<void> => {
+  try {
+    const docRef = doc(db, 'orders', orderId);
+    const updateData: FirebaseUpdateData = {
+      paymentStatus,
+      paymentReceived: paymentStatus === 'received',
+      paymentReceivedAt: paymentStatus === 'received' ? serverTimestamp() : null,
+      updatedAt: serverTimestamp(),
+    };
+
+    await updateDoc(docRef, updateData);
+  } catch (error) {
+    console.error('Error updating payment status:', error);
     throw error;
   }
 };

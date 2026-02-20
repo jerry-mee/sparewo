@@ -36,7 +36,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
             ),
             const SizedBox(height: 24),
             const Text(
-              '© Est. 2016, SpareWo',
+              '© Est. 2016 | SpareWo Ltd',
               style: TextStyle(
                 color: Colors.white70,
                 fontSize: 14,

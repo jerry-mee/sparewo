@@ -14,6 +14,7 @@ import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:sparewo_client/core/theme/app_theme.dart';
 import 'package:sparewo_client/core/router/app_router.dart';
 import 'package:sparewo_client/core/widgets/responsive_screen.dart';
+import 'package:sparewo_client/core/logging/app_logger.dart';
 
 class SignUpScreen extends ConsumerWidget {
   const SignUpScreen({super.key});
@@ -35,9 +36,10 @@ class SignUpScreen extends ConsumerWidget {
 
     final content = SafeArea(
       child: SingleChildScrollView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: EdgeInsets.symmetric(
           horizontal: compactAuthLayout ? 20 : 32,
-          vertical: compactAuthLayout ? 14 : 24,
+          vertical: compactAuthLayout ? 8 : 16,
         ),
         child: _SignUpForm(returnTo: returnTo, compact: compactAuthLayout),
       ),
@@ -57,7 +59,7 @@ class SignUpScreen extends ConsumerWidget {
             },
           ),
         ),
-        body: Center(child: content),
+        body: content,
       ),
       desktop: Scaffold(
         appBar: AppBar(
@@ -158,6 +160,19 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
     });
   }
 
+  void _goSafely(String route) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.go(route);
+    });
+  }
+
+  void _goNow(String route) {
+    if (!mounted) return;
+    FocusScope.of(context).unfocus();
+    context.go(route);
+  }
+
   int _passwordScore(String password) {
     var score = 0;
     if (password.length >= 8) score++;
@@ -212,7 +227,7 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
       setState(() {
         _isCheckingEmail = false;
         _isEmailTaken = cached;
-        _isEmailAvailable = !cached;
+        _isEmailAvailable = true;
         _isEmailCheckUnavailable = false;
         _showEmailStatus = true;
       });
@@ -230,7 +245,7 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
         setState(() {
           _isCheckingEmail = false;
           _isEmailTaken = exists;
-          _isEmailAvailable = !exists;
+          _isEmailAvailable = true;
           _isEmailCheckUnavailable = false;
           _showEmailStatus = true;
         });
@@ -266,6 +281,18 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
     }
     if (_formKey.currentState?.validate() ?? false) {
       try {
+        if (_isEmailTaken) {
+          AppLogger.info(
+            'SignUpScreen',
+            'Inline email check marked email as taken',
+            extra: {'email': _emailController.text.trim().toLowerCase()},
+          );
+          await _showExistingAccountDialog(
+            'This email already has an account. If the email is unverified, tap "Complete setup" to continue verification.',
+            canResume: true,
+          );
+          return;
+        }
         await ref
             .read(authNotifierProvider.notifier)
             .signUp(
@@ -275,24 +302,127 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
             );
         if (mounted) {
           final normalizedEmail = _emailController.text.trim().toLowerCase();
-          final isLinkMode = ref
+          final wasPartial = ref
               .read(authRepositoryProvider)
-              .isLinkVerificationMode(normalizedEmail);
-          final modeParam = isLinkMode ? '&mode=link' : '';
+              .takeLastRegistrationWasPartial();
+          final partialParam = wasPartial ? '&partial=1' : '';
           final returnParam = widget.returnTo != null
               ? '&returnTo=${Uri.encodeComponent(widget.returnTo!)}'
               : '';
-          context.go(
-            '/verify-email?email=${Uri.encodeComponent(normalizedEmail)}$modeParam$returnParam',
+          _goSafely(
+            '/verify-email?email=${Uri.encodeComponent(normalizedEmail)}$partialParam$returnParam',
           );
         }
       } catch (e) {
         if (!mounted) return;
-        _showSignupFeedback(
-          e.toString().replaceAll('Exception: ', ''),
-          isFailure: true,
+        final message = e.toString().replaceAll('Exception: ', '');
+        AppLogger.warn(
+          'SignUpScreen',
+          'Sign up failed',
+          extra: {
+            'email': _emailController.text.trim().toLowerCase(),
+            'message': message,
+          },
         );
+        if (_looksLikeExistingAccountError(message)) {
+          await _showExistingAccountDialog(
+            'This email already has an account. If the email is unverified, tap "Complete setup" to continue verification.',
+            canResume: true,
+          );
+          return;
+        }
+        _showSignupFeedback(message, isFailure: true);
       }
+    }
+  }
+
+  bool _looksLikeExistingAccountError(String message) {
+    final value = message.toLowerCase();
+    return value.contains('already registered') ||
+        value.contains('already in use') ||
+        value.contains('email-already-in-use') ||
+        value.contains('already has an account') ||
+        value.contains('partial setup') ||
+        value.contains('continue setup');
+  }
+
+  Future<void> _showExistingAccountDialog(
+    String message, {
+    bool canResume = false,
+  }) async {
+    final route = widget.returnTo != null
+        ? '/login?returnTo=${Uri.encodeComponent(widget.returnTo!)}'
+        : '/login';
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          title: const Text('Account already exists'),
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Stay here'),
+            ),
+            if (canResume)
+              FilledButton.tonal(
+                onPressed: () async {
+                  Navigator.of(dialogContext).pop();
+                  await _resumePartialOnboardingFromSignUp();
+                },
+                child: const Text('Continue setup'),
+              ),
+            FilledButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+                _goNow(route);
+              },
+              child: const Text('Go to Login'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _resumePartialOnboardingFromSignUp() async {
+    final email = _emailController.text.trim().toLowerCase();
+    final password = _passwordController.text.trim();
+    if (email.isEmpty || password.isEmpty) {
+      _showSignupFeedback(
+        'Enter the same email and password you used before, then continue setup.',
+        isFailure: true,
+      );
+      return;
+    }
+    try {
+      await ref
+          .read(authNotifierProvider.notifier)
+          .resumeIncompleteOnboarding(
+            email: email,
+            password: password,
+            name: _nameController.text.trim(),
+          );
+      final returnParam = widget.returnTo != null
+          ? '&returnTo=${Uri.encodeComponent(widget.returnTo!)}'
+          : '';
+      _goSafely(
+        '/verify-email?email=${Uri.encodeComponent(email)}&partial=1$returnParam',
+      );
+    } catch (error) {
+      if (!mounted) return;
+      final message = error.toString().replaceAll('Exception: ', '');
+      if (_looksLikeExistingAccountError(message)) {
+        await _showExistingAccountDialog(
+          'This account is already active. Please log in instead.',
+          canResume: false,
+        );
+        return;
+      }
+      _showSignupFeedback(message, isFailure: true);
     }
   }
 
@@ -362,28 +492,24 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
       if (!hasSeenOnboarding) {
         await prefs.setBool(perUserKey, true);
         await prefs.setBool('hasSeenOnboarding', true);
-        if (mounted) {
-          context.go('/add-car?nudge=true');
-        }
+        _goSafely('/add-car?nudge=true');
         return;
       }
     }
 
     if (widget.returnTo != null) {
-      if (!mounted) return;
-      context.go(widget.returnTo!);
+      _goNow(widget.returnTo!);
     } else {
-      if (!mounted) return;
-      context.go('/home');
+      _goNow('/home');
     }
   }
 
   void _continueAsGuest() {
     ref.read(hasSeenWelcomeProvider.notifier).completeWelcome();
     if (widget.returnTo != null) {
-      context.go(widget.returnTo!);
+      _goNow(widget.returnTo!);
     } else {
-      context.go('/home');
+      _goNow('/home');
     }
   }
 
@@ -416,22 +542,23 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
                 'Create Account',
                 textAlign: TextAlign.center,
                 style: AppTextStyles.displaySmall.copyWith(
+                  fontSize: 26,
                   fontWeight: FontWeight.w800,
-                  color: Colors.white,
+                  color: theme.colorScheme.onSurface,
                 ),
               ).animate().fadeIn().slideX(begin: -0.1, end: 0),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 6),
             SizedBox(
               width: double.infinity,
-              child: const Text(
-                'Start your journey with SpareWo.',
+              child: Text(
+                'Start your journey with SpareWo',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white, fontSize: 16),
+                style: TextStyle(fontSize: 13, color: theme.hintColor),
               ).animate().fadeIn(delay: 100.ms),
             ),
 
-            SizedBox(height: widget.compact ? 18 : 32),
+            SizedBox(height: widget.compact ? 12 : 20),
 
             TextFormField(
               controller: _nameController,
@@ -475,9 +602,13 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     ),
                     const SizedBox(width: 8),
-                    Text(
-                      'Checking email availability...',
-                      style: TextStyle(color: theme.hintColor, fontSize: 12),
+                    Expanded(
+                      child: Text(
+                        'Checking email availability...',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: theme.hintColor, fontSize: 12),
+                      ),
                     ),
                   ] else if (_isEmailTaken) ...[
                     const Icon(
@@ -486,27 +617,71 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
                       color: AppColors.warning,
                     ),
                     const SizedBox(width: 8),
-                    Text(
-                      'That email is already in use',
-                      style: TextStyle(
-                        color: theme.hintColor,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
+                    Expanded(
+                      child: Text(
+                        'This email already has an account. If setup is incomplete, continue registration.',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: theme.hintColor,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    TextButton(
+                      onPressed: _resumePartialOnboardingFromSignUp,
+                      style: TextButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                        minimumSize: const Size(0, 28),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: const Text(
+                        'Complete setup',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        final route = widget.returnTo != null
+                            ? '/login?returnTo=${Uri.encodeComponent(widget.returnTo!)}'
+                            : '/login';
+                        _goNow(route);
+                      },
+                      style: TextButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                        minimumSize: const Size(0, 0),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: const Text(
+                        'Log in',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.primary,
+                        ),
                       ),
                     ),
                   ] else if (_isEmailAvailable) ...[
-                    const Icon(
-                      Icons.check_circle_outline,
-                      size: 14,
-                      color: AppColors.success,
-                    ),
+                    Icon(Icons.info_outline, size: 14, color: theme.hintColor),
                     const SizedBox(width: 8),
-                    const Text(
-                      'Email is available',
-                      style: TextStyle(
-                        color: AppColors.success,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
+                    Expanded(
+                      child: Text(
+                        'Email format is valid. We verify account status at signup.',
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: theme.hintColor,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                   ] else if (_isEmailCheckUnavailable) ...[
@@ -516,19 +691,23 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
                       color: AppColors.warning,
                     ),
                     const SizedBox(width: 8),
-                    Text(
-                      'Could not verify now. We will confirm on sign up.',
-                      style: TextStyle(
-                        color: theme.hintColor,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
+                    Expanded(
+                      child: Text(
+                        'Could not verify now. We will confirm on sign up.',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: theme.hintColor,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                   ],
                 ],
               ),
             ],
-            SizedBox(height: widget.compact ? 14 : 20),
+            SizedBox(height: widget.compact ? 10 : 16),
             Container(
               key: _passwordSectionKey,
               child: Column(
@@ -656,7 +835,7 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
               ),
             ),
 
-            SizedBox(height: widget.compact ? 16 : 24),
+            SizedBox(height: widget.compact ? 12 : 16),
 
             Row(
               children: [
@@ -709,29 +888,56 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
               ],
             ),
 
-            SizedBox(height: widget.compact ? 20 : 28),
+            SizedBox(height: widget.compact ? 12 : 16),
 
-            SizedBox(
-              width: double.infinity,
-              height: widget.compact ? 52 : 56,
-              child: FilledButton(
-                onPressed: _handleSignUp,
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(30),
+            Align(
+              alignment: Alignment.center,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 290),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: widget.compact ? 46 : 50,
+                  child: FilledButton(
+                    onPressed: _handleSignUp,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      elevation: 3,
+                      shadowColor: AppColors.primary.withValues(alpha: 0.28),
+                    ),
+                    child: const Text(
+                      'Create Account',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
-                  elevation: 4,
-                  shadowColor: AppColors.primary.withValues(alpha: 0.3),
-                ),
-                child: const Text(
-                  'Create Account',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
               ),
             ),
 
-            SizedBox(height: widget.compact ? 16 : 24),
+            SizedBox(height: widget.compact ? 12 : 14),
+            SizedBox(
+              width: double.infinity,
+              height: 44,
+              child: OutlinedButton(
+                onPressed: () {
+                  final route = widget.returnTo != null
+                      ? '/login?returnTo=${Uri.encodeComponent(widget.returnTo!)}'
+                      : '/login';
+                  _goNow(route);
+                },
+                child: const Text(
+                  'Already have an account? Login',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
+
+            SizedBox(height: widget.compact ? 12 : 16),
 
             Row(
               children: [
@@ -747,16 +953,16 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
               ],
             ),
 
-            SizedBox(height: widget.compact ? 16 : 24),
+            SizedBox(height: widget.compact ? 10 : 14),
 
             SizedBox(
               width: double.infinity,
-              height: widget.compact ? 52 : 56,
+              height: widget.compact ? 46 : 48,
               child: OutlinedButton.icon(
                 onPressed: _handleGoogleSignUp,
                 icon: Image.asset(
                   'assets/icons/Google Logo Icon.png',
-                  width: 24,
+                  width: 22,
                 ),
                 label: const Text('Continue with Google'),
                 style: OutlinedButton.styleFrom(
@@ -768,40 +974,16 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
                 ),
               ),
             ),
-
-            SizedBox(height: widget.compact ? 20 : 32),
-
-            Center(
-              child: GestureDetector(
-                onTap: () {
-                  final route = widget.returnTo != null
-                      ? '/login?returnTo=${Uri.encodeComponent(widget.returnTo!)}'
-                      : '/login';
-                  context.go(route);
-                },
-                child: RichText(
-                  text: TextSpan(
-                    text: "Already have an account? ",
-                    style: TextStyle(color: theme.hintColor, fontSize: 15),
-                    children: const [
-                      TextSpan(
-                        text: 'Login',
-                        style: TextStyle(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            Center(
+            const SizedBox(height: 6),
+            SizedBox(
+              width: double.infinity,
               child: TextButton(
                 onPressed: _continueAsGuest,
+                style: TextButton.styleFrom(
+                  minimumSize: const Size(0, 38),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  visualDensity: VisualDensity.compact,
+                ),
                 child: Text(
                   'Continue as Guest',
                   style: TextStyle(

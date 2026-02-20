@@ -6,6 +6,7 @@ import 'package:sparewo_client/core/logging/app_logger.dart';
 /// for the SpareWo client app.
 class EmailService {
   static final EmailService _instance = EmailService._internal();
+  static const String _brandLogoUrl = 'https://sparewo.ug/splash_logo.png';
   factory EmailService() => _instance;
   EmailService._internal();
 
@@ -25,11 +26,7 @@ class EmailService {
     final String htmlContent =
         '''
       <div style="font-family: 'Poppins', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 30px; border-radius: 8px; border: 1px solid #eaeaea; box-shadow: 0 2px 10px rgba(0,0,0,0.08);">
-        <div style="text-align: center; margin-bottom: 30px;">
-          <div style="background-color: #1A1B4B; color: white; padding: 15px; border-radius: 4px;">
-            <h1 style="margin: 0; color: white; font-size: 24px;">SpareWo</h1>
-          </div>
-        </div>
+        ${_createEmailHeader(title: 'SpareWo')}
 
         <h2 style="color: #1A1B4B; font-size: 24px; margin-bottom: 20px; text-align: center;">Verify Your Email</h2>
 
@@ -109,11 +106,7 @@ class EmailService {
     final String htmlContent =
         '''
       <div style="font-family: 'Poppins', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 30px; border-radius: 8px; border: 1px solid #eaeaea; box-shadow: 0 2px 10px rgba(0,0,0,0.08);">
-        <div style="text-align: center; margin-bottom: 30px;">
-          <div style="background-color: #1A1B4B; color: white; padding: 15px; border-radius: 4px;">
-            <h1 style="margin: 0; color: white; font-size: 24px;">SpareWo</h1>
-          </div>
-        </div>
+        ${_createEmailHeader(title: 'SpareWo')}
 
         <h2 style="color: #1A1B4B; font-size: 24px; margin-bottom: 20px; text-align: center;">Order Confirmed!</h2>
 
@@ -195,11 +188,7 @@ class EmailService {
     final String htmlContent =
         '''
       <div style="font-family: 'Poppins', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 30px; border-radius: 8px; border: 1px solid #eaeaea; box-shadow: 0 2px 10px rgba(0,0,0,0.08);">
-        <div style="text-align: center; margin-bottom: 30px;">
-          <div style="background-color: #1A1B4B; color: white; padding: 15px; border-radius: 4px;">
-            <h1 style="margin: 0; color: white; font-size: 24px;">SpareWo AutoHub</h1>
-          </div>
-        </div>
+        ${_createEmailHeader(title: 'SpareWo AutoHub')}
 
         <h2 style="color: #1A1B4B; font-size: 24px; margin-bottom: 20px; text-align: center;">Service Booking Confirmed!</h2>
 
@@ -332,11 +321,7 @@ class EmailService {
     final String htmlContent =
         '''
       <div style="font-family: 'Poppins', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 30px; border-radius: 8px; border: 1px solid #eaeaea; box-shadow: 0 2px 10px rgba(0,0,0,0.08);">
-        <div style="text-align: center; margin-bottom: 30px;">
-          <div style="background-color: #1A1B4B; color: white; padding: 15px; border-radius: 4px;">
-            <h1 style="margin: 0; color: white; font-size: 24px;">SpareWo</h1>
-          </div>
-        </div>
+        ${_createEmailHeader(title: 'SpareWo')}
 
         <h2 style="color: #1A1B4B; font-size: 28px; margin-bottom: 20px; text-align: center;">Welcome to SpareWo!</h2>
 
@@ -455,6 +440,18 @@ class EmailService {
       );
       return false;
     }
+  }
+
+  /// Private helper to generate the common email header
+  String _createEmailHeader({required String title}) {
+    return '''
+      <div style="text-align: center; margin-bottom: 28px;">
+        <div style="background-color: #1A1B4B; color: white; padding: 15px; border-radius: 8px;">
+          <img src="$_brandLogoUrl" alt="SpareWo" width="64" height="64" style="display:block; margin:0 auto 10px; object-fit:contain;" />
+          <h1 style="margin: 0; color: white; font-size: 24px;">$title</h1>
+        </div>
+      </div>
+    ''';
   }
 
   /// Private helper to generate the common email footer

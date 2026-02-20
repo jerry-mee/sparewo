@@ -47,7 +47,13 @@ class OrderDetailScreen extends ConsumerWidget {
           elevation: 0,
           leading: IconButton(
             icon: const Icon(Icons.arrow_back_ios_new, size: 20),
-            onPressed: () => context.pop(),
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/orders');
+              }
+            },
           ),
         ),
         body: orderData == null
@@ -88,10 +94,20 @@ class OrderDetailScreen extends ConsumerWidget {
   }) {
     final theme = Theme.of(context);
     final items = orderData['items'] as List? ?? [];
+    final summary = _resolveSummary(orderData, items);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildStatusCard(context, orderData['status'] ?? 'pending'),
+        const SizedBox(height: 12),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            onPressed: () => _refreshOrderStatus(context),
+            icon: const Icon(Icons.sync),
+            label: const Text('Update Status'),
+          ),
+        ),
         const SizedBox(height: 24),
         Text('Delivery Details', style: AppTextStyles.h4),
         const SizedBox(height: 12),
@@ -107,18 +123,21 @@ class OrderDetailScreen extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _buildDetailRow(
+                context,
                 Icons.person_outline,
                 'Recipient',
                 orderData['userName'] ?? 'N/A',
               ),
               const Divider(height: 24),
               _buildDetailRow(
+                context,
                 Icons.location_on_outlined,
                 'Address',
                 orderData['deliveryAddress'] ?? 'N/A',
               ),
               const Divider(height: 24),
               _buildDetailRow(
+                context,
                 Icons.phone_outlined,
                 'Phone',
                 orderData['contactPhone'] ?? 'N/A',
@@ -134,27 +153,26 @@ class OrderDetailScreen extends ConsumerWidget {
         Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: AppColors.neutral100,
+            color: theme.colorScheme.surfaceContainerHighest.withValues(
+              alpha: theme.brightness == Brightness.dark ? 0.34 : 0.7,
+            ),
             borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: theme.dividerColor.withValues(alpha: 0.5),
+            ),
           ),
           child: Column(
             children: [
-              _buildSummaryRow(
-                'Subtotal',
-                (orderData['subtotal'] ?? 0).toDouble(),
-              ),
+              _buildSummaryRow(context, 'Subtotal', summary.subtotal),
               const SizedBox(height: 8),
-              _buildSummaryRow(
-                'Delivery Fee',
-                (orderData['deliveryFee'] ?? 0).toDouble(),
-              ),
+              _buildSummaryRow(context, 'Delivery Fee', summary.deliveryFee),
               const Divider(height: 24),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text('Total', style: AppTextStyles.h3),
                   Text(
-                    'UGX ${_formatCurrency((orderData['totalAmount'] ?? 0).toDouble())}',
+                    'UGX ${_formatCurrency(summary.total)}',
                     style: AppTextStyles.price,
                   ),
                 ],
@@ -225,7 +243,9 @@ class OrderDetailScreen extends ConsumerWidget {
       decoration: BoxDecoration(
         color: color.withValues(alpha: isDarkMode ? 0.22 : 0.14),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withValues(alpha: isDarkMode ? 0.4 : 0.3)),
+        border: Border.all(
+          color: color.withValues(alpha: isDarkMode ? 0.4 : 0.3),
+        ),
       ),
       child: Row(
         children: [
@@ -256,22 +276,30 @@ class OrderDetailScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildDetailRow(IconData icon, String label, String value) {
+  Widget _buildDetailRow(
+    BuildContext context,
+    IconData icon,
+    String label,
+    String value,
+  ) {
+    final theme = Theme.of(context);
+    final hintColor = theme.hintColor;
+    final textColor = theme.colorScheme.onSurface;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 20, color: Colors.grey),
+        Icon(icon, size: 20, color: hintColor),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                label,
-                style: const TextStyle(fontSize: 12, color: Colors.grey),
-              ),
+              Text(label, style: TextStyle(fontSize: 12, color: hintColor)),
               const SizedBox(height: 4),
-              Text(value, style: const TextStyle(fontWeight: FontWeight.w500)),
+              Text(
+                value,
+                style: TextStyle(fontWeight: FontWeight.w500, color: textColor),
+              ),
             ],
           ),
         ),
@@ -280,6 +308,7 @@ class OrderDetailScreen extends ConsumerWidget {
   }
 
   List<Widget> _buildItemsList(BuildContext context, List items) {
+    final theme = Theme.of(context);
     return items.map((item) {
       return Container(
         margin: const EdgeInsets.only(bottom: 12),
@@ -294,10 +323,12 @@ class OrderDetailScreen extends ConsumerWidget {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: AppColors.neutral100,
+                color: theme.colorScheme.surfaceContainerHighest.withValues(
+                  alpha: theme.brightness == Brightness.dark ? 0.5 : 0.8,
+                ),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Icon(Icons.settings, color: Colors.grey),
+              child: Icon(Icons.settings, color: theme.hintColor),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -310,14 +341,17 @@ class OrderDetailScreen extends ConsumerWidget {
                   ),
                   Text(
                     'Qty: ${item['quantity']}',
-                    style: const TextStyle(color: Colors.grey, fontSize: 12),
+                    style: TextStyle(color: theme.hintColor, fontSize: 12),
                   ),
                 ],
               ),
             ),
             Text(
-              'UGX ${_formatCurrency((item['lineTotal'] ?? 0).toDouble())}',
-              style: const TextStyle(fontWeight: FontWeight.bold),
+              'UGX ${_formatCurrency(_itemLineTotal(item))}',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: theme.colorScheme.onSurface,
+              ),
             ),
           ],
         ),
@@ -325,14 +359,18 @@ class OrderDetailScreen extends ConsumerWidget {
     }).toList();
   }
 
-  Widget _buildSummaryRow(String label, double amount) {
+  Widget _buildSummaryRow(BuildContext context, String label, double amount) {
+    final theme = Theme.of(context);
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: const TextStyle(color: Colors.grey)),
+        Text(label, style: TextStyle(color: theme.hintColor)),
         Text(
           'UGX ${_formatCurrency(amount)}',
-          style: const TextStyle(fontWeight: FontWeight.w500),
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            color: theme.colorScheme.onSurface,
+          ),
         ),
       ],
     );
@@ -345,9 +383,85 @@ class OrderDetailScreen extends ConsumerWidget {
     }
   }
 
+  Future<void> _refreshOrderStatus(BuildContext context) async {
+    final scaffold = ScaffoldMessenger.of(context);
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('orders')
+          .doc(orderId)
+          .get();
+      final status = (doc.data()?['status'] as String?) ?? 'pending';
+      scaffold.showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text('Latest status: ${status.toUpperCase()}'),
+        ),
+      );
+    } catch (error) {
+      scaffold.showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text('Could not refresh status: $error'),
+        ),
+      );
+    }
+  }
+
   String _formatCurrency(double amount) {
     final formatter = RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))');
     String formatted = amount.toStringAsFixed(0);
     return formatted.replaceAllMapped(formatter, (Match m) => '${m[1]},');
   }
+
+  double _toAmount(dynamic value) {
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? 0.0;
+    return 0.0;
+  }
+
+  double _itemLineTotal(dynamic rawItem) {
+    if (rawItem is! Map) return 0.0;
+    final item = Map<String, dynamic>.from(
+      rawItem.map((k, v) => MapEntry(k.toString(), v)),
+    );
+    final lineTotal = _toAmount(item['lineTotal']);
+    if (lineTotal > 0) return lineTotal;
+    final unitPrice = _toAmount(item['unitPrice']);
+    final quantity = _toAmount(item['quantity']);
+    return unitPrice * quantity;
+  }
+
+  _OrderSummary _resolveSummary(Map<String, dynamic> orderData, List items) {
+    final deliveryFee = _toAmount(orderData['deliveryFee']);
+    final declaredSubtotal = _toAmount(orderData['subtotal']);
+    final declaredTotal = _toAmount(orderData['totalAmount']);
+
+    var computedSubtotal = 0.0;
+    for (final item in items) {
+      computedSubtotal += _itemLineTotal(item);
+    }
+
+    final subtotal = declaredSubtotal > 0 ? declaredSubtotal : computedSubtotal;
+    var total = declaredTotal;
+    if (total <= 0 || total == deliveryFee) {
+      total = subtotal + deliveryFee;
+    }
+    return _OrderSummary(
+      subtotal: subtotal,
+      deliveryFee: deliveryFee,
+      total: total,
+    );
+  }
+}
+
+class _OrderSummary {
+  final double subtotal;
+  final double deliveryFee;
+  final double total;
+
+  _OrderSummary({
+    required this.subtotal,
+    required this.deliveryFee,
+    required this.total,
+  });
 }

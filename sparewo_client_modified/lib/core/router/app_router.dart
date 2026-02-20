@@ -29,6 +29,7 @@ import 'package:sparewo_client/features/wishlist/presentation/wishlist_screen.da
 import 'package:sparewo_client/features/profile/presentation/settings_screen.dart';
 import 'package:sparewo_client/features/profile/presentation/support_screen.dart';
 import 'package:sparewo_client/features/profile/presentation/about_screen.dart';
+import 'package:sparewo_client/features/notifications/presentation/notifications_screen.dart';
 // Added Imports
 import 'package:sparewo_client/features/autohub/domain/service_booking_model.dart';
 import 'package:sparewo_client/features/orders/presentation/booking_detail_screen.dart';
@@ -46,15 +47,15 @@ class HasSeenWelcomeNotifier extends Notifier<bool> {
 }
 
 final routerProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authStateChangesProvider);
-  final hasSeenWelcome = ref.watch(hasSeenWelcomeProvider);
+  final refresh = GoRouterRefreshStream(
+    ref.read(authRepositoryProvider).authStateChanges,
+  );
+  ref.onDispose(refresh.dispose);
 
   return GoRouter(
     navigatorKey: _rootNavigatorKey,
     initialLocation: '/splash',
-    refreshListenable: GoRouterRefreshStream(
-      ref.read(authRepositoryProvider).authStateChanges,
-    ),
+    refreshListenable: refresh,
     routes: [
       GoRoute(
         path: '/splash',
@@ -74,11 +75,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final email = state.uri.queryParameters['email'] ?? '';
           final returnTo = state.uri.queryParameters['returnTo'];
-          final mode = state.uri.queryParameters['mode'];
+          final partial = state.uri.queryParameters['partial'] == '1';
           return EmailVerificationScreen(
             email: email,
             returnTo: returnTo,
-            mode: mode,
+            isPartialOnboarding: partial,
           );
         },
       ),
@@ -233,6 +234,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const SettingsScreen(),
       ),
       GoRoute(
+        path: '/notifications',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const NotificationsScreen(),
+      ),
+      GoRoute(
         path: '/support',
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) => const SupportScreen(),
@@ -244,16 +250,29 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
     ],
     redirect: (BuildContext context, GoRouterState state) {
-      final isLoading = authState.isLoading;
-      final isLoggedIn = authState.hasValue && authState.value != null;
+      final authState = ref.read(authStateChangesProvider);
+      final hasSeenWelcome = ref.read(hasSeenWelcomeProvider);
+      final user = authState.hasValue ? authState.value : null;
       final location = state.matchedLocation;
+      final isAuthRoute =
+          location == '/welcome' ||
+          location == '/login' ||
+          location == '/signup' ||
+          location.startsWith('/verify-email');
+
+      // Only gate redirects on Firebase auth stream readiness.
+      // Profile loading can lag and is not part of GoRouter refreshListenable.
+      final isLoading = authState.isLoading;
+
+      final isLoggedIn = user != null;
 
       // -----------------------------------------------------------------------
       // 1. Loading State
       // -----------------------------------------------------------------------
       if (isLoading) {
-        // While checking auth status, stay on splash or show nothing
-        return location == '/splash' ? null : '/splash';
+        // Avoid route thrash during transient auth transitions
+        // (e.g. incomplete-login signIn -> signOut checks).
+        return null;
       }
 
       // -----------------------------------------------------------------------
@@ -282,12 +301,6 @@ final routerProvider = Provider<GoRouter>((ref) {
       // -----------------------------------------------------------------------
       // 4. Protected Routes vs Public Routes
       // -----------------------------------------------------------------------
-      final isAuthRoute =
-          location == '/welcome' ||
-          location == '/login' ||
-          location == '/signup' ||
-          location.startsWith('/verify-email');
-
       // -----------------------------------------------------------------------
       // 5. Logged In Logic
       // -----------------------------------------------------------------------
@@ -320,7 +333,8 @@ final routerProvider = Provider<GoRouter>((ref) {
             location.startsWith('/add-car');
 
         if (requiresAuth) {
-          return '/login';
+          final encodedReturnTo = Uri.encodeComponent(state.uri.toString());
+          return '/login?returnTo=$encodedReturnTo&reason=auth_required';
         }
 
         // Default: Allow public access (Home, Catalog, Cart, AutoHub Intro)

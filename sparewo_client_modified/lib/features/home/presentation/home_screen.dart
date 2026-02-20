@@ -15,6 +15,7 @@ import 'package:sparewo_client/features/auth/application/auth_provider.dart';
 import 'package:sparewo_client/features/cart/application/cart_provider.dart';
 import 'package:sparewo_client/features/home/presentation/widgets/app_guide_modal.dart';
 import 'package:sparewo_client/features/auth/presentation/widgets/auth_guard_modal.dart';
+import 'package:sparewo_client/features/notifications/application/notification_provider.dart';
 import 'package:sparewo_client/features/my_car/application/car_provider.dart';
 import 'package:sparewo_client/features/my_car/domain/car_model.dart';
 import 'package:sparewo_client/core/widgets/desktop_layout.dart';
@@ -193,6 +194,7 @@ class _MobileHomeScreenState extends ConsumerState<MobileHomeScreen> {
   Widget build(BuildContext context) {
     final currentUserAsync = ref.watch(currentUserProvider);
     final cartAsync = ref.watch(cartNotifierProvider);
+    final unreadNotifications = ref.watch(unreadNotificationsCountProvider);
     final carsAsync = ref.watch(carsProvider);
     final activeOrdersAsync = ref.watch(activeOrdersCountProvider);
     final tip = ref.watch(carFuluTipProvider);
@@ -222,6 +224,13 @@ class _MobileHomeScreenState extends ConsumerState<MobileHomeScreen> {
             centerTitle: true,
             title: Image.asset(logoAsset, height: 28, fit: BoxFit.contain),
             actions: [
+              Padding(
+                padding: const EdgeInsets.only(right: 10.0),
+                child: _buildGlassNotificationIcon(
+                  context,
+                  unreadNotifications,
+                ),
+              ),
               Padding(
                 padding: const EdgeInsets.only(right: 16.0),
                 child: _buildGlassCartIcon(context, cartAsync),
@@ -420,6 +429,49 @@ class _MobileHomeScreenState extends ConsumerState<MobileHomeScreen> {
               child: Icon(
                 Icons.shopping_bag_outlined,
                 color: theme.iconTheme.color,
+                size: 22,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGlassNotificationIcon(BuildContext context, int unreadCount) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(14),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.1)
+                : Colors.grey.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.1)
+                  : Colors.black.withValues(alpha: 0.05),
+            ),
+          ),
+          child: IconButton(
+            onPressed: () => context.push('/notifications'),
+            padding: EdgeInsets.zero,
+            icon: Badge(
+              isLabelVisible: unreadCount > 0,
+              label: Text('$unreadCount'),
+              backgroundColor: AppColors.primary,
+              child: Icon(
+                Icons.notifications_outlined,
+                color: unreadCount > 0
+                    ? AppColors.primary
+                    : theme.iconTheme.color,
                 size: 22,
               ),
             ),

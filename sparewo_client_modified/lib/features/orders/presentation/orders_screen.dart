@@ -120,7 +120,13 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen>
               size: 20,
               color: theme.iconTheme.color,
             ),
-            onPressed: () => context.pop(),
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/home');
+              }
+            },
           ),
           bottom: TabBar(
             controller: _tabController,
@@ -218,16 +224,8 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen>
             final date = (order['createdAt'] as Timestamp?)?.toDate();
             final status = (order['status'] as String?) ?? 'pending';
 
-            // FIX: Robust Price Calculation
-            double total = (order['totalAmount'] as num?)?.toDouble() ?? 0.0;
             final items = (order['items'] as List?) ?? [];
-
-            // If total is 0 but items exist, calculate manually
-            if (total == 0.0 && items.isNotEmpty) {
-              for (var item in items) {
-                total += (item['lineTotal'] as num?)?.toDouble() ?? 0.0;
-              }
-            }
+            final total = _resolveOrderTotal(order);
 
             final firstItemName = items.isNotEmpty ? items[0]['name'] : 'Parts';
 
@@ -295,7 +293,16 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen>
           },
         );
       },
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 10),
+            Text('Loading your parts orders...'),
+          ],
+        ),
+      ),
       error: (e, s) {
         AppLogger.error(
           'OrdersScreen',
@@ -455,7 +462,16 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen>
           },
         );
       },
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 10),
+            Text('Loading your garage bookings...'),
+          ],
+        ),
+      ),
       error: (e, s) {
         AppLogger.error(
           'OrdersScreen',
@@ -569,7 +585,9 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen>
       decoration: BoxDecoration(
         color: color.withValues(alpha: isDarkMode ? 0.26 : 0.18),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: isDarkMode ? 0.45 : 0.32)),
+        border: Border.all(
+          color: color.withValues(alpha: isDarkMode ? 0.45 : 0.32),
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -593,5 +611,39 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen>
     final formatter = RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))');
     String formatted = amount.toStringAsFixed(0);
     return formatted.replaceAllMapped(formatter, (Match m) => '${m[1]},');
+  }
+
+  double _toAmount(dynamic value) {
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? 0.0;
+    return 0.0;
+  }
+
+  double _resolveOrderTotal(Map<String, dynamic> order) {
+    final subtotal = _toAmount(order['subtotal']);
+    final deliveryFee = _toAmount(order['deliveryFee']);
+    final totalAmount = _toAmount(order['totalAmount']);
+    final items = (order['items'] as List?) ?? const [];
+
+    var computedItemsTotal = 0.0;
+    for (final raw in items) {
+      if (raw is! Map) continue;
+      final item = Map<String, dynamic>.from(
+        raw.map((k, v) => MapEntry(k.toString(), v)),
+      );
+      final lineTotal = _toAmount(item['lineTotal']);
+      if (lineTotal > 0) {
+        computedItemsTotal += lineTotal;
+        continue;
+      }
+      final unitPrice = _toAmount(item['unitPrice']);
+      final quantity = _toAmount(item['quantity']);
+      computedItemsTotal += unitPrice * quantity;
+    }
+
+    if (totalAmount > 0 && totalAmount != deliveryFee) return totalAmount;
+    if (subtotal > 0) return subtotal + deliveryFee;
+    if (computedItemsTotal > 0) return computedItemsTotal + deliveryFee;
+    return totalAmount > 0 ? totalAmount : deliveryFee;
   }
 }

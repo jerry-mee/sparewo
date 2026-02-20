@@ -15,13 +15,13 @@ import 'package:sparewo_client/core/widgets/responsive_screen.dart';
 class EmailVerificationScreen extends ConsumerStatefulWidget {
   final String email;
   final String? returnTo;
-  final String? mode;
+  final bool isPartialOnboarding;
 
   const EmailVerificationScreen({
     super.key,
     required this.email,
     this.returnTo,
-    this.mode,
+    this.isPartialOnboarding = false,
   });
 
   @override
@@ -42,16 +42,18 @@ class _EmailVerificationScreenState
   bool _canResend = false;
   bool _isVerifying = false;
   Timer? _clipboardTimer;
-  bool _isLinkVerificationMode = false;
+
+  void _goSafely(String route) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.go(route);
+    });
+  }
 
   @override
   void initState() {
     super.initState();
-    _isLinkVerificationMode =
-        (widget.mode ?? '').toLowerCase() == 'link' ||
-        ref.read(authRepositoryProvider).isLinkVerificationMode(widget.email);
     _startTimer();
-    _setupAutoFill();
   }
 
   @override
@@ -67,25 +69,26 @@ class _EmailVerificationScreenState
     super.dispose();
   }
 
-  void _setupAutoFill() {
-    // Handle manual paste in first field
-    _controllers[0].addListener(() {
-      final text = _controllers[0].text;
-      if (text.length > 1) {
-        // User pasted multiple characters
-        final code = text.replaceAll(RegExp(r'[^0-9]'), '');
-        if (code.length >= 6) {
-          setState(() {
-            for (int i = 0; i < 6; i++) {
-              _controllers[i].text = code[i];
-            }
-          });
-          // Clear focus and verify
-          FocusScope.of(context).unfocus();
-          Future.delayed(const Duration(milliseconds: 100), _verifyCode);
-        }
-      }
-    });
+  Future<void> _pasteFromClipboard() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    if (!mounted) return;
+    final raw = data?.text ?? '';
+    final code = raw.replaceAll(RegExp(r'[^0-9]'), '');
+    if (code.length < 6) {
+      EasyLoading.showInfo('Clipboard does not contain a 6-digit code');
+      return;
+    }
+    FocusScope.of(context).unfocus();
+    for (var i = 0; i < 6; i++) {
+      _controllers[i].value = TextEditingValue(
+        text: code[i],
+        selection: const TextSelection.collapsed(offset: 1),
+      );
+    }
+    if (!mounted) return;
+    await Future.delayed(const Duration(milliseconds: 80));
+    if (!mounted) return;
+    await _verifyCode();
   }
 
   void _startTimer() {
@@ -131,10 +134,8 @@ class _EmailVerificationScreenState
   Future<void> _verifyCode() async {
     if (_isVerifying) return;
 
-    final code = _isLinkVerificationMode
-        ? '__LINK__'
-        : _controllers.map((c) => c.text).join();
-    if (!_isLinkVerificationMode && code.length != 6) {
+    final code = _controllers.map((c) => c.text).join();
+    if (code.length != 6) {
       EasyLoading.showError('Please enter the complete code');
       return;
     }
@@ -151,7 +152,7 @@ class _EmailVerificationScreenState
           .verifyEmail(email: widget.email, code: code);
 
       if (success) {
-        EasyLoading.showSuccess('Account created successfully!');
+        EasyLoading.showSuccess('Verification complete!');
         // Stop clipboard monitoring
         _clipboardTimer?.cancel();
         // Navigate after a brief delay
@@ -168,7 +169,7 @@ class _EmailVerificationScreenState
               await prefs.setBool(perUserKey, true);
               await prefs.setBool('hasSeenOnboarding', true);
               if (mounted) {
-                context.go('/add-car?nudge=true');
+                _goSafely('/add-car?nudge=true');
               }
               return;
             }
@@ -176,10 +177,10 @@ class _EmailVerificationScreenState
 
           if (widget.returnTo != null) {
             if (!mounted) return;
-            context.go(widget.returnTo!);
+            _goSafely(widget.returnTo!);
           } else {
             if (!mounted) return;
-            context.go('/home');
+            _goSafely('/home');
           }
         }
       }
@@ -217,7 +218,19 @@ class _EmailVerificationScreenState
           elevation: 0,
           leading: IconButton(
             icon: Icon(Icons.arrow_back, color: colorScheme.onSurface),
-            onPressed: () => context.go('/signup'),
+            onPressed: () {
+              if (widget.isPartialOnboarding) {
+                final route = widget.returnTo != null
+                    ? '/login?returnTo=${Uri.encodeComponent(widget.returnTo!)}'
+                    : '/login';
+                _goSafely(route);
+              } else {
+                final route = widget.returnTo != null
+                    ? '/signup?returnTo=${Uri.encodeComponent(widget.returnTo!)}'
+                    : '/signup';
+                _goSafely(route);
+              }
+            },
           ),
         ),
         body: SafeArea(
@@ -280,103 +293,134 @@ class _EmailVerificationScreenState
 
                     const SizedBox(height: 40),
 
-                    if (!_isLinkVerificationMode)
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: List.generate(6, (index) {
-                          return SizedBox(
-                            width: 50,
-                            height: 60,
-                            child: TextFormField(
-                              controller: _controllers[index],
-                              focusNode: _focusNodes[index],
-                              keyboardType: TextInputType.number,
-                              textAlign: TextAlign.center,
-                              maxLength: 1,
-                              enabled: !_isVerifying,
-                              style: theme.textTheme.headlineSmall?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: colorScheme.onSurface,
-                              ),
-                              decoration: InputDecoration(
-                                counterText: '',
-                                filled: true,
-                                fillColor: colorScheme.surfaceContainerHighest
-                                    .withValues(alpha: 0.5),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(
-                                    color: colorScheme.onSurface.withValues(
-                                      alpha: 0.1,
-                                    ),
-                                  ),
-                                ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(
-                                    color: colorScheme.onSurface.withValues(
-                                      alpha: 0.1,
-                                    ),
-                                  ),
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: const BorderSide(
-                                    color: AppColors.primary,
-                                    width: 2,
-                                  ),
-                                ),
-                                disabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(
-                                    color: colorScheme.onSurface.withValues(
-                                      alpha: 0.05,
-                                    ),
-                                    width: 1,
-                                  ),
-                                ),
-                              ),
-                              inputFormatters: [
-                                FilteringTextInputFormatter.digitsOnly,
-                                LengthLimitingTextInputFormatter(1),
-                              ],
-                              onChanged: (value) {
-                                if (value.isNotEmpty) {
-                                  if (index < 5) {
-                                    _focusNodes[index + 1].requestFocus();
-                                  } else {
-                                    final code = _controllers
-                                        .map((c) => c.text)
-                                        .join();
-                                    if (code.length == 6) {
-                                      FocusScope.of(context).unfocus();
-                                      _verifyCode();
-                                    }
-                                  }
-                                } else if (value.isEmpty && index > 0) {
-                                  _focusNodes[index - 1].requestFocus();
-                                }
-                              },
-                            ),
-                          );
-                        }),
-                      ).animate().fadeIn(delay: 250.ms)
-                    else
+                    if (widget.isPartialOnboarding)
                       Container(
                         width: double.infinity,
+                        margin: const EdgeInsets.only(bottom: 16),
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
                           color: AppColors.primary.withValues(alpha: 0.08),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
-                          'We sent a verification link to your email. Open it, then return here and tap "I have verified".',
+                          'Your account already exists, but setup was incomplete. Enter the new code to finish verification.',
                           style: TextStyle(
-                            color: colorScheme.onSurface.withValues(alpha: 0.8),
+                            color: colorScheme.onSurface.withValues(
+                              alpha: 0.85,
+                            ),
                             fontSize: 14,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
-                      ).animate().fadeIn(delay: 250.ms),
+                      ).animate().fadeIn(delay: 220.ms),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: List.generate(6, (index) {
+                        final isDark = theme.brightness == Brightness.dark;
+                        final codeColor = isDark
+                            ? Colors.white
+                            : Colors.black87;
+                        return SizedBox(
+                          width: 50,
+                          height: 60,
+                          child: TextFormField(
+                            controller: _controllers[index],
+                            focusNode: _focusNodes[index],
+                            keyboardType: TextInputType.number,
+                            textAlign: TextAlign.center,
+                            maxLength: 1,
+                            enabled: !_isVerifying,
+                            enableInteractiveSelection: false,
+                            autofillHints: const [AutofillHints.oneTimeCode],
+                            cursorColor: AppColors.primary,
+                            style: TextStyle(
+                              fontSize: 28,
+                              fontWeight: FontWeight.w700,
+                              color: codeColor,
+                            ),
+                            decoration: InputDecoration(
+                              counterText: '',
+                              filled: true,
+                              fillColor: colorScheme.surfaceContainerHighest
+                                  .withValues(alpha: isDark ? 0.35 : 0.6),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                  color: colorScheme.onSurface.withValues(
+                                    alpha: 0.12,
+                                  ),
+                                ),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                  color: colorScheme.onSurface.withValues(
+                                    alpha: 0.12,
+                                  ),
+                                ),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(
+                                  color: AppColors.primary,
+                                  width: 2,
+                                ),
+                              ),
+                              disabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                  color: colorScheme.onSurface.withValues(
+                                    alpha: 0.06,
+                                  ),
+                                  width: 1,
+                                ),
+                              ),
+                            ),
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                              LengthLimitingTextInputFormatter(1),
+                            ],
+                            onChanged: (value) {
+                              if (value.length > 1) {
+                                final digit = value[value.length - 1];
+                                _controllers[index].value = TextEditingValue(
+                                  text: digit,
+                                  selection: const TextSelection.collapsed(
+                                    offset: 1,
+                                  ),
+                                );
+                                value = digit;
+                              }
+                              if (value.isNotEmpty) {
+                                if (index < 5) {
+                                  _focusNodes[index + 1].requestFocus();
+                                } else {
+                                  final code = _controllers
+                                      .map((c) => c.text)
+                                      .join();
+                                  if (code.length == 6) {
+                                    FocusScope.of(context).unfocus();
+                                    _verifyCode();
+                                  }
+                                }
+                              } else if (value.isEmpty && index > 0) {
+                                _focusNodes[index - 1].requestFocus();
+                              }
+                            },
+                          ),
+                        );
+                      }),
+                    ).animate().fadeIn(delay: 250.ms),
+
+                    const SizedBox(height: 12),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton.icon(
+                        onPressed: _isVerifying ? null : _pasteFromClipboard,
+                        icon: const Icon(Icons.content_paste_rounded, size: 16),
+                        label: const Text('Paste code'),
+                      ),
+                    ),
 
                     const SizedBox(height: 40),
 
@@ -403,11 +447,9 @@ class _EmailVerificationScreenState
                                   ),
                                 ),
                               )
-                            : Text(
-                                _isLinkVerificationMode
-                                    ? 'I have verified'
-                                    : 'Verify Email',
-                                style: const TextStyle(
+                            : const Text(
+                                'Verify Email',
+                                style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -420,9 +462,7 @@ class _EmailVerificationScreenState
                     // Resend Code
                     if (!_canResend)
                       Text(
-                        _isLinkVerificationMode
-                            ? 'Resend link in $_secondsRemaining seconds'
-                            : 'Resend code in $_secondsRemaining seconds',
+                        'Resend code in $_secondsRemaining seconds',
                         style: TextStyle(
                           color: colorScheme.onSurface.withValues(alpha: 0.6),
                           fontSize: 14,
