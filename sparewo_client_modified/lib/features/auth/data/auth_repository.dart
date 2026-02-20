@@ -44,6 +44,7 @@ class AuthRepository {
     final normalized = email.trim().toLowerCase();
     if (normalized.isEmpty) return false;
     try {
+      // ignore: deprecated_member_use
       final methods = await _auth.fetchSignInMethodsForEmail(normalized);
       return methods.isNotEmpty;
     } on FirebaseAuthException catch (e) {
@@ -114,15 +115,6 @@ class AuthRepository {
 
       final code = _generateVerificationCode();
 
-      _verificationCodes[email] = code;
-      _codeExpiry[email] = DateTime.now().add(const Duration(minutes: 30));
-
-      _pendingUsers[email] = {
-        'email': email,
-        'password': password,
-        'name': name,
-      };
-
       final emailSent = await _emailService.sendVerificationEmail(
         to: email,
         code: code,
@@ -130,10 +122,16 @@ class AuthRepository {
       );
 
       if (!emailSent) {
-        throw Exception(
-          'Failed to send verification email. Please check your email address and try again.',
-        );
+        throw Exception(_verificationEmailFailureMessage());
       }
+
+      _verificationCodes[email] = code;
+      _codeExpiry[email] = DateTime.now().add(const Duration(minutes: 30));
+      _pendingUsers[email] = {
+        'email': email,
+        'password': password,
+        'name': name,
+      };
     } catch (e) {
       _verificationCodes.remove(email);
       _codeExpiry.remove(email);
@@ -236,6 +234,21 @@ class AuthRepository {
   String _generateVerificationCode() {
     final random = Random();
     return (100000 + random.nextInt(900000)).toString();
+  }
+
+  String _verificationEmailFailureMessage() {
+    switch (_emailService.lastFailureReason) {
+      case 'missing_api_key':
+        return 'We could not send the verification email because email service is not configured right now. Please try again shortly or continue with Google sign-in.';
+      case 'invalid_api_key':
+        return 'Verification email service is temporarily unavailable. Please try again in a few minutes.';
+      case 'rate_limited':
+        return 'Too many verification attempts right now. Please wait a moment and try again.';
+      case 'network_error':
+        return 'Network issue while sending verification email. Check your connection and try again.';
+      default:
+        return 'We could not send the verification email right now. Please try again shortly.';
+    }
   }
 
   // --- Google Sign In & Linking ---

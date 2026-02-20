@@ -30,16 +30,6 @@ class SignUpScreen extends ConsumerWidget {
         EasyLoading.show(status: 'Creating account...');
       } else {
         EasyLoading.dismiss();
-        if (state.hasError) {
-          final error = state.error.toString().replaceAll('Exception: ', '');
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(error),
-              backgroundColor: AppColors.error,
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
       }
     });
 
@@ -252,19 +242,27 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
       return;
     }
     if (_formKey.currentState?.validate() ?? false) {
-      await ref
-          .read(authNotifierProvider.notifier)
-          .signUp(
-            email: _emailController.text.trim().toLowerCase(),
-            password: _passwordController.text.trim(),
-            name: _nameController.text.trim(),
+      try {
+        await ref
+            .read(authNotifierProvider.notifier)
+            .signUp(
+              email: _emailController.text.trim().toLowerCase(),
+              password: _passwordController.text.trim(),
+              name: _nameController.text.trim(),
+            );
+        if (mounted) {
+          final returnParam = widget.returnTo != null
+              ? '&returnTo=${Uri.encodeComponent(widget.returnTo!)}'
+              : '';
+          context.go(
+            '/verify-email?email=${Uri.encodeComponent(_emailController.text.trim())}$returnParam',
           );
-      if (mounted) {
-        final returnParam = widget.returnTo != null
-            ? '&returnTo=${Uri.encodeComponent(widget.returnTo!)}'
-            : '';
-        context.go(
-          '/verify-email?email=${Uri.encodeComponent(_emailController.text.trim())}$returnParam',
+        }
+      } catch (e) {
+        if (!mounted) return;
+        _showSignupFeedback(
+          e.toString().replaceAll('Exception: ', ''),
+          isFailure: true,
         );
       }
     }
@@ -280,8 +278,46 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
       );
       return;
     }
-    await ref.read(authNotifierProvider.notifier).signInWithGoogle();
-    await _routeAfterAuth();
+    try {
+      await ref.read(authNotifierProvider.notifier).signInWithGoogle();
+      await _routeAfterAuth();
+    } catch (e) {
+      if (!mounted) return;
+      _showSignupFeedback(
+        e.toString().replaceAll('Exception: ', ''),
+        isFailure: true,
+      );
+    }
+  }
+
+  void _showSignupFeedback(String message, {bool isFailure = false}) {
+    final theme = Theme.of(context);
+    final bg = isFailure
+        ? theme.colorScheme.surfaceContainerHighest
+        : theme.colorScheme.primaryContainer;
+    final fg = isFailure
+        ? theme.colorScheme.onSurface
+        : theme.colorScheme.onPrimaryContainer;
+    final icon = isFailure ? Icons.info_outline : Icons.check_circle_outline;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: bg,
+        content: Row(
+          children: [
+            Icon(icon, size: 18, color: fg),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                message,
+                style: TextStyle(color: fg, fontWeight: FontWeight.w500),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _routeAfterAuth() async {

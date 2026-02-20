@@ -12,6 +12,9 @@ class EmailService {
   EmailService._internal();
 
   static const String _apiUrl = 'https://api.resend.com/emails';
+  String? _lastFailureReason;
+
+  String? get lastFailureReason => _lastFailureReason;
 
   // The "from" email must be on a domain verified in Resend
   static const String _senderEmail = "SpareWo <garage@sparewo.ug>";
@@ -393,10 +396,12 @@ class EmailService {
     required String subject,
     required String htmlContent,
   }) async {
+    _lastFailureReason = null;
     final apiKey = _readApiKey();
 
     // Check if the API key was loaded successfully
     if (apiKey == null || apiKey.isEmpty) {
+      _lastFailureReason = 'missing_api_key';
       AppLogger.warn(
         'EmailService',
         'Resend API key is not configured or dotenv is not initialized. Email not sent.',
@@ -427,6 +432,7 @@ class EmailService {
 
       // Resend API returns 200 OK on success
       if (response.statusCode == 200) {
+        _lastFailureReason = null;
         AppLogger.info(
           'EmailService',
           'Email sent successfully via Resend',
@@ -434,6 +440,13 @@ class EmailService {
         );
         return true;
       } else {
+        if (response.statusCode == 401 || response.statusCode == 403) {
+          _lastFailureReason = 'invalid_api_key';
+        } else if (response.statusCode == 429) {
+          _lastFailureReason = 'rate_limited';
+        } else {
+          _lastFailureReason = 'provider_error';
+        }
         AppLogger.warn(
           'EmailService',
           'Failed to send email via Resend',
@@ -446,6 +459,7 @@ class EmailService {
         return false;
       }
     } catch (e) {
+      _lastFailureReason = 'network_error';
       AppLogger.error(
         'EmailService',
         'HTTP error while sending email via Resend',
