@@ -3,6 +3,7 @@ import * as https from "node:https";
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import {setGlobalOptions} from "firebase-functions/v2/options";
+import {onCall, HttpsError} from "firebase-functions/v2/https";
 import {defineSecret} from "firebase-functions/params";
 
 admin.initializeApp();
@@ -487,5 +488,97 @@ export const sendOpsEmailOnOrderUpdate = functions.firestore.onDocumentUpdated(
     } catch (error) {
       functions.logger.error("sendOpsEmailOnOrderUpdate failed", error);
     }
+  }
+);
+
+export const sendClientTransactionalEmail = onCall(
+  {
+    timeoutSeconds: 20,
+    memory: "256MiB",
+    secrets: [RESEND_API_KEY],
+    region: "us-central1",
+  },
+  async (request) => {
+    const payload = (request.data || {}) as PlainObject;
+    const subject = toText(payload.subject);
+    const html = toText(payload.html);
+    const kind = toText(payload.kind, "generic");
+    const rawRecipients = Array.isArray(payload.recipients) ? payload.recipients : [];
+
+    if (!subject || !html || rawRecipients.length === 0) {
+      throw new HttpsError("invalid-argument", "Missing recipients, subject, or html");
+    }
+
+    if (html.length > 180000) {
+      throw new HttpsError("invalid-argument", "Email content too large");
+    }
+
+    const allowedKinds = new Set([
+      "verification",
+      "order_confirmation",
+      "booking_confirmation",
+      "booking_admin_copy",
+      "welcome",
+      "generic",
+    ]);
+
+    if (!allowedKinds.has(kind)) {
+      throw new HttpsError("invalid-argument", "Unsupported email type");
+    }
+
+    if (!request.auth && kind !== "verification") {
+      throw new HttpsError("unauthenticated", "Sign in required for this email action");
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    let recipients = rawRecipients
+      .map((item) => toText(item).toLowerCase())
+      .filter((value) => value && emailRegex.test(value));
+
+    if (kind === "booking_admin_copy") {
+      recipients = [ADMIN_EMAIL, GARAGE_EMAIL];
+    }
+
+    if (recipients.length === 0 || recipients.length > 5) {
+      throw new HttpsError("invalid-argument", "Invalid recipient list");
+    }
+
+    const key = RESEND_API_KEY.value();
+    if (!key) {
+      throw new HttpsError("internal", "RESEND_API_KEY is not configured");
+    }
+
+    const sender = process.env.SENDER_EMAIL || "SpareWo <no-reply@sparewo.ug>";
+
+    const response = await postJson(
+      "api.resend.com",
+      "/emails",
+      {
+        from: sender,
+        to: recipients,
+        subject,
+        html,
+      },
+      {
+        Authorization: `Bearer ${key}`,
+      }
+    );
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      functions.logger.error("sendClientTransactionalEmail failed", {
+        statusCode: response.statusCode,
+        body: response.body,
+        kind,
+      });
+      throw new HttpsError("internal", "Email provider rejected the request");
+    }
+
+    functions.logger.info("sendClientTransactionalEmail sent", {
+      kind,
+      recipientCount: recipients.length,
+      actorUid: request.auth?.uid || null,
+    });
+
+    return {ok: true};
   }
 );

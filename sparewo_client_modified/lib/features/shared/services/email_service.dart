@@ -1,7 +1,5 @@
 // lib/features/shared/services/email_service.dart
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:sparewo_client/core/logging/app_logger.dart';
 
 /// Central service for handling all email communications via the Resend API
@@ -11,13 +9,9 @@ class EmailService {
   factory EmailService() => _instance;
   EmailService._internal();
 
-  static const String _apiUrl = 'https://api.resend.com/emails';
   String? _lastFailureReason;
 
   String? get lastFailureReason => _lastFailureReason;
-
-  // The "from" email must be on a domain verified in Resend
-  static const String _senderEmail = "SpareWo <garage@sparewo.ug>";
 
   /// Sends a verification email with a 6-digit code
   Future<bool> sendVerificationEmail({
@@ -77,6 +71,7 @@ class EmailService {
       recipients: [to],
       subject: subject,
       htmlContent: htmlContent,
+      kind: 'verification',
     );
   }
 
@@ -179,6 +174,7 @@ class EmailService {
       recipients: [to],
       subject: subject,
       htmlContent: htmlContent,
+      kind: 'order_confirmation',
     );
   }
 
@@ -275,6 +271,7 @@ class EmailService {
       recipients: [to],
       subject: subject,
       htmlContent: htmlContent,
+      kind: 'booking_confirmation',
     );
   }
 
@@ -321,6 +318,7 @@ class EmailService {
       recipients: to,
       subject: subject,
       htmlContent: htmlContent,
+      kind: 'booking_admin_copy',
     );
   }
 
@@ -387,94 +385,75 @@ class EmailService {
       recipients: [to],
       subject: subject,
       htmlContent: htmlContent,
+      kind: 'welcome',
     );
   }
 
-  /// Core function that sends the email via the Resend API
+  /// Sends email via backend Cloud Function (Resend secret stays server-side)
   Future<bool> _sendEmail({
     required List<String> recipients,
     required String subject,
     required String htmlContent,
+    required String kind,
   }) async {
     _lastFailureReason = null;
-    final apiKey = _readApiKey();
-
-    // Check if the API key was loaded successfully
-    if (apiKey == null || apiKey.isEmpty) {
-      _lastFailureReason = 'missing_api_key';
-      AppLogger.warn(
-        'EmailService',
-        'Resend API key is not configured or dotenv is not initialized. Email not sent.',
-      );
-      return false;
-    }
-
-    // Headers for Resend API
-    final headers = {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer $apiKey',
-    };
-
-    // Body structure for Resend API
-    final body = json.encode({
-      "from": _senderEmail,
-      "to": recipients.map((e) => e.trim().toLowerCase()).toList(),
-      "subject": subject,
-      "html": htmlContent,
-    });
 
     try {
-      final response = await http.post(
-        Uri.parse(_apiUrl),
-        headers: headers,
-        body: body,
-      );
+      final callable = FirebaseFunctions.instanceFor(
+        region: 'us-central1',
+      ).httpsCallable('sendClientTransactionalEmail');
+      final response = await callable.call({
+        'recipients': recipients.map((e) => e.trim().toLowerCase()).toList(),
+        'subject': subject,
+        'html': htmlContent,
+        'kind': kind,
+      });
 
-      // Resend API returns 200 OK on success
-      if (response.statusCode == 200) {
-        _lastFailureReason = null;
-        AppLogger.info(
-          'EmailService',
-          'Email sent successfully via Resend',
-          extra: {'recipients': recipients},
-        );
-        return true;
-      } else {
-        if (response.statusCode == 401 || response.statusCode == 403) {
-          _lastFailureReason = 'invalid_api_key';
-        } else if (response.statusCode == 429) {
-          _lastFailureReason = 'rate_limited';
-        } else {
-          _lastFailureReason = 'provider_error';
-        }
+      final data = response.data;
+      final ok = data is Map && data['ok'] == true;
+      if (!ok) {
+        _lastFailureReason = 'provider_error';
         AppLogger.warn(
           'EmailService',
-          'Failed to send email via Resend',
-          extra: {
-            'statusCode': response.statusCode,
-            'response': response.body,
-            'recipients': recipients,
-          },
+          'Cloud function returned non-success while sending email',
+          extra: {'response': '$data', 'recipients': recipients, 'kind': kind},
         );
         return false;
       }
+
+      _lastFailureReason = null;
+      AppLogger.info(
+        'EmailService',
+        'Email sent successfully via Cloud Function (Resend)',
+        extra: {'recipients': recipients, 'kind': kind},
+      );
+      return true;
+    } on FirebaseFunctionsException catch (e) {
+      if (e.code == 'resource-exhausted') {
+        _lastFailureReason = 'rate_limited';
+      } else if (e.code == 'unavailable' || e.code == 'deadline-exceeded') {
+        _lastFailureReason = 'network_error';
+      } else if (e.code == 'unauthenticated' || e.code == 'permission-denied') {
+        _lastFailureReason = 'permission_denied';
+      } else {
+        _lastFailureReason = 'provider_error';
+      }
+      AppLogger.error(
+        'EmailService',
+        'Cloud function error while sending email',
+        error: e,
+        extra: {'recipients': recipients, 'kind': kind, 'code': e.code},
+      );
+      return false;
     } catch (e) {
       _lastFailureReason = 'network_error';
       AppLogger.error(
         'EmailService',
-        'HTTP error while sending email via Resend',
+        'Unexpected error while sending email',
         error: e,
-        extra: {'recipients': recipients},
+        extra: {'recipients': recipients, 'kind': kind},
       );
       return false;
-    }
-  }
-
-  String? _readApiKey() {
-    try {
-      return dotenv.env['RESEND_API_KEY'];
-    } catch (_) {
-      return null;
     }
   }
 
