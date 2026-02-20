@@ -43,13 +43,18 @@ class AuthRepository {
   Future<bool> isEmailRegistered(String email) async {
     final normalized = email.trim().toLowerCase();
     if (normalized.isEmpty) return false;
-
-    final snapshot = await _firestore
-        .collection('users')
-        .where('email', isEqualTo: normalized)
-        .limit(1)
-        .get();
-    return snapshot.docs.isNotEmpty;
+    try {
+      final methods = await _auth.fetchSignInMethodsForEmail(normalized);
+      return methods.isNotEmpty;
+    } on FirebaseAuthException catch (e) {
+      // Some Firebase projects disable reliable email enumeration.
+      if (e.code == 'operation-not-allowed' ||
+          e.code == 'invalid-credential' ||
+          e.code == 'too-many-requests') {
+        return false;
+      }
+      rethrow;
+    }
   }
 
   // --- Email & Password Auth ---
@@ -92,10 +97,18 @@ class AuthRepository {
         throw Exception('Please enter a valid email address');
       }
 
-      final exists = await isEmailRegistered(email);
-      if (exists) {
-        throw Exception(
-          'This email is already registered. Please login instead.',
+      try {
+        final exists = await isEmailRegistered(email);
+        if (exists) {
+          throw Exception(
+            'This email is already registered. Please login instead.',
+          );
+        }
+      } on FirebaseException catch (e) {
+        AppLogger.warn(
+          'AuthRepository',
+          'Email precheck unavailable; continuing to verification step',
+          extra: {'error': e.code},
         );
       }
 

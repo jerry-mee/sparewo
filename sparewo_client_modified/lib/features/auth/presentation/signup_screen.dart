@@ -119,6 +119,7 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
   bool _isCheckingEmail = false;
   bool _isEmailTaken = false;
   bool _isEmailAvailable = false;
+  bool _isEmailCheckUnavailable = false;
   bool _showEmailStatus = false;
 
   @override
@@ -179,6 +180,7 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
         _isCheckingEmail = false;
         _isEmailTaken = false;
         _isEmailAvailable = false;
+        _isEmailCheckUnavailable = false;
         _showEmailStatus = false;
       });
       return;
@@ -188,6 +190,7 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
       _isCheckingEmail = true;
       _isEmailTaken = false;
       _isEmailAvailable = false;
+      _isEmailCheckUnavailable = false;
       _showEmailStatus = true;
     });
 
@@ -197,6 +200,7 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
         _isCheckingEmail = false;
         _isEmailTaken = cached;
         _isEmailAvailable = !cached;
+        _isEmailCheckUnavailable = false;
         _showEmailStatus = true;
       });
       return;
@@ -214,6 +218,7 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
           _isCheckingEmail = false;
           _isEmailTaken = exists;
           _isEmailAvailable = !exists;
+          _isEmailCheckUnavailable = false;
           _showEmailStatus = true;
         });
         _emailAvailabilityCache[email] = exists;
@@ -223,7 +228,8 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
           _isCheckingEmail = false;
           _isEmailTaken = false;
           _isEmailAvailable = false;
-          _showEmailStatus = false;
+          _isEmailCheckUnavailable = true;
+          _showEmailStatus = true;
         });
       }
     });
@@ -300,8 +306,10 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
     }
 
     if (widget.returnTo != null) {
+      if (!mounted) return;
       context.go(widget.returnTo!);
     } else {
+      if (!mounted) return;
       context.go('/home');
     }
   }
@@ -433,6 +441,21 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
                       'Email is available',
                       style: TextStyle(
                         color: AppColors.success,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ] else if (_isEmailCheckUnavailable) ...[
+                    const Icon(
+                      Icons.info_outline,
+                      size: 14,
+                      color: AppColors.warning,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Could not verify now. We will confirm on sign up.',
+                      style: TextStyle(
+                        color: theme.hintColor,
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                       ),
