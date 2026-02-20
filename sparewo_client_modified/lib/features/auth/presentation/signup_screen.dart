@@ -111,7 +111,8 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
   bool _isEmailAvailable = false;
   bool _isEmailCheckUnavailable = false;
   bool _showEmailStatus = false;
-  final GlobalKey _passwordGuideKey = GlobalKey();
+  final GlobalKey _passwordSectionKey = GlobalKey();
+  bool _didFocusPasswordSection = false;
 
   @override
   void initState() {
@@ -123,7 +124,12 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
   void _refreshUi() {
     if (!mounted) return;
     setState(() {});
-    _ensurePasswordGuideVisible();
+    final isInPasswordSection =
+        _passwordFocusNode.hasFocus || _confirmPasswordFocusNode.hasFocus;
+    if (isInPasswordSection && !_didFocusPasswordSection) {
+      _didFocusPasswordSection = true;
+      _ensurePasswordSectionVisible();
+    }
   }
 
   @override
@@ -138,16 +144,16 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
     super.dispose();
   }
 
-  void _ensurePasswordGuideVisible() {
+  void _ensurePasswordSectionVisible() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      final context = _passwordGuideKey.currentContext;
+      final context = _passwordSectionKey.currentContext;
       if (context == null) return;
       Scrollable.ensureVisible(
         context,
-        duration: const Duration(milliseconds: 240),
+        duration: const Duration(milliseconds: 280),
         curve: Curves.easeOut,
-        alignment: 0.25,
+        alignment: 0.2,
       );
     });
   }
@@ -268,11 +274,16 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
               name: _nameController.text.trim(),
             );
         if (mounted) {
+          final normalizedEmail = _emailController.text.trim().toLowerCase();
+          final isLinkMode = ref
+              .read(authRepositoryProvider)
+              .isLinkVerificationMode(normalizedEmail);
+          final modeParam = isLinkMode ? '&mode=link' : '';
           final returnParam = widget.returnTo != null
               ? '&returnTo=${Uri.encodeComponent(widget.returnTo!)}'
               : '';
           context.go(
-            '/verify-email?email=${Uri.encodeComponent(_emailController.text.trim())}$returnParam',
+            '/verify-email?email=${Uri.encodeComponent(normalizedEmail)}$modeParam$returnParam',
           );
         }
       } catch (e) {
@@ -518,131 +529,132 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
               ),
             ],
             SizedBox(height: widget.compact ? 14 : 20),
-            TextFormField(
-              controller: _passwordController,
-              obscureText: _obscure,
-              focusNode: _passwordFocusNode,
-              autofillHints: const [AutofillHints.newPassword],
-              keyboardType: TextInputType.visiblePassword,
-              autocorrect: false,
-              enableSuggestions: false,
-              textInputAction: TextInputAction.next,
-              decoration: InputDecoration(
-                labelText: 'Password',
-                prefixIcon: const Icon(Icons.lock_outline),
-                suffixIcon: IconButton(
-                  icon: Icon(
-                    _obscure
-                        ? Icons.visibility_outlined
-                        : Icons.visibility_off_outlined,
-                  ),
-                  onPressed: () => setState(() => _obscure = !_obscure),
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-              ),
-              onChanged: (_) {
-                setState(() {});
-                _ensurePasswordGuideVisible();
-              },
-              validator: (v) {
-                final value = v ?? '';
-                if (value.length < 8) {
-                  return 'Use at least 8 characters';
-                }
-                if (!RegExp(r'[A-Z]').hasMatch(value) ||
-                    !RegExp(r'[0-9]').hasMatch(value)) {
-                  return 'Add at least 1 uppercase letter and 1 number';
-                }
-                return null;
-              },
-            ),
-            SizedBox(height: widget.compact ? 10 : 14),
-            TextFormField(
-              controller: _confirmPasswordController,
-              obscureText: _obscureConfirm,
-              focusNode: _confirmPasswordFocusNode,
-              autofillHints: const [AutofillHints.newPassword],
-              keyboardType: TextInputType.visiblePassword,
-              autocorrect: false,
-              enableSuggestions: false,
-              textInputAction: TextInputAction.done,
-              onChanged: (_) {
-                setState(() {});
-                _ensurePasswordGuideVisible();
-              },
-              decoration: InputDecoration(
-                labelText: 'Confirm Password',
-                prefixIcon: const Icon(Icons.lock_person_outlined),
-                suffixIcon: IconButton(
-                  icon: Icon(
-                    _obscureConfirm
-                        ? Icons.visibility_outlined
-                        : Icons.visibility_off_outlined,
-                  ),
-                  onPressed: () =>
-                      setState(() => _obscureConfirm = !_obscureConfirm),
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-              ),
-              validator: (v) {
-                if ((v ?? '').isEmpty) {
-                  return 'Confirm your password';
-                }
-                if (v != _passwordController.text) {
-                  return 'Passwords do not match';
-                }
-                return null;
-              },
-            ),
-            if (_confirmPasswordController.text.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Row(
+            Container(
+              key: _passwordSectionKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(
-                    _confirmPasswordController.text == _passwordController.text
-                        ? Icons.check_circle_outline
-                        : Icons.error_outline,
-                    size: 14,
-                    color:
-                        _confirmPasswordController.text ==
-                            _passwordController.text
-                        ? AppColors.success
-                        : AppColors.error,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    _confirmPasswordController.text == _passwordController.text
-                        ? 'Passwords match'
-                        : 'Passwords do not match',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color:
-                          _confirmPasswordController.text ==
-                              _passwordController.text
-                          ? AppColors.success
-                          : AppColors.error,
+                  TextFormField(
+                    controller: _passwordController,
+                    obscureText: _obscure,
+                    focusNode: _passwordFocusNode,
+                    autofillHints: const [AutofillHints.newPassword],
+                    keyboardType: TextInputType.visiblePassword,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    textInputAction: TextInputAction.next,
+                    decoration: InputDecoration(
+                      labelText: 'Password',
+                      prefixIcon: const Icon(Icons.lock_outline),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscure
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
+                        ),
+                        onPressed: () => setState(() => _obscure = !_obscure),
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
                     ),
+                    onChanged: (_) => setState(() {}),
+                    validator: (v) {
+                      final value = v ?? '';
+                      if (value.length < 8) {
+                        return 'Use at least 8 characters';
+                      }
+                      if (!RegExp(r'[A-Z]').hasMatch(value) ||
+                          !RegExp(r'[0-9]').hasMatch(value)) {
+                        return 'Add at least 1 uppercase letter and 1 number';
+                      }
+                      return null;
+                    },
                   ),
+                  SizedBox(height: widget.compact ? 10 : 14),
+                  TextFormField(
+                    controller: _confirmPasswordController,
+                    obscureText: _obscureConfirm,
+                    focusNode: _confirmPasswordFocusNode,
+                    autofillHints: const [AutofillHints.newPassword],
+                    keyboardType: TextInputType.visiblePassword,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    textInputAction: TextInputAction.done,
+                    onChanged: (_) => setState(() {}),
+                    decoration: InputDecoration(
+                      labelText: 'Confirm Password',
+                      prefixIcon: const Icon(Icons.lock_person_outlined),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscureConfirm
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
+                        ),
+                        onPressed: () =>
+                            setState(() => _obscureConfirm = !_obscureConfirm),
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                    ),
+                    validator: (v) {
+                      if ((v ?? '').isEmpty) {
+                        return 'Confirm your password';
+                      }
+                      if (v != _passwordController.text) {
+                        return 'Passwords do not match';
+                      }
+                      return null;
+                    },
+                  ),
+                  if (_confirmPasswordController.text.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(
+                          _confirmPasswordController.text ==
+                                  _passwordController.text
+                              ? Icons.check_circle_outline
+                              : Icons.error_outline,
+                          size: 14,
+                          color:
+                              _confirmPasswordController.text ==
+                                  _passwordController.text
+                              ? AppColors.success
+                              : AppColors.error,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          _confirmPasswordController.text ==
+                                  _passwordController.text
+                              ? 'Passwords match'
+                              : 'Passwords do not match',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color:
+                                _confirmPasswordController.text ==
+                                    _passwordController.text
+                                ? AppColors.success
+                                : AppColors.error,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  if (shouldShowPasswordGuide) ...[
+                    SizedBox(height: widget.compact ? 10 : 14),
+                    _PasswordGuide(
+                      password: password,
+                      score: strengthScore,
+                      color: _strengthColor(strengthScore),
+                      label: _strengthLabel(strengthScore),
+                    ),
+                  ],
                 ],
               ),
-            ],
-            if (shouldShowPasswordGuide) ...[
-              SizedBox(height: widget.compact ? 10 : 14),
-              Container(
-                key: _passwordGuideKey,
-                child: _PasswordGuide(
-                  password: password,
-                  score: strengthScore,
-                  color: _strengthColor(strengthScore),
-                  label: _strengthLabel(strengthScore),
-                ),
-              ),
-            ],
+            ),
 
             SizedBox(height: widget.compact ? 16 : 24),
 

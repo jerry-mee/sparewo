@@ -74,7 +74,12 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final email = state.uri.queryParameters['email'] ?? '';
           final returnTo = state.uri.queryParameters['returnTo'];
-          return EmailVerificationScreen(email: email, returnTo: returnTo);
+          final mode = state.uri.queryParameters['mode'];
+          return EmailVerificationScreen(
+            email: email,
+            returnTo: returnTo,
+            mode: mode,
+          );
         },
       ),
 
@@ -241,6 +246,8 @@ final routerProvider = Provider<GoRouter>((ref) {
     redirect: (BuildContext context, GoRouterState state) {
       final isLoading = authState.isLoading;
       final isLoggedIn = authState.hasValue && authState.value != null;
+      final currentUser = authState.asData?.value;
+      final isEmailVerified = currentUser?.emailVerified ?? true;
       final location = state.matchedLocation;
 
       // -----------------------------------------------------------------------
@@ -286,6 +293,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       // -----------------------------------------------------------------------
       // 5. Logged In Logic
       // -----------------------------------------------------------------------
+      if (isLoggedIn && !isEmailVerified) {
+        if (location.startsWith('/verify-email')) {
+          return null;
+        }
+        final email = Uri.encodeComponent(currentUser?.email ?? '');
+        return '/verify-email?email=$email&mode=link';
+      }
+
       if (isLoggedIn) {
         // If user is logged in but on an auth screen (login/signup), send to Home
         if (isAuthRoute) {

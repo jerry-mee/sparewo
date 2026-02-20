@@ -129,13 +129,18 @@ class _AuthGuardModalState extends ConsumerState<AuthGuardModal> {
               name: _signupName.text.trim(),
             );
         if (!mounted) return;
+        final normalizedEmail = _signupEmail.text.trim().toLowerCase();
+        final isLinkMode = ref
+            .read(authRepositoryProvider)
+            .isLinkVerificationMode(normalizedEmail);
         final returnTo = widget.returnTo;
         Navigator.of(context).pop();
-        final encodedEmail = Uri.encodeComponent(_signupEmail.text.trim());
+        final encodedEmail = Uri.encodeComponent(normalizedEmail);
+        final modeParam = isLinkMode ? '&mode=link' : '';
         final returnParam = returnTo != null
             ? '&returnTo=${Uri.encodeComponent(returnTo)}'
             : '';
-        context.go('/verify-email?email=$encodedEmail$returnParam');
+        context.go('/verify-email?email=$encodedEmail$modeParam$returnParam');
       } catch (e) {
         if (!mounted) return;
         final message = e.toString().replaceAll('Exception: ', '');

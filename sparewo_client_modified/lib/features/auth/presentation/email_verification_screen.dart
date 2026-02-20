@@ -15,11 +15,13 @@ import 'package:sparewo_client/core/widgets/responsive_screen.dart';
 class EmailVerificationScreen extends ConsumerStatefulWidget {
   final String email;
   final String? returnTo;
+  final String? mode;
 
   const EmailVerificationScreen({
     super.key,
     required this.email,
     this.returnTo,
+    this.mode,
   });
 
   @override
@@ -45,9 +47,9 @@ class _EmailVerificationScreenState
   @override
   void initState() {
     super.initState();
-    _isLinkVerificationMode = ref
-        .read(authRepositoryProvider)
-        .isLinkVerificationMode(widget.email);
+    _isLinkVerificationMode =
+        (widget.mode ?? '').toLowerCase() == 'link' ||
+        ref.read(authRepositoryProvider).isLinkVerificationMode(widget.email);
     _startTimer();
     _setupAutoFill();
   }
