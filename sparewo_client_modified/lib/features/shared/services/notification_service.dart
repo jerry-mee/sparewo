@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -30,6 +31,8 @@ class NotificationService {
 
   String? _currentUserId;
   StreamSubscription? _firestoreNotifSubscription;
+  StreamSubscription<String>? _tokenRefreshSubscription;
+  GoRouter? _router;
 
   // Preferences Keys
   static const String _prefKeyHideAddCar = 'notification_hide_add_car_nudge';
@@ -78,7 +81,9 @@ class NotificationService {
     );
 
     await updateToken();
-    _firebaseMessaging.onTokenRefresh.listen((token) {
+    _tokenRefreshSubscription = _firebaseMessaging.onTokenRefresh.listen((
+      token,
+    ) {
       AppLogger.info(
         'NotificationService',
         'FCM token refreshed',
@@ -158,42 +163,67 @@ class NotificationService {
 
   void startFirestoreNotificationListener(String userId) {
     _firestoreNotifSubscription?.cancel();
+    _currentUserId = userId;
 
     _firestoreNotifSubscription = FirebaseFirestore.instance
         .collection('notifications')
         .where('recipientId', isEqualTo: userId)
         .where('read', isEqualTo: false)
         .snapshots()
-        .listen((snapshot) {
-          for (var change in snapshot.docChanges) {
-            if (change.type == DocumentChangeType.added) {
-              final data = change.doc.data();
-              if (data != null) {
-                // Convert Firestore doc to a RemoteMessage-like structure for the UI
-                final title = data['title'] ?? 'SpareWo Update';
-                final body = data['message'] ?? '';
+        .listen(
+          (snapshot) {
+            for (var change in snapshot.docChanges) {
+              if (change.type == DocumentChangeType.added) {
+                final data = change.doc.data();
+                if (data != null) {
+                  // Convert Firestore doc to a RemoteMessage-like structure for the UI
+                  final title = data['title'] ?? 'SpareWo Update';
+                  final body = data['message'] ?? '';
+                  final safeData = _toJsonSafeMap(data);
+                  final payloadData = _notificationPayloadFromDoc(safeData);
 
-                // Show local notification
-                showLocalNotification(
-                  id: change.doc.id.hashCode,
-                  title: title,
-                  body: body,
-                  payload: jsonEncode(data),
-                );
+                  // Show local notification
+                  showLocalNotification(
+                    id: change.doc.id.hashCode,
+                    title: title,
+                    body: body,
+                    payload: jsonEncode(payloadData),
+                  );
 
-                // Also broadcast to the foreground stream so the in-app SnackBar shows up
-                _foregroundMessageController.add(
-                  RemoteMessage(
-                    notification: RemoteNotification(title: title, body: body),
-                    data: Map<String, String>.from(
-                      data.map((key, value) => MapEntry(key, value.toString())),
+                  // Also broadcast to the foreground stream so the in-app SnackBar shows up
+                  _foregroundMessageController.add(
+                    RemoteMessage(
+                      notification: RemoteNotification(
+                        title: title,
+                        body: body,
+                      ),
+                      data: Map<String, String>.from(
+                        payloadData.map(
+                          (key, value) => MapEntry(key, value.toString()),
+                        ),
+                      ),
                     ),
-                  ),
-                );
+                  );
+                }
               }
             }
-          }
-        });
+          },
+          onError: (error, stack) {
+            AppLogger.error(
+              'NotificationService',
+              'Firestore notifications listener failed',
+              error: error,
+              stackTrace: stack,
+              extra: {'userId': userId},
+            );
+          },
+        );
+  }
+
+  void stopFirestoreNotificationListener() {
+    _firestoreNotifSubscription?.cancel();
+    _firestoreNotifSubscription = null;
+    _currentUserId = null;
   }
 
   Future<void> updateToken([String? userId]) async {
@@ -501,11 +531,16 @@ class NotificationService {
   void _handleLocalNotificationTap(String? payload) {
     if (payload == null) return;
     AppLogger.ui('Notification', 'Tapped', details: payload);
-    // Note: Actual navigation happens via router listener or interaction callback
+    final router = _router;
+    if (router == null) return;
+    final decoded = _decodePayload(payload);
+    if (decoded == null) return;
+    _handleNavigation(decoded, router);
   }
 
   // Check if app was launched from notification (Cold boot or Background)
   Future<void> setupInteractedMessage(GoRouter router) async {
+    _router = router;
     RemoteMessage? initialMessage = await _firebaseMessaging
         .getInitialMessage();
     if (initialMessage != null) {
@@ -518,26 +553,105 @@ class NotificationService {
   }
 
   void _handleNavigation(Map<String, dynamic> data, GoRouter router) {
-    final type = data['type'];
-    final id = data['id'];
+    final type = data['type']?.toString();
+    final id = data['id']?.toString();
+    final link = data['link']?.toString();
+
+    if (link != null && link.isNotEmpty && link.startsWith('/')) {
+      _navigateSafely(router, link);
+      return;
+    }
 
     if (type == 'order' && id != null) {
-      router.push('/order/$id');
+      _navigateSafely(router, '/order/$id');
     } else if (type == 'booking' && id != null) {
-      router.push('/booking/$id'); // Ensure booking detail route exists
+      _navigateSafely(router, '/booking/$id');
     } else if (type == 'add_car_nudge') {
-      // Pass a query param to trigger the "Don't ask again" dialog
-      router.push('/add-car?nudge=true');
+      _navigateSafely(router, '/add-car?nudge=true');
     }
   }
 
+  void _navigateSafely(GoRouter router, String location) {
+    final current = router.routeInformationProvider.value.uri.toString();
+    if (current == location) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      try {
+        router.go(location);
+      } catch (error, stackTrace) {
+        AppLogger.error(
+          'NotificationService',
+          'Navigation from notification failed',
+          error: error,
+          stackTrace: stackTrace,
+          extra: {'location': location},
+        );
+      }
+    });
+  }
+
   String _encodePayload(Map<String, dynamic> data) {
-    return jsonEncode(data);
+    return jsonEncode(_toJsonSafeMap(data));
+  }
+
+  Map<String, dynamic>? _decodePayload(String payload) {
+    try {
+      final decoded = jsonDecode(payload);
+      if (decoded is Map<String, dynamic>) return decoded;
+      if (decoded is Map) {
+        return Map<String, dynamic>.from(
+          decoded.map((key, value) => MapEntry(key.toString(), value)),
+        );
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Map<String, dynamic> _notificationPayloadFromDoc(Map<String, dynamic> data) {
+    final payload = <String, dynamic>{...data};
+    payload['title'] = payload['title']?.toString() ?? 'SpareWo Update';
+    payload['message'] = payload['message']?.toString() ?? '';
+
+    final link = payload['link']?.toString();
+    if (link != null && link.startsWith('/booking/')) {
+      payload['type'] = 'booking';
+      payload['id'] = link.split('/').last;
+    } else if (link != null && link.startsWith('/order/')) {
+      payload['type'] = 'order';
+      payload['id'] = link.split('/').last;
+    }
+
+    return payload;
+  }
+
+  Map<String, dynamic> _toJsonSafeMap(Map<String, dynamic> data) {
+    return data.map((key, value) => MapEntry(key, _toJsonSafeValue(value)));
+  }
+
+  dynamic _toJsonSafeValue(dynamic value) {
+    if (value is Timestamp) return value.toDate().toIso8601String();
+    if (value is DateTime) return value.toIso8601String();
+    if (value is Map) {
+      return value.map(
+        (key, nestedValue) =>
+            MapEntry(key.toString(), _toJsonSafeValue(nestedValue)),
+      );
+    }
+    if (value is Iterable) {
+      return value.map(_toJsonSafeValue).toList(growable: false);
+    }
+    if (value == null || value is String || value is num || value is bool) {
+      return value;
+    }
+    return value.toString();
   }
 
   void dispose() {
-    _foregroundMessageController.close();
+    _tokenRefreshSubscription?.cancel();
     _firestoreNotifSubscription?.cancel();
+    _foregroundMessageController.close();
   }
 }
 

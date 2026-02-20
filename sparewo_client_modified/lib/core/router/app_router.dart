@@ -303,6 +303,21 @@ final routerProvider = Provider<GoRouter>((ref) {
           return null;
         }
 
+        final requiresAuth =
+            location == '/orders' ||
+            location.startsWith('/order/') ||
+            location.startsWith('/booking/') ||
+            location == '/my-cars' ||
+            location.startsWith('/my-cars/') ||
+            location == '/addresses' ||
+            location == '/wishlist' ||
+            location == '/add-car' ||
+            location.startsWith('/add-car');
+
+        if (requiresAuth) {
+          return '/login';
+        }
+
         // Default: Allow public access (Home, Catalog, Cart, AutoHub Intro)
         return null;
       }

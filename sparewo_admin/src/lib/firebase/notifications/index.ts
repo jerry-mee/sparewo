@@ -1,7 +1,6 @@
 import {
   collection,
   doc,
-  getDoc,
   getDocs,
   query,
   where,
@@ -62,8 +61,12 @@ export const createNotification = async (
   notification: Omit<Notification, 'id' | 'createdAt' | 'updatedAt'>
 ): Promise<string> => {
   try {
+    const { link, ...rest } = notification;
+    const trimmedLink =
+      typeof link === 'string' && link.trim().length > 0 ? link.trim() : null;
     const docRef = await addDoc(collection(db, 'notifications'), {
-      ...notification,
+      ...rest,
+      ...(trimmedLink ? { link: trimmedLink } : {}),
       read: false,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()

@@ -142,9 +142,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     icon: Icons.lock_outline,
                     onTap: () async {
                       try {
+                        final email = ref
+                            .read(currentUserProvider)
+                            .asData
+                            ?.value
+                            ?.email;
+                        if (email == null) throw Exception('Email not found');
                         await ref
                             .read(authNotifierProvider.notifier)
-                            .sendPasswordResetEmail();
+                            .sendPasswordResetEmail(email: email);
                         if (context.mounted) {
                           _showSuccess(context, 'Password reset email sent');
                         }
@@ -267,9 +273,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                     icon: Icons.lock_outline,
                                     onTap: () async {
                                       try {
+                                        final email = ref
+                                            .read(currentUserProvider)
+                                            .asData
+                                            ?.value
+                                            ?.email;
+                                        if (email == null)
+                                          throw Exception('Email not found');
                                         await ref
                                             .read(authNotifierProvider.notifier)
-                                            .sendPasswordResetEmail();
+                                            .sendPasswordResetEmail(
+                                              email: email,
+                                            );
                                         if (context.mounted) {
                                           _showSuccess(
                                             context,

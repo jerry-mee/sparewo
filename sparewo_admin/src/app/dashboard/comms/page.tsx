@@ -19,13 +19,17 @@ import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/lib/context/auth-context';
 import {
   CommunicationAudience,
+  CommunicationRecipientRole,
   CommunicationType,
   getCommunicationAudienceCounts,
   getRecentCommunications,
+  listCommunicationRecipients,
   previewCommunicationAudience,
   sendAdminCommunication,
 } from '@/lib/firebase/comms';
 import { formatDateTime } from '@/lib/utils';
+
+type DeliveryMode = 'broadcast' | 'individual';
 
 const audienceOptions: Array<{ value: CommunicationAudience; label: string }> = [
   { value: 'all_clients', label: 'All Clients' },
@@ -50,7 +54,14 @@ export default function CommunicationsPage() {
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
   const [link, setLink] = useState('');
+  const [deliveryMode, setDeliveryMode] = useState<DeliveryMode>('broadcast');
   const [audience, setAudience] = useState<CommunicationAudience>('all_clients');
+  const [individualRole, setIndividualRole] = useState<CommunicationRecipientRole>('client');
+  const [recipientSearch, setRecipientSearch] = useState('');
+  const [recipientOptions, setRecipientOptions] = useState<
+    Array<{ id: string; label: string; email?: string }>
+  >([]);
+  const [selectedRecipientId, setSelectedRecipientId] = useState('');
   const [type, setType] = useState<CommunicationType>('info');
 
   const [previewCount, setPreviewCount] = useState(0);
@@ -101,6 +112,23 @@ export default function CommunicationsPage() {
   }, []);
 
   const loadPreview = useCallback(async () => {
+    if (deliveryMode === 'individual') {
+      try {
+        const recipients = await listCommunicationRecipients(individualRole, recipientSearch, 50);
+        setRecipientOptions(recipients);
+        const selectedRecipient = recipients.find((recipient) => recipient.id === selectedRecipientId);
+        setPreviewCount(selectedRecipient ? 1 : 0);
+        setPreviewSample(selectedRecipient ? [selectedRecipient] : []);
+      } catch (error) {
+        console.error(error);
+        setRecipientOptions([]);
+        setPreviewCount(0);
+        setPreviewSample([]);
+        toast.error('Failed to load recipients');
+      }
+      return;
+    }
+
     try {
       const preview = await previewCommunicationAudience(audience, 5);
       setPreviewCount(preview.total);
@@ -111,7 +139,7 @@ export default function CommunicationsPage() {
       setPreviewSample([]);
       toast.error('Failed to preview audience');
     }
-  }, [audience]);
+  }, [audience, deliveryMode, individualRole, recipientSearch, selectedRecipientId]);
 
   useEffect(() => {
     loadDashboardData();
@@ -125,6 +153,18 @@ export default function CommunicationsPage() {
     () => audienceOptions.find((option) => option.value === audience)?.label ?? 'Audience',
     [audience]
   );
+
+  const selectedRecipient = useMemo(
+    () => recipientOptions.find((recipient) => recipient.id === selectedRecipientId) ?? null,
+    [recipientOptions, selectedRecipientId]
+  );
+
+  const effectiveAudience: CommunicationAudience =
+    deliveryMode === 'individual'
+      ? individualRole === 'client'
+        ? 'individual_client'
+        : 'individual_vendor'
+      : audience;
 
   const handleSend = async () => {
     if (!user) {
@@ -140,6 +180,11 @@ export default function CommunicationsPage() {
       return;
     }
 
+    if (deliveryMode === 'individual' && !selectedRecipientId) {
+      toast.error('Select a recipient first.');
+      return;
+    }
+
     if (previewCount === 0) {
       toast.error('No recipients found for this audience.');
       return;
@@ -151,9 +196,10 @@ export default function CommunicationsPage() {
         {
           title: trimmedTitle,
           message: trimmedMessage,
-          audience,
+          audience: effectiveAudience,
           type,
           link: link.trim() || undefined,
+          recipientIds: deliveryMode === 'individual' ? [selectedRecipientId] : undefined,
         },
         user.uid
       );
@@ -162,6 +208,7 @@ export default function CommunicationsPage() {
       setTitle('');
       setMessage('');
       setLink('');
+      setSelectedRecipientId('');
       await Promise.all([loadDashboardData(), loadPreview()]);
     } catch (error) {
       console.error(error);
@@ -236,29 +283,69 @@ export default function CommunicationsPage() {
         <Card className="xl:col-span-2">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Megaphone className="h-5 w-5" /> Compose Broadcast
+              <Megaphone className="h-5 w-5" /> Compose Communication
             </CardTitle>
             <CardDescription>
               Notifications are stored per-recipient in Firestore and delivered in batched writes.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Delivery Mode</label>
+              <Select
+                value={deliveryMode}
+                onValueChange={(value) => {
+                  setDeliveryMode(value as DeliveryMode);
+                  setSelectedRecipientId('');
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose mode" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="broadcast">Broadcast</SelectItem>
+                  <SelectItem value="individual">Individual</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Audience</label>
-                <Select value={audience} onValueChange={(value) => setAudience(value as CommunicationAudience)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choose audience" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {audienceOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {deliveryMode === 'broadcast' ? (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Audience</label>
+                  <Select value={audience} onValueChange={(value) => setAudience(value as CommunicationAudience)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose audience" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {audienceOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Recipient Type</label>
+                  <Select
+                    value={individualRole}
+                    onValueChange={(value) => {
+                      setIndividualRole(value as CommunicationRecipientRole);
+                      setSelectedRecipientId('');
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose recipient type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="client">Client</SelectItem>
+                      <SelectItem value="vendor">Vendor</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div className="space-y-2">
                 <label className="text-sm font-medium">Message Type</label>
                 <Select value={type} onValueChange={(value) => setType(value as CommunicationType)}>
@@ -275,6 +362,34 @@ export default function CommunicationsPage() {
                 </Select>
               </div>
             </div>
+
+            {deliveryMode === 'individual' && (
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Search Recipient</label>
+                  <Input
+                    placeholder="Type name, email, or id"
+                    value={recipientSearch}
+                    onChange={(event) => setRecipientSearch(event.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Recipient</label>
+                  <Select value={selectedRecipientId} onValueChange={setSelectedRecipientId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose recipient" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {recipientOptions.map((recipient) => (
+                        <SelectItem key={recipient.id} value={recipient.id}>
+                          {recipient.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
 
             <div className="space-y-2">
               <label className="text-sm font-medium">Title</label>
@@ -308,7 +423,12 @@ export default function CommunicationsPage() {
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/30 px-4 py-3">
               <div className="text-sm">
                 <p className="font-medium">
-                  Sending to <span className="text-primary">{selectedAudienceLabel}</span>
+                  Sending to{' '}
+                  <span className="text-primary">
+                    {deliveryMode === 'individual'
+                      ? (selectedRecipient?.label ?? 'Select recipient')
+                      : selectedAudienceLabel}
+                  </span>
                 </p>
                 <p className="text-muted-foreground">
                   Estimated recipients: <strong>{previewCount}</strong>

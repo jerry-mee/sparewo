@@ -22,9 +22,15 @@ export const createNotification = async (
   notification: Omit<Notification, 'id' | 'createdAt' | 'updatedAt'>
 ): Promise<string> => {
   try {
+    const { link, ...rest } = notification;
     const recipientId = notification.recipientId || notification.userId;
+    const trimmedLink =
+      typeof link === 'string' && link.trim().length > 0
+        ? link.trim()
+        : null;
     const notificationData = {
-      ...notification,
+      ...rest,
+      ...(trimmedLink ? { link: trimmedLink } : {}),
       recipientId,
       userId: recipientId,
       isRead: false,

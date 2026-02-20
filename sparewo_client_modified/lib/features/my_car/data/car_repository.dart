@@ -11,10 +11,11 @@ class CarRepository {
     : _firestore = firestore ?? FirebaseFirestore.instance;
 
   // Get user's cars
-  Stream<List<CarModel>> getUserCars() {
+  Stream<List<CarModel>> getUserCars() async* {
     if (userId == null) {
       AppLogger.warn('CarRepository', 'userId is null in getUserCars');
-      return Stream.value([]);
+      yield const <CarModel>[];
+      return;
     }
 
     AppLogger.debug(
@@ -23,35 +24,60 @@ class CarRepository {
       extra: {'userId': userId},
     );
 
-    return _firestore
-        .collection('users')
-        .doc(userId)
-        .collection('cars')
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .map((snapshot) {
-          final cars = snapshot.docs.map((doc) {
-            return CarModel.fromJson(_normalizeCarData(doc.id, doc.data()));
-          }).toList();
+    try {
+      final stream = _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('cars')
+          .orderBy('createdAt', descending: true)
+          .snapshots()
+          .handleError((error, stackTrace) {
+            if (error is FirebaseException &&
+                error.code == 'permission-denied') {
+              AppLogger.warn(
+                'CarRepository',
+                'Permission denied in cars snapshot stream',
+                extra: {'userId': userId},
+              );
+              return;
+            }
 
-          AppLogger.debug(
-            'CarRepository',
-            'Received snapshot',
-            extra: {'userId': userId, 'count': cars.length},
-          );
+            throw error;
+          });
 
-          return cars;
-        })
-        .handleError((error, stack) {
-          AppLogger.error(
-            'CarRepository',
-            'Stream error in getUserCars',
-            error: error,
-            stackTrace: stack,
-            extra: {'userId': userId},
-          );
-          throw error;
-        });
+      await for (final snapshot in stream) {
+        final cars = snapshot.docs.map((doc) {
+          return CarModel.fromJson(_normalizeCarData(doc.id, doc.data()));
+        }).toList();
+
+        AppLogger.debug(
+          'CarRepository',
+          'Received snapshot',
+          extra: {'userId': userId, 'count': cars.length},
+        );
+
+        yield cars;
+      }
+    } on FirebaseException catch (error, stack) {
+      if (error.code == 'permission-denied') {
+        AppLogger.warn(
+          'CarRepository',
+          'Permission denied in getUserCars; returning empty stream',
+          extra: {'userId': userId},
+        );
+        yield const <CarModel>[];
+        return;
+      }
+
+      AppLogger.error(
+        'CarRepository',
+        'Stream error in getUserCars',
+        error: error,
+        stackTrace: stack,
+        extra: {'userId': userId},
+      );
+      rethrow;
+    }
   }
 
   // Get a specific car

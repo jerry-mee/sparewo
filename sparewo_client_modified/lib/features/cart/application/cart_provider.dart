@@ -1,22 +1,50 @@
 // lib/features/cart/application/cart_provider.dart
 import 'dart:async';
 import 'dart:convert';
+import 'package:firebase_auth/firebase_auth.dart' as fb_auth;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sparewo_client/features/auth/application/auth_provider.dart';
 import 'package:sparewo_client/features/cart/data/cart_repository.dart';
 import 'package:sparewo_client/features/cart/domain/cart_model.dart';
 import 'package:sparewo_client/features/cart/domain/cart_item_model.dart';
+import 'package:sparewo_client/features/catalog/application/product_provider.dart';
 
 // 1. Repository Provider
 final cartRepositoryProvider = Provider<CartRepository>((ref) {
-  final userAsync = ref.watch(currentUserProvider);
-  final userId = userAsync.asData?.value?.id;
-  return CartRepository(userId: userId);
+  final user = ref.watch(authStateChangesProvider).asData?.value;
+  return CartRepository(userId: user?.uid);
+});
+
+// 1.1 Reactive Subtotal Provider
+final cartSubtotalProvider = FutureProvider<double>((ref) async {
+  final cartAsync = ref.watch(cartNotifierProvider);
+  final cart = cartAsync.asData?.value;
+  if (cart == null || cart.items.isEmpty) return 0.0;
+
+  double subtotal = 0.0;
+  for (final item in cart.items) {
+    try {
+      final product = await ref.watch(
+        productByIdProvider(item.productId).future,
+      );
+      if (product != null) {
+        subtotal += product.unitPrice * item.quantity;
+      }
+    } catch (_) {
+      // Ignore errors for individual products and continue
+    }
+  }
+  return subtotal;
 });
 
 // 2. Cart Stream Provider
-final cartStreamProvider = StreamProvider<CartModel>((ref) {
+final cartStreamProvider = StreamProvider.autoDispose<CartModel>((ref) {
+  final user = ref.watch(authStateChangesProvider).asData?.value;
+  if (user == null) {
+    return Stream.value(const CartModel(items: []));
+  }
+
   final repository = ref.watch(cartRepositoryProvider);
   return repository.getUserCart();
 });
@@ -32,6 +60,14 @@ class CartNotifier extends AsyncNotifier<CartModel> {
   // Initial local state
   CartModel _localCart = const CartModel(items: []);
   bool _localCartHydrated = false;
+  bool _authListenerRegistered = false;
+  bool _cartStreamListenerRegistered = false;
+  bool _isMigratingLocalCart = false;
+
+  fb_auth.User? _effectiveAuthUser() {
+    return ref.read(authStateChangesProvider).asData?.value ??
+        fb_auth.FirebaseAuth.instance.currentUser;
+  }
 
   @override
   FutureOr<CartModel> build() async {
@@ -43,20 +79,26 @@ class CartNotifier extends AsyncNotifier<CartModel> {
     final userAsync = ref.watch(authStateChangesProvider);
     final fbUser = userAsync.asData?.value;
 
-    // Listen for login changes to migrate cart
-    ref.listen(authStateChangesProvider, (prev, next) {
-      final wasLoggedIn = prev?.asData?.value != null;
-      final isLoggedIn = next.asData?.value != null;
-      if (!wasLoggedIn && isLoggedIn) {
-        Future.microtask(() async {
-          await migrateLocalCart();
-          ref.invalidate(cartStreamProvider);
-          // Wait for stream to emit new value
-          final latest = await ref.read(cartStreamProvider.future);
-          state = AsyncData(latest);
-        });
-      }
-    });
+    if (!_authListenerRegistered) {
+      _authListenerRegistered = true;
+      // Listen for login changes once to migrate guest cart
+      ref.listen(authStateChangesProvider, (prev, next) {
+        final wasLoggedIn = prev?.asData?.value != null;
+        final isLoggedIn = next.asData?.value != null;
+        if (!wasLoggedIn && isLoggedIn) {
+          Future.microtask(() async {
+            await migrateLocalCart();
+            ref.invalidate(cartStreamProvider);
+            try {
+              final latest = await ref.read(cartStreamProvider.future);
+              state = AsyncData(latest);
+            } catch (_) {
+              // Ignore transient stream races during auth transitions
+            }
+          });
+        }
+      });
+    }
 
     if (fbUser != null) {
       if (_localCart.items.isNotEmpty) {
@@ -64,9 +106,12 @@ class CartNotifier extends AsyncNotifier<CartModel> {
       }
 
       // Listen to stream when logged in
-      ref.listen(cartStreamProvider, (previous, next) {
-        next.whenData((cart) => state = AsyncData(cart));
-      });
+      if (!_cartStreamListenerRegistered) {
+        _cartStreamListenerRegistered = true;
+        ref.listen(cartStreamProvider, (previous, next) {
+          next.whenData((cart) => state = AsyncData(cart));
+        });
+      }
       return await ref.read(cartStreamProvider.future);
     } else {
       // Use local cart when logged out
@@ -81,9 +126,11 @@ class CartNotifier extends AsyncNotifier<CartModel> {
     state = const AsyncLoading();
 
     state = await AsyncValue.guard(() async {
-      final authState = ref.read(authNotifierProvider);
+      // Fix: Use authStateChangesProvider to check actual login status
+      // authNotifierProvider only shows *action* state, not *session* state.
+      final user = _effectiveAuthUser();
 
-      if (authState.asData?.value != null) {
+      if (user != null) {
         final repository = ref.read(cartRepositoryProvider);
         await repository.addItem(productId: productId, quantity: quantity);
         return await ref.read(cartStreamProvider.future);
@@ -118,9 +165,11 @@ class CartNotifier extends AsyncNotifier<CartModel> {
     state = const AsyncLoading();
 
     state = await AsyncValue.guard(() async {
-      final authState = ref.read(authNotifierProvider);
+      // Fix: Use authStateChangesProvider to check actual login status
+      // authNotifierProvider only shows *action* state, not *session* state.
+      final user = _effectiveAuthUser();
 
-      if (authState.asData?.value != null) {
+      if (user != null) {
         final repository = ref.read(cartRepositoryProvider);
         await repository.updateQuantity(
           productId: productId,
@@ -154,9 +203,11 @@ class CartNotifier extends AsyncNotifier<CartModel> {
     state = const AsyncLoading();
 
     state = await AsyncValue.guard(() async {
-      final authState = ref.read(authNotifierProvider);
+      // Fix: Use authStateChangesProvider to check actual login status
+      // authNotifierProvider only shows *action* state, not *session* state.
+      final user = _effectiveAuthUser();
 
-      if (authState.asData?.value != null) {
+      if (user != null) {
         final repository = ref.read(cartRepositoryProvider);
         await repository.removeItem(productId);
         return await ref.read(cartStreamProvider.future);
@@ -174,9 +225,11 @@ class CartNotifier extends AsyncNotifier<CartModel> {
     state = const AsyncLoading();
 
     state = await AsyncValue.guard(() async {
-      final authState = ref.read(authNotifierProvider);
+      // Fix: Use authStateChangesProvider to check actual login status
+      // authNotifierProvider only shows *action* state, not *session* state.
+      final user = _effectiveAuthUser();
 
-      if (authState.asData?.value != null) {
+      if (user != null) {
         final repository = ref.read(cartRepositoryProvider);
         await repository.clearCart();
         return await ref.read(cartStreamProvider.future);
@@ -189,25 +242,36 @@ class CartNotifier extends AsyncNotifier<CartModel> {
   }
 
   Future<void> migrateLocalCart() async {
-    if (_localCart.items.isEmpty) return;
+    if (_isMigratingLocalCart || _localCart.items.isEmpty) return;
 
-    final fbUser = ref.read(authStateChangesProvider).asData?.value;
-    if (fbUser == null) return;
+    final user = _effectiveAuthUser();
+    if (user == null) return;
 
-    final repository = CartRepository(userId: fbUser.uid);
+    _isMigratingLocalCart = true;
+    final repository = CartRepository(userId: user.uid);
 
-    for (final item in _localCart.items) {
-      try {
-        await repository.addItem(
-          productId: item.productId,
-          quantity: item.quantity,
-        );
-      } catch (e) {
-        // silently ignore conflicts during migration
+    try {
+      final failedItems = <CartItemModel>[];
+      for (final item in _localCart.items) {
+        try {
+          await repository.addItem(
+            productId: item.productId,
+            quantity: item.quantity,
+          );
+        } catch (_) {
+          failedItems.add(item);
+        }
       }
+
+      _localCart = CartModel(items: failedItems);
+      if (failedItems.isEmpty) {
+        await _clearPersistedLocalCart();
+      } else {
+        await _persistLocalCart(_localCart);
+      }
+    } finally {
+      _isMigratingLocalCart = false;
     }
-    _localCart = const CartModel(items: []);
-    await _clearPersistedLocalCart();
   }
 
   Future<CartModel> _loadLocalCart() async {

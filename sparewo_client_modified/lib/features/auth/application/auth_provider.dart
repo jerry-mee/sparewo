@@ -130,10 +130,10 @@ class AuthNotifier extends AsyncNotifier<UserModel?> {
     }
   }
 
-  Future<void> sendPasswordResetEmail() async {
+  Future<void> sendPasswordResetEmail({required String email}) async {
     state = const AsyncLoading();
     try {
-      await _repo.sendPasswordResetEmail();
+      await _repo.sendPasswordResetEmail(email: email);
       state = const AsyncData(null);
     } catch (e, st) {
       state = AsyncError(e, st);

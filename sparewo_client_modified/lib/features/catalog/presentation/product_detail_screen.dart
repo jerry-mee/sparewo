@@ -59,7 +59,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
 
   Widget _buildDesktop(BuildContext context) {
     final productAsync = ref.watch(productByIdProvider(widget.productId));
-    final user = ref.watch(currentUserProvider).asData?.value;
+    final user = ref.watch(authStateChangesProvider).asData?.value;
     final theme = Theme.of(context);
 
     return DesktopScaffold(
@@ -73,82 +73,169 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 DesktopSection(
-                  title: product.partName,
-                  subtitle: product.brand.toUpperCase(),
-                  padding: const EdgeInsets.only(top: 26, bottom: 14),
+                  padding: const EdgeInsets.only(top: 32, bottom: 40),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // Image Gallery Section
                       Expanded(
                         flex: 6,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: theme.cardColor,
-                            borderRadius: BorderRadius.circular(
-                              DesktopWebScale.panelRadius,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              product.brand.toUpperCase(),
+                              style: AppTextStyles.labelSmall.copyWith(
+                                color: AppColors.primary,
+                                letterSpacing: 2.0,
+                                fontWeight: FontWeight.w800,
+                              ),
                             ),
-                            border: Border.all(
-                              color: theme.dividerColor.withValues(alpha: 0.35),
+                            const SizedBox(height: 8),
+                            Text(
+                              product.partName,
+                              style: AppTextStyles.desktopH1.copyWith(
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: -1.2,
+                              ),
                             ),
-                            boxShadow: AppShadows.cardShadow,
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(
-                              DesktopWebScale.panelRadius,
+                            const SizedBox(height: 24),
+                            Container(
+                              decoration: BoxDecoration(
+                                color: theme.cardColor,
+                                borderRadius: BorderRadius.circular(
+                                  DesktopWebScale.panelRadius,
+                                ),
+                                border: Border.all(
+                                  color: theme.dividerColor.withValues(
+                                    alpha: 0.35,
+                                  ),
+                                ),
+                                boxShadow: AppShadows.cardShadow,
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(
+                                  DesktopWebScale.panelRadius,
+                                ),
+                                child: _buildImageGallery(product, context),
+                              ),
                             ),
-                            child: _buildImageGallery(product, context),
-                          ),
+                            const SizedBox(height: 40),
+                            Text(
+                              'Description',
+                              style: AppTextStyles.desktopH3.copyWith(
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              product.description,
+                              style: AppTextStyles.bodyLarge.copyWith(
+                                color: theme.textTheme.bodyMedium?.color
+                                    ?.withValues(alpha: 0.8),
+                                height: 1.6,
+                                fontSize: 18,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(width: 36),
-                      Expanded(
-                        flex: 4,
-                        child: Container(
-                          padding: const EdgeInsets.all(28),
-                          decoration: BoxDecoration(
-                            color: theme.cardColor,
-                            borderRadius: BorderRadius.circular(
-                              DesktopWebScale.cardRadius,
-                            ),
-                            border: Border.all(
-                              color: theme.dividerColor.withValues(alpha: 0.35),
-                            ),
-                            boxShadow: AppShadows.cardShadow,
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _buildStockBadge(product.isInStock),
-                              const SizedBox(height: 18),
-                              Text(
-                                product.formattedPrice,
-                                style: AppTextStyles.desktopH1.copyWith(
-                                  color: AppColors.primary,
-                                  fontSize: 42,
+                      const SizedBox(width: 48),
+
+                      // Quick Actions / Summary Panel
+                      SizedBox(
+                        width: 420,
+                        child: Column(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(32),
+                              decoration: BoxDecoration(
+                                color: theme.cardColor,
+                                borderRadius: BorderRadius.circular(
+                                  DesktopWebScale.cardRadius,
                                 ),
-                              ),
-                              const SizedBox(height: 22),
-                              Text(
-                                'Description',
-                                style: AppTextStyles.desktopH3,
-                              ),
-                              const SizedBox(height: 10),
-                              Text(
-                                product.description,
-                                style: AppTextStyles.bodyLarge.copyWith(
-                                  color: theme.textTheme.bodyMedium?.color
-                                      ?.withValues(alpha: 0.8),
-                                  height: 1.55,
+                                border: Border.all(
+                                  color: theme.dividerColor.withValues(
+                                    alpha: 0.45,
+                                  ),
                                 ),
+                                boxShadow: AppShadows.floatingShadow,
                               ),
-                              const SizedBox(height: 32),
-                              _buildBottomAction(
-                                context,
-                                product,
-                                user != null,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      _buildStockBadge(product.isInStock),
+                                      const Icon(
+                                        Icons.share_outlined,
+                                        size: 20,
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 24),
+                                  Text(
+                                    product.formattedPrice,
+                                    style: AppTextStyles.desktopH1.copyWith(
+                                      color: AppColors.primary,
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 48,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.local_shipping_outlined,
+                                        size: 16,
+                                        color: AppColors.success,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'Free delivery on orders over UGX 500k',
+                                        style: AppTextStyles.bodySmall.copyWith(
+                                          color: AppColors.success,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 32),
+                                  Divider(
+                                    color: theme.dividerColor.withValues(
+                                      alpha: 0.5,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 32),
+
+                                  _buildBottomAction(
+                                    context,
+                                    product,
+                                    user != null,
+                                  ),
+
+                                  const SizedBox(height: 24),
+                                  Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.verified_user_outlined,
+                                        size: 18,
+                                        color: Colors.blue,
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Text(
+                                        'Authentic Spare Parts Guaranteed',
+                                        style: AppTextStyles.bodySmall.copyWith(
+                                          color: theme.hintColor,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
@@ -167,7 +254,8 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
 
   Widget _buildMobile(BuildContext context) {
     final productAsync = ref.watch(productByIdProvider(widget.productId));
-    final user = ref.watch(currentUserProvider).asData?.value;
+    // Fix: Use authStateChangesProvider to avoid race condition on cold start
+    final user = ref.watch(authStateChangesProvider).asData?.value;
     final theme = Theme.of(context);
 
     return Scaffold(

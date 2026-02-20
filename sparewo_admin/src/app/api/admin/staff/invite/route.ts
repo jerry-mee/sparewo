@@ -4,9 +4,18 @@ import { db, auth } from '@/lib/firebase/admin';
 import * as crypto from 'crypto';
 import { getInviteEmailHtml, sendEmail } from '@/lib/mail';
 import { isAdministratorRole, normalizeRole } from '@/lib/auth/roles';
+import { enforceRateLimit, getRequestIp, RateLimitError } from '@/lib/security/rate-limit';
 
 export async function POST(req: Request) {
     try {
+        const ip = getRequestIp(req);
+        await enforceRateLimit({
+            key: 'api:staff_invite:ip',
+            identifier: ip,
+            windowSeconds: 300,
+            maxRequests: 20,
+        });
+
         const authHeader = req.headers.get('Authorization');
         if (!authHeader?.startsWith('Bearer ')) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -14,6 +23,12 @@ export async function POST(req: Request) {
 
         const token = authHeader.split('Bearer ')[1];
         const decodedToken = await auth.verifyIdToken(token);
+        await enforceRateLimit({
+            key: 'api:staff_invite:user',
+            identifier: decodedToken.uid,
+            windowSeconds: 300,
+            maxRequests: 12,
+        });
 
         // Verify admin role
         const adminRef = db.collection('adminUsers').doc(decodedToken.uid);
@@ -104,6 +119,12 @@ export async function POST(req: Request) {
         });
 
     } catch (error: unknown) {
+        if (error instanceof RateLimitError) {
+            return NextResponse.json(
+                { error: error.message },
+                { status: 429, headers: { 'Retry-After': String(error.retryAfterSeconds) } }
+            );
+        }
         console.error('Invite staff error:', error);
         const message = error instanceof Error ? error.message : 'Internal Server Error';
         return NextResponse.json({ error: message }, { status: 500 });

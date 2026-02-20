@@ -144,56 +144,142 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
                 constraints: BoxConstraints(maxWidth: maxContentWidth),
                 child: Padding(
                   padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
-                  child: Column(
-                    children: [
-                      const SizedBox(height: 10),
-                      _buildCollapsibleHeader(context, isDesktop: isDesktop),
-                      const SizedBox(height: 10),
-                      Expanded(
-                        child: productsAsync.when(
-                          data: (products) {
-                            if (products.isEmpty) {
-                              return _buildEmptyState(context);
-                            }
-
-                            final sortedProducts = _sortProducts(products);
-                            return GridView.builder(
-                              controller: _gridScrollController,
-                              physics: const ClampingScrollPhysics(),
-                              padding: EdgeInsets.fromLTRB(
-                                0,
-                                6,
-                                0,
-                                isDesktop ? 52 : 24,
+                  child: isDesktop
+                      ? Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Sidebar Filters
+                            SizedBox(
+                              width: 250,
+                              child: _DesktopSidebarFilters(
+                                categories: _categories,
+                                selectedCategory: _selectedCategory,
+                                onCategorySelected: (cat) => setState(
+                                  () => _selectedCategory = cat == 'All'
+                                      ? null
+                                      : cat,
+                                ),
+                                sortOption: _sortOption,
+                                onSortChanged: (val) =>
+                                    setState(() => _sortOption = val),
+                                sortOptions: _sortOptions,
                               ),
-                              gridDelegate:
-                                  SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: _gridCrossAxisCount(
-                                      width,
-                                      isDesktop,
-                                    ),
-                                    mainAxisSpacing: isDesktop ? 18 : 14,
-                                    crossAxisSpacing: isDesktop ? 18 : 14,
-                                    childAspectRatio: _gridAspectRatio(
-                                      width,
-                                      isDesktop,
+                            ),
+                            const SizedBox(width: 32),
+                            // Main Content Area
+                            Expanded(
+                              child: Column(
+                                children: [
+                                  const SizedBox(height: 20),
+                                  _buildDesktopHeader(context),
+                                  const SizedBox(height: 16),
+                                  Expanded(
+                                    child: productsAsync.when(
+                                      data: (products) {
+                                        if (products.isEmpty) {
+                                          return _buildEmptyState(context);
+                                        }
+
+                                        final sortedProducts = _sortProducts(
+                                          products,
+                                        );
+                                        return GridView.builder(
+                                          controller: _gridScrollController,
+                                          physics:
+                                              const ClampingScrollPhysics(),
+                                          padding: const EdgeInsets.only(
+                                            bottom: 52,
+                                            top: 8,
+                                          ),
+                                          gridDelegate:
+                                              SliverGridDelegateWithFixedCrossAxisCount(
+                                                crossAxisCount:
+                                                    _gridCrossAxisCount(
+                                                      width,
+                                                      true,
+                                                    ),
+                                                mainAxisSpacing: 20,
+                                                crossAxisSpacing: 20,
+                                                childAspectRatio:
+                                                    _gridAspectRatio(
+                                                      width,
+                                                      true,
+                                                    ),
+                                              ),
+                                          itemCount: sortedProducts.length,
+                                          itemBuilder: (context, index) =>
+                                              _StoreProductCard(
+                                                product: sortedProducts[index],
+                                                isDesktop: true,
+                                              ),
+                                        );
+                                      },
+                                      loading: () => const Center(
+                                        child: CircularProgressIndicator(),
+                                      ),
+                                      error: (error, _) =>
+                                          _buildErrorState(context, error),
                                     ),
                                   ),
-                              itemCount: sortedProducts.length,
-                              itemBuilder: (context, index) =>
-                                  _StoreProductCard(
-                                    product: sortedProducts[index],
-                                    isDesktop: isDesktop,
-                                  ),
-                            );
-                          },
-                          loading: () =>
-                              const Center(child: CircularProgressIndicator()),
-                          error: (error, _) => _buildErrorState(context, error),
+                                ],
+                              ),
+                            ),
+                          ],
+                        )
+                      : Column(
+                          children: [
+                            const SizedBox(height: 10),
+                            _buildCollapsibleHeader(context, isDesktop: false),
+                            const SizedBox(height: 10),
+                            Expanded(
+                              child: productsAsync.when(
+                                data: (products) {
+                                  if (products.isEmpty) {
+                                    return _buildEmptyState(context);
+                                  }
+
+                                  final sortedProducts = _sortProducts(
+                                    products,
+                                  );
+                                  return GridView.builder(
+                                    controller: _gridScrollController,
+                                    physics: const ClampingScrollPhysics(),
+                                    padding: const EdgeInsets.fromLTRB(
+                                      0,
+                                      6,
+                                      0,
+                                      24,
+                                    ),
+                                    gridDelegate:
+                                        SliverGridDelegateWithFixedCrossAxisCount(
+                                          crossAxisCount: _gridCrossAxisCount(
+                                            width,
+                                            false,
+                                          ),
+                                          mainAxisSpacing: 14,
+                                          crossAxisSpacing: 14,
+                                          childAspectRatio: _gridAspectRatio(
+                                            width,
+                                            false,
+                                          ),
+                                        ),
+                                    itemCount: sortedProducts.length,
+                                    itemBuilder: (context, index) =>
+                                        _StoreProductCard(
+                                          product: sortedProducts[index],
+                                          isDesktop: false,
+                                        ),
+                                  );
+                                },
+                                loading: () => const Center(
+                                  child: CircularProgressIndicator(),
+                                ),
+                                error: (error, _) =>
+                                    _buildErrorState(context, error),
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                    ],
-                  ),
                 ),
               ),
             );
@@ -205,9 +291,12 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
 
   int _gridCrossAxisCount(double width, bool isDesktop) {
     if (!isDesktop) return 2;
-    if (width >= 1680) return 5;
-    if (width >= 1320) return 4;
-    if (width >= 1040) return 3;
+    // With Sidebar (250px) + Padding (32px) + Content Padding
+    final effectiveWidth = width - 300;
+    if (effectiveWidth >= 1600) return 6;
+    if (effectiveWidth >= 1300) return 5;
+    if (effectiveWidth >= 1000) return 4;
+    if (effectiveWidth >= 700) return 3;
     return 2;
   }
 
@@ -542,6 +631,166 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
           style: AppTextStyles.bodyMedium,
           textAlign: TextAlign.center,
         ),
+      ),
+    );
+  }
+
+  Widget _buildDesktopHeader(BuildContext context) {
+    return Row(
+      children: [
+        const Expanded(
+          child: Text(
+            'Catalogue',
+            style: TextStyle(
+              fontSize: 32,
+              fontWeight: FontWeight.w900,
+              letterSpacing: -1.0,
+            ),
+          ),
+        ),
+        SizedBox(
+          width: 400,
+          child: _buildSearchAndSort(context, condensed: true),
+        ),
+      ],
+    );
+  }
+}
+
+class _DesktopSidebarFilters extends StatelessWidget {
+  final List<String> categories;
+  final String? selectedCategory;
+  final ValueChanged<String> onCategorySelected;
+  final String sortOption;
+  final ValueChanged<String> onSortChanged;
+  final List<String> sortOptions;
+
+  const _DesktopSidebarFilters({
+    required this.categories,
+    required this.selectedCategory,
+    required this.onCategorySelected,
+    required this.sortOption,
+    required this.onSortChanged,
+    required this.sortOptions,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.only(top: 24, bottom: 40),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'CATEGORIES',
+            style: AppTextStyles.labelSmall.copyWith(
+              letterSpacing: 1.5,
+              color: theme.hintColor,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 16),
+          ...categories.map((cat) {
+            final isSelected =
+                (selectedCategory == null && cat == 'All') ||
+                selectedCategory == cat;
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: InkWell(
+                onTap: () => onCategorySelected(cat),
+                borderRadius: BorderRadius.circular(12),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? AppColors.primary.withValues(alpha: 0.1)
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      Text(
+                        cat,
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          fontWeight: isSelected
+                              ? FontWeight.w800
+                              : FontWeight.w500,
+                          color: isSelected
+                              ? AppColors.primary
+                              : theme.textTheme.bodyLarge?.color,
+                        ),
+                      ),
+                      if (isSelected) ...[
+                        const Spacer(),
+                        const Icon(
+                          Icons.check_circle_rounded,
+                          size: 16,
+                          color: AppColors.primary,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }),
+          const SizedBox(height: 40),
+          Text(
+            'SORT BY',
+            style: AppTextStyles.labelSmall.copyWith(
+              letterSpacing: 1.5,
+              color: theme.hintColor,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 16),
+          ...sortOptions.map((opt) {
+            final isSelected = sortOption == opt;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: InkWell(
+                onTap: () => onSortChanged(opt),
+                borderRadius: BorderRadius.circular(12),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        isSelected
+                            ? Icons.radio_button_checked
+                            : Icons.radio_button_off,
+                        size: 18,
+                        color: isSelected ? AppColors.primary : theme.hintColor,
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        opt,
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: isSelected
+                              ? theme.textTheme.bodyLarge?.color
+                              : theme.hintColor,
+                          fontWeight: isSelected
+                              ? FontWeight.w700
+                              : FontWeight.w400,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }),
+        ],
       ),
     );
   }

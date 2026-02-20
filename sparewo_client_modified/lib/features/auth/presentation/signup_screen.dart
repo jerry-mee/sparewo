@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:sparewo_client/features/shared/widgets/legal_modal.dart';
 import 'package:sparewo_client/features/auth/application/auth_provider.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:sparewo_client/core/theme/app_theme.dart';
@@ -107,13 +107,11 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
   bool _agreedToTerms = false;
 
   Future<void> _openTermsAndConditions() async {
-    final uri = Uri.parse('https://www.sparewo.ug/terms-of-service');
-    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
-    if (!launched && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not open Terms & Conditions')),
-      );
-    }
+    LegalModal.showTermsAndConditions(context);
+  }
+
+  Future<void> _openPrivacyPolicy() async {
+    LegalModal.showPrivacyPolicy(context);
   }
 
   Future<void> _handleSignUp() async {
@@ -269,6 +267,18 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
                       onTap: _openTermsAndConditions,
                       child: const Text(
                         'Terms & Conditions',
+                        style: TextStyle(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.bold,
+                          decoration: TextDecoration.underline,
+                        ),
+                      ),
+                    ),
+                    Text(' and ', style: TextStyle(color: theme.hintColor)),
+                    GestureDetector(
+                      onTap: _openPrivacyPolicy,
+                      child: const Text(
+                        'Privacy Policy',
                         style: TextStyle(
                           color: AppColors.primary,
                           fontWeight: FontWeight.bold,

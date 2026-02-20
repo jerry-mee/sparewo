@@ -217,10 +217,10 @@ class CartScreen extends ConsumerWidget {
     required bool isLoggedIn,
     required bool isDesktop,
   }) {
-    return FutureBuilder<double>(
-      future: _calculateSubtotal(ref, cart),
-      builder: (context, snapshot) {
-        final subtotal = snapshot.data ?? 0.0;
+    final subtotalAsync = ref.watch(cartSubtotalProvider);
+
+    return subtotalAsync.when(
+      data: (subtotal) {
         const shipping = 0.0;
         final total = subtotal + shipping;
 
@@ -323,6 +323,13 @@ class CartScreen extends ConsumerWidget {
           child: SafeArea(child: summaryContent),
         );
       },
+      loading: () => const Center(
+        child: Padding(
+          padding: EdgeInsets.all(20),
+          child: CircularProgressIndicator(),
+        ),
+      ),
+      error: (e, _) => Center(child: Text('Error calculating total: $e')),
     );
   }
 
@@ -371,19 +378,6 @@ class CartScreen extends ConsumerWidget {
       message: 'Please sign in to complete your purchase and track your order.',
       onAuthenticated: () => context.push('/checkout'),
     );
-  }
-
-  Future<double> _calculateSubtotal(WidgetRef ref, CartModel cart) async {
-    double subtotal = 0.0;
-    for (final item in cart.items) {
-      final product = await ref.read(
-        productByIdProvider(item.productId).future,
-      );
-      if (product != null) {
-        subtotal += product.unitPrice * item.quantity;
-      }
-    }
-    return subtotal;
   }
 
   String _formatCurrency(double amount) {

@@ -27,16 +27,7 @@ class LoginScreen extends ConsumerWidget {
         EasyLoading.show(status: 'Signing in...');
       } else {
         EasyLoading.dismiss();
-        if (state.hasValue && state.value != null) {
-          // Successfully logged in
-          if (returnTo != null) {
-            context.go(returnTo);
-          } else if (context.canPop()) {
-            context.pop();
-          } else {
-            context.go('/home');
-          }
-        } else if (state.hasError) {
+        if (state.hasError) {
           final error = state.error.toString().replaceAll('Exception: ', '');
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -165,6 +156,71 @@ class _LoginFormState extends ConsumerState<_LoginForm> {
     }
   }
 
+  Future<void> _showForgotPasswordDialog(BuildContext context) async {
+    final emailController = TextEditingController(text: _emailController.text);
+    final formKey = GlobalKey<FormState>();
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Reset Password'),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Enter your email address to receive a password reset link.',
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: emailController,
+                autofocus: true,
+                keyboardType: TextInputType.emailAddress,
+                decoration: InputDecoration(
+                  labelText: 'Email',
+                  prefixIcon: const Icon(Icons.email_outlined),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                validator: (v) =>
+                    v?.contains('@') == true ? null : 'Invalid email',
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              if (formKey.currentState?.validate() ?? false) {
+                Navigator.pop(context);
+                try {
+                  EasyLoading.show(status: 'Sending...');
+                  await ref
+                      .read(authNotifierProvider.notifier)
+                      .sendPasswordResetEmail(
+                        email: emailController.text.trim(),
+                      );
+                  EasyLoading.showSuccess('Reset link sent!');
+                } catch (e) {
+                  EasyLoading.showError(
+                    e.toString().replaceAll('Exception: ', ''),
+                  );
+                }
+              }
+            },
+            child: const Text('Send Link'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -223,9 +279,7 @@ class _LoginFormState extends ConsumerState<_LoginForm> {
           Align(
             alignment: Alignment.centerRight,
             child: TextButton(
-              onPressed: () {
-                // Forgot password logic
-              },
+              onPressed: () => _showForgotPasswordDialog(context),
               child: const Text('Forgot Password?'),
             ),
           ),

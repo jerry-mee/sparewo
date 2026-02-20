@@ -40,7 +40,7 @@ interface CatalogProduct {
   retailPrice: number;
   currency: string;
   availability: 'in_stock' | 'out_of_stock' | 'limited';
-  featured: boolean;
+  isFeatured: boolean;
   categories: string[];
   searchKeywords: string[];
   specifications: Record<string, unknown>;
@@ -328,7 +328,7 @@ export const getCatalogProducts = async (
     }
     
     if (filters?.featured !== undefined) {
-      constraints.push(where('featured', '==', filters.featured));
+      constraints.push(where('isFeatured', '==', filters.featured));
     }
     
     let q = query(
@@ -347,7 +347,12 @@ export const getCatalogProducts = async (
     let lastVisible: DocumentData | undefined = undefined;
     
     querySnapshot.forEach((doc) => {
-      products.push({ id: doc.id, ...doc.data() } as CatalogProduct);
+      const data = doc.data();
+      products.push({
+        id: doc.id,
+        ...data,
+        isFeatured: (data.isFeatured ?? data.featured ?? false) as boolean,
+      } as CatalogProduct);
       lastVisible = doc;
     });
     
@@ -494,10 +499,27 @@ export const updateCatalogProduct = async (
 ): Promise<void> => {
   try {
     const docRef = doc(db, 'catalog_products', catalogProductId);
-    await updateDoc(docRef, {
-      ...updates,
+    const updatePayload: FirebaseUpdateData = {
       updatedAt: serverTimestamp(),
-    });
+    };
+
+    if (updates.retailPrice !== undefined) {
+      updatePayload.retailPrice = updates.retailPrice;
+    }
+    if (updates.availability !== undefined) {
+      updatePayload.availability = updates.availability;
+    }
+    if (updates.categories !== undefined) {
+      updatePayload.categories = updates.categories;
+    }
+    if (updates.isActive !== undefined) {
+      updatePayload.isActive = updates.isActive;
+    }
+    if (updates.featured !== undefined) {
+      updatePayload.isFeatured = updates.featured;
+    }
+
+    await updateDoc(docRef, updatePayload);
   } catch (error) {
     console.error('Error updating catalog product:', error);
     throw error;
@@ -518,9 +540,9 @@ export const bulkCreateCatalogFromApproved = async (
     let created = 0;
     let failed = 0;
     
-    const batch = writeBatch(db);
     const batchSize = 500;
     let operationCount = 0;
+    let batch = writeBatch(db);
     
     for (const docSnap of querySnapshot.docs) {
       try {
@@ -541,8 +563,8 @@ export const bulkCreateCatalogFromApproved = async (
           retailPrice,
           currency: 'UGX',
           availability: vendorProduct.stockQuantity > 0 ? 'in_stock' : 'out_of_stock',
-          featured: false,
-          categories: [vendorProduct.category],
+          isFeatured: false,
+          categories: vendorProduct.category ? [vendorProduct.category] : [],
           searchKeywords: vendorProduct.searchKeywords || [],
           specifications: vendorProduct.specifications || {},
           createdAt: serverTimestamp(),
@@ -580,6 +602,7 @@ export const bulkCreateCatalogFromApproved = async (
         
         if (operationCount >= batchSize - 3) {
           await batch.commit();
+          batch = writeBatch(db);
           operationCount = 0;
         }
       } catch (error) {

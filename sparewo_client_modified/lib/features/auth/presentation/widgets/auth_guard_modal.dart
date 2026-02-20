@@ -7,6 +7,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sparewo_client/core/theme/app_theme.dart';
 import 'package:sparewo_client/features/auth/application/auth_provider.dart';
+import 'package:sparewo_client/features/shared/widgets/legal_modal.dart';
 
 /// A modal that politely asks the user to login/signup.
 class AuthGuardModal extends ConsumerStatefulWidget {
@@ -168,11 +169,16 @@ class _AuthGuardModalState extends ConsumerState<AuthGuardModal> {
 
   void _completeAuthSuccess() {
     if (!mounted) return;
-    widget.onLoginSuccess?.call();
+    final onLoginSuccess = widget.onLoginSuccess;
+    final returnTo = widget.returnTo;
+    final router = GoRouter.of(context);
     Navigator.of(context).pop();
-    if (widget.onLoginSuccess == null && widget.returnTo != null) {
-      context.go(widget.returnTo!);
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      onLoginSuccess?.call();
+      if (onLoginSuccess == null && returnTo != null) {
+        router.go(returnTo);
+      }
+    });
   }
 
   @override
@@ -404,9 +410,27 @@ class _AuthGuardModalState extends ConsumerState<AuthGuardModal> {
                 ),
               ),
               Expanded(
-                child: Text(
-                  'I agree to the Terms & Conditions',
-                  style: TextStyle(color: theme.hintColor),
+                child: GestureDetector(
+                  onTap: () => LegalModal.showTermsAndConditions(context),
+                  child: RichText(
+                    text: TextSpan(
+                      text: 'I agree to the ',
+                      style: TextStyle(
+                        color: theme.hintColor,
+                        fontFamily: theme.textTheme.bodyMedium?.fontFamily,
+                      ),
+                      children: const [
+                        TextSpan(
+                          text: 'Terms & Conditions',
+                          style: TextStyle(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.bold,
+                            decoration: TextDecoration.underline,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ],

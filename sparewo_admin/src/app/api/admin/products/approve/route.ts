@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { db, auth } from '@/lib/firebase/admin';
 import { isAdministratorRole, normalizeRole } from '@/lib/auth/roles';
 import { getProductApprovedEmailHtml, sendEmail } from '@/lib/mail';
+import { enforceRateLimit, getRequestIp, RateLimitError } from '@/lib/security/rate-limit';
 
 interface ApproveProductBody {
   productId?: string;
@@ -10,6 +11,14 @@ interface ApproveProductBody {
 
 export async function POST(req: Request) {
   try {
+    const ip = getRequestIp(req);
+    await enforceRateLimit({
+      key: 'api:product_approve:ip',
+      identifier: ip,
+      windowSeconds: 300,
+      maxRequests: 30,
+    });
+
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -17,6 +26,12 @@ export async function POST(req: Request) {
 
     const token = authHeader.split('Bearer ')[1];
     const decodedToken = await auth.verifyIdToken(token);
+    await enforceRateLimit({
+      key: 'api:product_approve:user',
+      identifier: decodedToken.uid,
+      windowSeconds: 300,
+      maxRequests: 20,
+    });
 
     const adminRef = db.collection('adminUsers').doc(decodedToken.uid);
     const adminSnap = await adminRef.get();
@@ -132,6 +147,13 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ success: true });
   } catch (error: unknown) {
+    if (error instanceof RateLimitError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 429, headers: { 'Retry-After': String(error.retryAfterSeconds) } }
+      );
+    }
+
     const message = error instanceof Error ? error.message : 'Internal Server Error';
     console.error('Approve product API error:', error);
     return NextResponse.json({ error: message }, { status: 500 });

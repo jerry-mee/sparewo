@@ -3,9 +3,18 @@ import { NextResponse } from 'next/server';
 import { db, auth } from '@/lib/firebase/admin';
 import { StaffMember } from '@/lib/types/staff';
 import { normalizeRole } from '@/lib/auth/roles';
+import { enforceRateLimit, getRequestIp, RateLimitError } from '@/lib/security/rate-limit';
 
 export async function POST(req: Request) {
     try {
+        const ip = getRequestIp(req);
+        await enforceRateLimit({
+            key: 'api:staff_list:ip',
+            identifier: ip,
+            windowSeconds: 300,
+            maxRequests: 80,
+        });
+
         const authHeader = req.headers.get('Authorization');
         if (!authHeader?.startsWith('Bearer ')) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -13,6 +22,12 @@ export async function POST(req: Request) {
 
         const token = authHeader.split('Bearer ')[1];
         const decodedToken = await auth.verifyIdToken(token);
+        await enforceRateLimit({
+            key: 'api:staff_list:user',
+            identifier: decodedToken.uid,
+            windowSeconds: 300,
+            maxRequests: 60,
+        });
 
         // Only authenticated dashboard roles can list staff.
         const adminRef = db.collection('adminUsers').doc(decodedToken.uid);
@@ -68,6 +83,12 @@ export async function POST(req: Request) {
 
         return NextResponse.json({ staff: staffMembers });
     } catch (error) {
+        if (error instanceof RateLimitError) {
+            return NextResponse.json(
+                { error: error.message },
+                { status: 429, headers: { 'Retry-After': String(error.retryAfterSeconds) } }
+            );
+        }
         console.error('List staff error:', error);
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }

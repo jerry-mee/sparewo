@@ -3,6 +3,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:sparewo_client/core/theme/app_theme.dart';
@@ -228,40 +229,83 @@ class _GarageSummaryCard extends StatelessWidget {
 
 Widget _buildEmptyGarage(BuildContext context) {
   final theme = Theme.of(context);
+  final isDark = theme.brightness == Brightness.dark;
+
   return Center(
-    child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
+    child: SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 20),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
+          // Illustrated/Graphical Header
           Container(
-            padding: const EdgeInsets.all(28),
+            height: 200,
+            width: 200,
             decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.12),
+              color: AppColors.primary.withValues(alpha: 0.05),
               shape: BoxShape.circle,
             ),
-            child: const Icon(
-              Icons.directions_car_outlined,
-              size: 62,
-              color: AppColors.primary,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Icon(
+                  Icons.garage_rounded,
+                  size: 100,
+                  color: AppColors.primary.withValues(
+                    alpha: isDark ? 0.2 : 0.1,
+                  ),
+                ),
+                Icon(
+                      Icons.directions_car_filled_rounded,
+                      size: 72,
+                      color: AppColors.primary.withValues(alpha: 0.8),
+                    )
+                    .animate(onPlay: (c) => c.repeat())
+                    .shimmer(
+                      duration: 2.seconds,
+                      color: Colors.white.withValues(alpha: 0.3),
+                    ),
+              ],
             ),
-          ).animate().scale(),
-          const SizedBox(height: 24),
-          Text('Your Garage is Empty', style: AppTextStyles.h3),
-          const SizedBox(height: 8),
+          ).animate().scale(curve: Curves.easeOutBack, duration: 600.ms),
+
+          const SizedBox(height: 32),
+
           Text(
-            'Add a vehicle with photos to unlock service tracking and reminders.',
+            'Your Digital Garage',
+            style: AppTextStyles.h2.copyWith(fontWeight: FontWeight.w900),
             textAlign: TextAlign.center,
-            style: AppTextStyles.bodyMedium.copyWith(color: theme.hintColor),
-          ),
-          const SizedBox(height: 28),
-          FilledButton(
-            onPressed: () => context.push('/add-car'),
-            style: FilledButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+          ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.2, end: 0),
+
+          const SizedBox(height: 12),
+
+          Text(
+            'Keep track of your vehicle\'s health, service history, and insurance in one place. Add your first car to get started.',
+            textAlign: TextAlign.center,
+            style: AppTextStyles.bodyLarge.copyWith(
+              color: theme.hintColor,
+              height: 1.5,
             ),
-            child: const Text('Add First Vehicle'),
-          ),
+          ).animate().fadeIn(delay: 400.ms),
+
+          const SizedBox(height: 40),
+
+          SizedBox(
+            width: double.infinity,
+            height: 56,
+            child: FilledButton.icon(
+              onPressed: () => context.push('/add-car'),
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('Add Your Vehicle'),
+              style: FilledButton.styleFrom(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                elevation: 4,
+                shadowColor: AppColors.primary.withValues(alpha: 0.4),
+              ),
+            ),
+          ).animate().fadeIn(delay: 600.ms).scale(),
         ],
       ),
     ),
@@ -366,189 +410,151 @@ Widget _buildAddCarButton(BuildContext context) {
   );
 }
 
-class _GarageCarCard extends ConsumerWidget {
+class _GarageCarCard extends ConsumerStatefulWidget {
   final CarModel car;
 
   const _GarageCarCard({required this.car});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_GarageCarCard> createState() => _GarageCarCardState();
+}
+
+class _GarageCarCardState extends ConsumerState<_GarageCarCard> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final imageUrl = _primaryImageUrl(car);
+    final isDesktop = MediaQuery.sizeOf(context).width >= 800;
+    final imageUrl = _primaryImageUrl(widget.car);
     final hasImage = imageUrl != null && imageUrl.isNotEmpty;
-    final nextInsurance = _formatInsurance(car.insuranceExpiryDate);
-    final lastService = _formatService(car.lastServiceDate);
     final saving = ref.watch(carNotifierProvider).isLoading;
 
+    if (isDesktop) {
+      return _buildDesktopCard(context, theme, hasImage, imageUrl, saving);
+    }
+
+    return _buildMobileCard(context, theme, hasImage, imageUrl, saving);
+  }
+
+  Widget _buildMobileCard(
+    BuildContext context,
+    ThemeData theme,
+    bool hasImage,
+    String? imageUrl,
+    bool saving,
+  ) {
     return InkWell(
-      onTap: () => context.push('/my-cars/detail/${car.id}', extra: car),
+      onTap: () =>
+          context.push('/my-cars/detail/${widget.car.id}', extra: widget.car),
       borderRadius: BorderRadius.circular(24),
-      child: Ink(
+      child: Container(
+        height: 240.h,
         decoration: BoxDecoration(
-          color: theme.cardColor,
           borderRadius: BorderRadius.circular(24),
           boxShadow: AppShadows.cardShadow,
-          border: Border.all(color: theme.dividerColor.withValues(alpha: 0.45)),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        clipBehavior: Clip.antiAlias,
+        child: Stack(
+          fit: StackFit.expand,
           children: [
-            ClipRRect(
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(24),
-              ),
-              child: AspectRatio(
-                aspectRatio: 16 / 9,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    if (hasImage)
-                      CachedNetworkImage(
-                        imageUrl: imageUrl,
-                        fit: BoxFit.cover,
-                        errorWidget: (_, __, ___) =>
-                            _ImageFallback(theme: theme),
-                        placeholder: (_, __) => _ImageFallback(theme: theme),
-                      )
-                    else
-                      _ImageFallback(theme: theme),
-                    Positioned.fill(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              Colors.black.withValues(alpha: 0.12),
-                              Colors.transparent,
-                              Colors.black.withValues(alpha: 0.65),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      top: 12,
-                      left: 12,
-                      child: _TopChip(
-                        text: '${car.year}',
-                        background: Colors.black.withValues(alpha: 0.45),
-                        foreground: Colors.white,
-                      ),
-                    ),
-                    Positioned(
-                      top: 12,
-                      right: 12,
-                      child: _TopChip(
-                        text: car.isDefault ? 'Primary' : 'Vehicle',
-                        background: car.isDefault
-                            ? AppColors.primary.withValues(alpha: 0.9)
-                            : Colors.black.withValues(alpha: 0.45),
-                        foreground: Colors.white,
-                      ),
-                    ),
-                    Positioned(
-                      left: 14,
-                      right: 14,
-                      bottom: 12,
-                      child: Text(
-                        car.displayName,
-                        style: AppTextStyles.h4.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
+            // Background Image
+            if (hasImage)
+              CachedNetworkImage(
+                imageUrl: imageUrl!,
+                fit: BoxFit.cover,
+                errorWidget: (_, __, ___) => _ImageFallback(theme: theme),
+                placeholder: (_, __) => _ImageFallback(theme: theme),
+              )
+            else
+              _ImageFallback(theme: theme),
+
+            // Immersive Gradient Overlay
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withValues(alpha: 0.15),
+                      Colors.black.withValues(alpha: 0.2),
+                      Colors.black.withValues(alpha: 0.85),
+                    ],
+                    stops: const [0.0, 0.4, 1.0],
+                  ),
                 ),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+
+            // Top Status Badges
+            Positioned(
+              top: 14,
+              left: 14,
+              child: _TopChip(
+                text: widget.car.isDefault ? 'PRIMARY' : 'VEHICLE',
+                background: widget.car.isDefault
+                    ? AppColors.primary
+                    : Colors.black.withValues(alpha: 0.5),
+                foreground: Colors.white,
+              ),
+            ),
+
+            // Car Info (Bottom)
+            Positioned(
+              left: 20,
+              right: 20,
+              bottom: 20,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    (car.plateNumber?.trim().isNotEmpty ?? false)
-                        ? car.plateNumber!.toUpperCase()
-                        : 'No Number Plate',
-                    style: AppTextStyles.labelLarge.copyWith(
-                      letterSpacing: 0.6,
-                      color: theme.textTheme.bodyLarge?.color,
+                    widget.car.displayName,
+                    style: AppTextStyles.h3.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                      height: 1.1,
+                      letterSpacing: -0.5,
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      _InfoPill(icon: Icons.speed, text: _mileageLabel(car)),
-                      _InfoPill(icon: Icons.verified_user, text: nextInsurance),
-                      _InfoPill(icon: Icons.build, text: lastService),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 6),
                   Row(
                     children: [
-                      Text(
-                        hasImage ? 'Photo verified' : 'No photo yet',
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: hasImage ? AppColors.success : theme.hintColor,
-                        ),
+                      _InfoIconPill(
+                        icon: Icons.speed_rounded,
+                        text: _mileageLabel(widget.car),
                       ),
-                      const Spacer(),
-                      if (!car.isDefault)
-                        TextButton.icon(
-                          onPressed: saving
-                              ? null
-                              : () async {
-                                  await ref
-                                      .read(carNotifierProvider.notifier)
-                                      .setDefaultCar(car.id);
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text(
-                                          'Primary vehicle updated.',
-                                        ),
-                                      ),
-                                    );
-                                  }
-                                },
-                          icon: const Icon(
-                            Icons.star_rounded,
-                            size: 16,
-                            color: AppColors.primary,
-                          ),
-                          label: Text(
-                            'Set Primary',
-                            style: AppTextStyles.labelMedium.copyWith(
-                              color: AppColors.primary,
-                            ),
-                          ),
-                        )
-                      else
-                        Row(
-                          children: [
-                            const Icon(
-                              Icons.star_rounded,
-                              color: AppColors.primary,
-                              size: 16,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              'Primary',
-                              style: AppTextStyles.labelMedium.copyWith(
-                                color: AppColors.primary,
-                              ),
-                            ),
-                          ],
-                        ),
+                      const SizedBox(width: 8),
+                      _InfoIconPill(
+                        icon: Icons.shield_rounded,
+                        text: _formatInsurance(widget.car.insuranceExpiryDate),
+                      ),
                     ],
                   ),
                 ],
+              ),
+            ),
+
+            // Edit/Quick Action floating button
+            Positioned(
+              bottom: 15,
+              right: 15,
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.2),
+                  ),
+                ),
+                child: const Icon(
+                  Icons.chevron_right_rounded,
+                  color: Colors.white,
+                ),
               ),
             ),
           ],
@@ -557,23 +563,272 @@ class _GarageCarCard extends ConsumerWidget {
     );
   }
 
+  Widget _buildDesktopCard(
+    BuildContext context,
+    ThemeData theme,
+    bool hasImage,
+    String? imageUrl,
+    bool saving,
+  ) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: GestureDetector(
+        onTap: () =>
+            context.push('/my-cars/detail/${widget.car.id}', extra: widget.car),
+        child: AnimatedContainer(
+          duration: 300.ms,
+          curve: Curves.easeOutCubic,
+          decoration: BoxDecoration(
+            color: theme.cardColor,
+            borderRadius: BorderRadius.circular(30),
+            border: Border.all(
+              color: _isHovered
+                  ? AppColors.primary.withValues(alpha: 0.5)
+                  : theme.dividerColor.withValues(alpha: 0.3),
+              width: _isHovered ? 2 : 1.2,
+            ),
+            boxShadow: _isHovered
+                ? AppShadows.floatingShadow
+                : AppShadows.cardShadow,
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // High-Def Image Area
+              Expanded(
+                flex: 7,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if (hasImage)
+                      CachedNetworkImage(
+                        imageUrl: imageUrl!,
+                        fit: BoxFit.cover,
+                        errorWidget: (_, __, ___) =>
+                            _ImageFallback(theme: theme),
+                        placeholder: (_, __) => _ImageFallback(theme: theme),
+                      )
+                    else
+                      _ImageFallback(theme: theme),
+
+                    // Racing Style Overlay
+                    AnimatedOpacity(
+                      duration: 300.ms,
+                      opacity: _isHovered ? 0.3 : 0.6,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.transparent,
+                              Colors.black.withValues(alpha: 0.9),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    Positioned(
+                      top: 16,
+                      right: 16,
+                      child: _TopChip(
+                        text: widget.car.isDefault ? 'PRIMARY' : 'GAREGE',
+                        background: widget.car.isDefault
+                            ? AppColors.primary
+                            : Colors.black.withValues(alpha: 0.7),
+                        foreground: Colors.white,
+                      ),
+                    ),
+
+                    Positioned(
+                      bottom: 16,
+                      left: 20,
+                      right: 20,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.car.displayName.toUpperCase(),
+                            style: AppTextStyles.desktopH3.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w900,
+                              height: 1.0,
+                              letterSpacing: -0.8,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            widget.car.plateNumber?.toUpperCase() ?? 'NO PLATE',
+                            style: AppTextStyles.labelSmall.copyWith(
+                              color: Colors.white.withValues(alpha: 0.7),
+                              letterSpacing: 1.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Bottom Details Area
+              Expanded(
+                flex: 3,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 12,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _DesktopInfoRow(
+                            label: 'MILEAGE',
+                            value: _mileageLabel(widget.car),
+                            icon: Icons.speed_rounded,
+                          ),
+                          const SizedBox(height: 8),
+                          _DesktopInfoRow(
+                            label: 'INSURANCE',
+                            value: _formatInsurance(
+                              widget.car.insuranceExpiryDate,
+                            ),
+                            icon: Icons.shield_rounded,
+                          ),
+                        ],
+                      ),
+
+                      // Circle Action Button
+                      AnimatedContainer(
+                        duration: 300.ms,
+                        height: 54,
+                        width: 54,
+                        decoration: BoxDecoration(
+                          color: _isHovered
+                              ? AppColors.primary
+                              : theme.scaffoldBackgroundColor,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: _isHovered
+                                ? AppColors.primary
+                                : theme.dividerColor,
+                          ),
+                        ),
+                        child: Icon(
+                          Icons.arrow_forward_rounded,
+                          color: _isHovered
+                              ? Colors.white
+                              : theme.iconTheme.color,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   String _mileageLabel(CarModel car) {
     final mileage = car.mileage;
-    if (mileage == null) return 'Mileage -';
+    if (mileage == null) return '-';
     final formatter = NumberFormat('#,###');
     return '${formatter.format(mileage)} km';
   }
 
   String _formatInsurance(DateTime? date) {
-    if (date == null) return 'Insurance -';
+    if (date == null) return '-';
     final days = date.difference(DateTime.now()).inDays;
-    if (days < 0) return 'Insurance expired';
-    return 'Insurance $days days';
+    if (days < 0) return 'Expired';
+    return '$days days';
   }
+}
 
-  String _formatService(DateTime? date) {
-    if (date == null) return 'Service -';
-    return 'Service ${DateFormat('MMM y').format(date)}';
+class _InfoIconPill extends StatelessWidget {
+  final IconData icon;
+  final String text;
+
+  const _InfoIconPill({required this.icon, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: Colors.white, size: 14),
+          const SizedBox(width: 6),
+          Text(
+            text,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DesktopInfoRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+
+  const _DesktopInfoRow({
+    required this.label,
+    required this.value,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: theme.hintColor),
+        const SizedBox(width: 8),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: AppTextStyles.labelSmall.copyWith(
+                fontSize: 9,
+                color: theme.hintColor,
+                letterSpacing: 1.1,
+              ),
+            ),
+            Text(
+              value,
+              style: AppTextStyles.labelMedium.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
   }
 }
 
@@ -625,39 +880,6 @@ class _TopChip extends StatelessWidget {
       child: Text(
         text,
         style: AppTextStyles.labelSmall.copyWith(color: foreground),
-      ),
-    );
-  }
-}
-
-class _InfoPill extends StatelessWidget {
-  final IconData icon;
-  final String text;
-
-  const _InfoPill({required this.icon, required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: AppColors.primary),
-          const SizedBox(width: 6),
-          Text(
-            text,
-            style: AppTextStyles.labelSmall.copyWith(
-              color: theme.textTheme.bodyMedium?.color,
-              letterSpacing: 0.1,
-            ),
-          ),
-        ],
       ),
     );
   }

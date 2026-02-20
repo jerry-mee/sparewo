@@ -2,6 +2,7 @@ import {
   addDoc,
   collection,
   doc,
+  getDoc,
   getDocs,
   limit,
   orderBy,
@@ -19,6 +20,8 @@ export type CommunicationAudience =
   | 'all_vendors'
   | 'active_vendors'
   | 'suspended_vendors'
+  | 'individual_client'
+  | 'individual_vendor'
   | 'admins';
 
 export type CommunicationType = 'info' | 'success' | 'warning' | 'error';
@@ -29,6 +32,7 @@ export interface CommunicationDraft {
   type: CommunicationType;
   audience: CommunicationAudience;
   link?: string;
+  recipientIds?: string[];
 }
 
 export interface CommunicationSummary {
@@ -57,6 +61,8 @@ interface Recipient {
   label: string;
   email?: string;
 }
+
+export type CommunicationRecipientRole = 'client' | 'vendor';
 
 const normalizeString = (value: unknown, fallback = ''): string =>
   typeof value === 'string' ? value : fallback;
@@ -119,8 +125,25 @@ export const getCommunicationAudienceCounts = async (): Promise<AudienceCounts> 
 };
 
 const getRecipientsByAudience = async (
-  audience: CommunicationAudience
+  audience: CommunicationAudience,
+  options?: { recipientIds?: string[] }
 ): Promise<Recipient[]> => {
+  if (audience === 'individual_client' || audience === 'individual_vendor') {
+    const ids = (options?.recipientIds ?? []).filter(Boolean);
+    if (ids.length === 0) return [];
+
+    const collectionName = audience === 'individual_client' ? 'users' : 'vendors';
+    const nameField = audience === 'individual_client' ? 'name' : 'businessName';
+
+    const snaps = await Promise.all(
+      ids.map((id) => getDoc(doc(db, collectionName, id)))
+    );
+
+    return snaps
+      .filter((snap) => snap.exists())
+      .map((snap) => parseRecipient(snap.id, snap.data() as Record<string, unknown>, nameField));
+  }
+
   if (audience === 'admins') {
     const adminsSnap = await getDocs(collection(db, 'adminUsers'));
     return adminsSnap.docs.map((docSnap) =>
@@ -155,6 +178,31 @@ const getRecipientsByAudience = async (
     .map((docSnap) => parseRecipient(docSnap.id, docSnap.data() as Record<string, unknown>, 'businessName'));
 };
 
+export const listCommunicationRecipients = async (
+  role: CommunicationRecipientRole,
+  searchTerm = '',
+  maxResults = 30
+): Promise<Recipient[]> => {
+  const collectionName = role === 'client' ? 'users' : 'vendors';
+  const preferredNameField = role === 'client' ? 'name' : 'businessName';
+  const snap = await getDocs(collection(db, collectionName));
+  const term = searchTerm.trim().toLowerCase();
+
+  const recipients = snap.docs
+    .map((docSnap) => parseRecipient(docSnap.id, docSnap.data() as Record<string, unknown>, preferredNameField))
+    .filter((recipient) => {
+      if (!term) return true;
+      return (
+        recipient.label.toLowerCase().includes(term) ||
+        recipient.email?.toLowerCase().includes(term) ||
+        recipient.id.toLowerCase().includes(term)
+      );
+    })
+    .slice(0, Math.max(1, maxResults));
+
+  return recipients;
+};
+
 export const previewCommunicationAudience = async (
   audience: CommunicationAudience,
   sampleSize = 5
@@ -177,18 +225,22 @@ export const sendAdminCommunication = async (
     throw new Error('Title and message are required.');
   }
 
-  const recipients = await getRecipientsByAudience(draft.audience);
+  const recipients = await getRecipientsByAudience(draft.audience, {
+    recipientIds: draft.recipientIds,
+  });
 
   if (recipients.length === 0) {
     return { communicationId: null, attempted: 0, delivered: 0 };
   }
 
+  const trimmedLink = draft.link?.trim();
   const communicationRef = await addDoc(collection(db, 'admin_communications'), {
     title,
     message,
     type: draft.type,
     audience: draft.audience,
-    link: draft.link?.trim() || null,
+    link: trimmedLink || null,
+    recipientIds: draft.recipientIds ?? [],
     attemptedCount: recipients.length,
     deliveredCount: 0,
     status: 'processing',
@@ -213,7 +265,7 @@ export const sendAdminCommunication = async (
         title,
         message,
         type: draft.type,
-        link: draft.link?.trim() || undefined,
+        ...(trimmedLink ? { link: trimmedLink } : {}),
         isRead: false,
         read: false,
         source: 'admin_communication',

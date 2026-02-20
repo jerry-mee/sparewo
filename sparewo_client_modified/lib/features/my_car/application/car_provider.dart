@@ -7,13 +7,17 @@ import 'package:sparewo_client/features/my_car/domain/car_model.dart';
 
 // 1. Repository Provider
 final carRepositoryProvider = Provider<CarRepository>((ref) {
-  final userAsync = ref.watch(currentUserProvider);
-  final userId = userAsync.asData?.value?.id;
+  final userAsync = ref.watch(authStateChangesProvider);
+  final userId = userAsync.asData?.value?.uid;
   return CarRepository(userId: userId);
 });
 
 // 2. Cars Stream Provider
-final carsProvider = StreamProvider<List<CarModel>>((ref) {
+final carsProvider = StreamProvider.autoDispose<List<CarModel>>((ref) {
+  final user = ref.watch(authStateChangesProvider).asData?.value;
+  if (user == null) {
+    return Stream.value(const <CarModel>[]);
+  }
   final repository = ref.watch(carRepositoryProvider);
   return repository.getUserCars();
 });

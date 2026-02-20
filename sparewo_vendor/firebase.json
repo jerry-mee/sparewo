@@ -1,1 +1,67 @@
-{"hosting":{"public":"build/web","site":"sparewo-vendor","ignore":["firebase.json","**/.*","**/node_modules/**"],"headers":[{"source":"**","headers":[{"key":"Cache-Control","value":"no-cache, no-store, must-revalidate"},{"key":"X-Content-Type-Options","value":"nosniff"},{"key":"X-Frame-Options","value":"DENY"},{"key":"X-XSS-Protection","value":"1; mode=block"}]}],"rewrites":[{"source":"**","destination":"/index.html"}]},"functions":{"source":"functions","runtime":"nodejs20","codebase":"default"},"emulators":{"functions":{"port":5001,"host":"0.0.0.0"},"hosting":{"port":5000},"ui":{"enabled":true},"auth":{"port":9099},"firestore":{"port":8080}},"flutter":{"platforms":{"android":{"default":{"projectId":"sparewoapp","appId":"1:858998050859:android:bc7c8857ea7699eb071a6e","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"sparewoapp","configurations":{"android":"1:858998050859:android:bc7c8857ea7699eb071a6e","web":"1:858998050859:web:18f337fe2c7e6ef8071a6e"}}}}}}
+{
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "hosting": {
+    "public": "build/web",
+    "site": "sparewo-vendor",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "headers": [
+      {
+        "source": "**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          },
+          {
+            "key": "X-Content-Type-Options",
+            "value": "nosniff"
+          },
+          {
+            "key": "X-Frame-Options",
+            "value": "DENY"
+          },
+          {
+            "key": "X-XSS-Protection",
+            "value": "1; mode=block"
+          }
+        ]
+      }
+    ],
+    "rewrites": [{ "source": "**", "destination": "/index.html" }]
+  },
+  "functions": {
+    "source": "functions",
+    "runtime": "nodejs20",
+    "codebase": "default"
+  },
+  "emulators": {
+    "functions": { "port": 5001, "host": "0.0.0.0" },
+    "hosting": { "port": 5000 },
+    "ui": { "enabled": true },
+    "auth": { "port": 9099 },
+    "firestore": { "port": 8080 }
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "sparewoapp",
+          "appId": "1:858998050859:android:bc7c8857ea7699eb071a6e",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "sparewoapp",
+          "configurations": {
+            "android": "1:858998050859:android:bc7c8857ea7699eb071a6e",
+            "web": "1:858998050859:web:18f337fe2c7e6ef8071a6e"
+          }
+        }
+      }
+    }
+  }
+}

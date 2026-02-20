@@ -6,6 +6,7 @@ import 'package:sparewo_client/core/widgets/desktop_scaffold.dart';
 import 'package:sparewo_client/core/widgets/desktop_section.dart';
 import 'package:sparewo_client/core/widgets/responsive_screen.dart';
 import 'package:sparewo_client/core/widgets/site_footer.dart';
+import 'package:sparewo_client/features/shared/widgets/legal_modal.dart';
 
 class AboutScreen extends StatefulWidget {
   const AboutScreen({super.key});
@@ -172,17 +173,26 @@ class _AboutScreenState extends State<AboutScreen> {
 
   Widget _buildInfoRow(BuildContext context, String title) {
     final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 16),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(title, style: AppTextStyles.bodyMedium),
-          Icon(
-            Icons.chevron_right,
-            color: theme.iconTheme.color?.withValues(alpha: 0.5),
-          ),
-        ],
+    return InkWell(
+      onTap: () {
+        if (title == 'Terms of Service') {
+          LegalModal.showTermsAndConditions(context);
+        } else if (title == 'Privacy Policy') {
+          LegalModal.showPrivacyPolicy(context);
+        }
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(title, style: AppTextStyles.bodyMedium),
+            Icon(
+              Icons.chevron_right,
+              color: theme.iconTheme.color?.withValues(alpha: 0.5),
+            ),
+          ],
+        ),
       ),
     );
   }

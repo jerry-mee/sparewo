@@ -1,4 +1,8 @@
 {
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
   "flutter": {
     "platforms": {
       "android": {
@@ -12,7 +16,7 @@
         "default": {
           "projectId": "sparewoapp",
           "appId": "1:858998050859:ios:fe08857b21acf4d8071a6e",
-          "uploadDebugSymbols": false,
+          "uploadDebugSymbols": true,
           "fileOutput": "ios/Runner/GoogleService-Info.plist"
         }
       }

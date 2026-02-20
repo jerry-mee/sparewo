@@ -9,6 +9,8 @@ export interface AdminUser {
   updatedAt: unknown;
 }
 
+export * from './issue';
+
 export interface VendorStatus {
   value: 'pending' | 'approved' | 'rejected' | 'suspended';
   label: string;

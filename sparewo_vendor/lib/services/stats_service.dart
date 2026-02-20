@@ -7,6 +7,24 @@ import '../constants/enums.dart';
 class StatsService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
+  ProductStatus _parseProductStatus(dynamic raw) {
+    final value = raw?.toString().toLowerCase().trim();
+    if (value == null || value.isEmpty) return ProductStatus.pending;
+    for (final status in ProductStatus.values) {
+      if (status.name.toLowerCase() == value) return status;
+    }
+    return ProductStatus.pending;
+  }
+
+  OrderStatus _parseOrderStatus(dynamic raw) {
+    final value = raw?.toString().toLowerCase().trim();
+    if (value == null || value.isEmpty) return OrderStatus.pending;
+    for (final status in OrderStatus.values) {
+      if (status.name.toLowerCase() == value) return status;
+    }
+    return OrderStatus.pending;
+  }
+
   Future<DashboardStats> getDashboardStats(String vendorId) async {
     try {
       final results = await Future.wait([
@@ -47,12 +65,12 @@ class StatsService {
 
   Stream<DashboardStats> watchDashboardStats(String vendorId) {
     final productsStream = _firestore
-        .collection('products')
+        .collection('vendor_products')
         .where('vendorId', isEqualTo: vendorId)
         .snapshots();
 
     final ordersStream = _firestore
-        .collection('orders')
+        .collection('order_fulfillments')
         .where('vendorId', isEqualTo: vendorId)
         .snapshots();
 
@@ -95,7 +113,7 @@ class StatsService {
 
   Future<Map<String, dynamic>> _getProductStats(String vendorId) async {
     final snapshot = await _firestore
-        .collection('products')
+        .collection('vendor_products')
         .where('vendorId', isEqualTo: vendorId)
         .get();
 
@@ -110,9 +128,8 @@ class StatsService {
 
     for (var doc in snapshot.docs) {
       final data = doc.data() as Map<String, dynamic>;
-      final status =
-          ProductStatus.values.byName(data['status'].toString().toLowerCase());
-      final stockQuantity = data['stockQuantity'] as int;
+      final status = _parseProductStatus(data['status']);
+      final stockQuantity = (data['stockQuantity'] as num?)?.toInt() ?? 0;
 
       switch (status) {
         case ProductStatus.pending:
@@ -141,7 +158,7 @@ class StatsService {
 
   Future<Map<String, dynamic>> _getOrderStats(String vendorId) async {
     final snapshot = await _firestore
-        .collection('orders')
+        .collection('order_fulfillments')
         .where('vendorId', isEqualTo: vendorId)
         .get();
 
@@ -166,10 +183,9 @@ class StatsService {
 
     for (var doc in snapshot.docs) {
       final data = doc.data() as Map<String, dynamic>;
-      final status =
-          OrderStatus.values.byName(data['status'].toString().toLowerCase());
-      final amount = (data['totalAmount'] as num).toDouble();
-      final createdAt = (data['createdAt'] as Timestamp).toDate();
+      final status = _parseOrderStatus(data['status']);
+      final amount = (data['totalVendorAmount'] as num?)?.toDouble() ?? 0.0;
+      final createdAt = (data['createdAt'] as Timestamp?)?.toDate() ?? now;
 
       switch (status) {
         case OrderStatus.pending:

@@ -6,6 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  CircleAlert,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -56,6 +57,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       { title: "Vendors", href: "/dashboard/vendors", icon: Store, roles: ["Administrator", "Manager"] },
       { title: "Products", href: "/dashboard/products", icon: Package, roles: ["Administrator", "Manager", "Mechanic"] },
       { title: "Orders", href: "/dashboard/orders", icon: ShoppingCart, roles: ["Administrator", "Manager", "Mechanic"] },
+      { title: "Issues", href: "/dashboard/issues", icon: CircleAlert, roles: ["Administrator", "Manager"] },
       { title: "Comms", href: "/dashboard/comms", icon: MessageSquareWarning, roles: ["Administrator", "Manager"] },
       { title: "Settings", href: "/dashboard/settings", icon: Settings, roles: ["Administrator"] },
     ],

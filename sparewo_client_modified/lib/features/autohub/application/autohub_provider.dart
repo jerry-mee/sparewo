@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sparewo_client/core/logging/app_logger.dart';
 import 'package:sparewo_client/features/auth/application/auth_provider.dart';
+import 'package:sparewo_client/features/auth/domain/user_model.dart';
 import 'package:sparewo_client/features/autohub/data/autohub_repository.dart';
 import 'package:sparewo_client/features/autohub/domain/service_booking_model.dart';
 import 'package:sparewo_client/features/shared/providers/email_provider.dart';
@@ -111,7 +112,17 @@ class BookingFlowNotifier extends Notifier<BookingState> {
 
     try {
       final bookingState = state;
-      final user = ref.read(currentUserProvider).asData?.value;
+      UserModel? user = ref.read(currentUserProvider).asData?.value;
+
+      // If authenticated but profile still loading, wait for it
+      if (user == null) {
+        final authState = ref.read(authStateChangesProvider).asData?.value;
+        if (authState != null) {
+          // We know we are logged in, so wait for the profile stream to emit
+          user = await ref.read(currentUserProvider.future);
+        }
+      }
+
       if (user == null) {
         AppLogger.warn('submitBooking.noUser', 'User not logged in');
         throw Exception('User not logged in');

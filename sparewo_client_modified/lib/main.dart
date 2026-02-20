@@ -6,7 +6,9 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb_auth;
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
@@ -56,11 +58,15 @@ Future<void> main() async {
             'context': details.context?.toDescription(),
           },
         );
+        // Report to Firebase Crashlytics
+        FirebaseCrashlytics.instance.recordFlutterFatalError(details);
       };
 
       // Catch uncaught platform / isolate errors
       PlatformDispatcher.instance.onError = (error, stack) {
         AppLogger.error('PlatformError', error.toString(), stackTrace: stack);
+        // Report to Firebase Crashlytics
+        FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
         return true;
       };
 
@@ -82,7 +88,7 @@ Future<void> main() async {
 
       // Start App Check without blocking the main thread
       if (!kIsWeb) {
-        _activateAppCheck();
+        await _activateAppCheck();
       }
 
       _configureEasyLoading();
@@ -98,9 +104,6 @@ Future<void> main() async {
 /// Activates Firebase App Check without blocking the app startup
 Future<void> _activateAppCheck() async {
   try {
-    // Small delay to let the platform initialize things
-    await Future.delayed(const Duration(seconds: 1));
-
     await FirebaseAppCheck.instance.activate(
       androidProvider: kReleaseMode
           ? AndroidProvider.playIntegrity
@@ -109,25 +112,6 @@ Future<void> _activateAppCheck() async {
           ? AppleProvider.appAttest
           : AppleProvider.debug,
     );
-
-    if (!kReleaseMode) {
-      // Don't await this forever, if it fails it fails.
-      unawaited(
-        FirebaseAppCheck.instance
-            .getToken()
-            .then((token) {
-              if (token != null) {
-                AppLogger.info(
-                  'FirebaseAppCheck',
-                  '!!! DEBUG TOKEN !!!: $token',
-                );
-              }
-            })
-            .catchError((e) {
-              AppLogger.warn('FirebaseAppCheck', 'Token fetch failed: $e');
-            }),
-      );
-    }
 
     AppLogger.info(
       'FirebaseAppCheck',
@@ -185,6 +169,8 @@ class _MyAppState extends ConsumerState<MyApp> {
   StreamSubscription? _notificationSubscription;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
   _bookingApprovalSubscription;
+  ProviderSubscription<AsyncValue<fb_auth.User?>>? _authStateListener;
+  ProviderSubscription<AsyncValue<fb_auth.User?>>? _easyLoadingListener;
   final Map<String, String> _knownBookingStatuses = <String, String>{};
   String? _bookingListenerUserId;
 
@@ -211,6 +197,39 @@ class _MyAppState extends ConsumerState<MyApp> {
       // Handle App Opening from Notification
       final router = ref.read(routerProvider);
       await notifService.setupInteractedMessage(router);
+
+      _authStateListener = ref.listenManual<AsyncValue<fb_auth.User?>>(
+        authStateChangesProvider,
+        (previous, next) {
+          final userId = next.asData?.value?.uid;
+          if (userId != null) {
+            _syncBookingApprovalListener(
+              userId: userId,
+              notificationService: notifService,
+            );
+
+            notifService.updateToken(userId);
+            notifService.startFirestoreNotificationListener(userId);
+            return;
+          }
+
+          _syncBookingApprovalListener(
+            userId: null,
+            notificationService: notifService,
+          );
+          notifService.stopFirestoreNotificationListener();
+        },
+        fireImmediately: true,
+      );
+
+      _easyLoadingListener = ref.listenManual<AsyncValue<fb_auth.User?>>(
+        authStateChangesProvider,
+        (_, next) {
+          if (!next.isLoading) {
+            EasyLoading.dismiss();
+          }
+        },
+      );
 
       AppLogger.info('MyApp', 'Services wired up');
     } catch (e, st) {
@@ -243,29 +262,40 @@ class _MyAppState extends ConsumerState<MyApp> {
         .collection('service_bookings')
         .where('userId', isEqualTo: userId)
         .snapshots()
-        .listen((snapshot) {
-          for (final doc in snapshot.docs) {
-            final data = doc.data();
-            final bookingId = doc.id;
-            final status = (data['status'] as String?) ?? '';
-            final bookingNumber =
-                (data['bookingNumber'] as String?) ?? bookingId;
+        .listen(
+          (snapshot) {
+            for (final doc in snapshot.docs) {
+              final data = doc.data();
+              final bookingId = doc.id;
+              final status = (data['status'] as String?) ?? '';
+              final bookingNumber =
+                  (data['bookingNumber'] as String?) ?? bookingId;
 
-            final previousStatus = _knownBookingStatuses[bookingId];
-            if (previousStatus != null &&
-                previousStatus != status &&
-                status == 'confirmed') {
-              notificationService.showLocalNotification(
-                id: bookingId.hashCode,
-                title: 'AutoHub Request Approved',
-                body:
-                    'Your request $bookingNumber is approved. We shall reach out shortly.',
-              );
+              final previousStatus = _knownBookingStatuses[bookingId];
+              if (previousStatus != null &&
+                  previousStatus != status &&
+                  status == 'confirmed') {
+                notificationService.showLocalNotification(
+                  id: bookingId.hashCode,
+                  title: 'AutoHub Request Approved',
+                  body:
+                      'Your request $bookingNumber is approved. We shall reach out shortly.',
+                );
+              }
+
+              _knownBookingStatuses[bookingId] = status;
             }
-
-            _knownBookingStatuses[bookingId] = status;
-          }
-        });
+          },
+          onError: (error, stack) {
+            AppLogger.error(
+              'MyApp',
+              'Booking approval listener failed',
+              error: error,
+              stackTrace: stack,
+              extra: {'userId': userId},
+            );
+          },
+        );
   }
 
   /// Shows a custom styled SnackBar that matches the app aesthetic
@@ -340,40 +370,14 @@ class _MyAppState extends ConsumerState<MyApp> {
   void dispose() {
     _notificationSubscription?.cancel();
     _bookingApprovalSubscription?.cancel();
+    _authStateListener?.close();
+    _easyLoadingListener?.close();
+    ref.read(notificationServiceProvider).stopFirestoreNotificationListener();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final notifService = ref.read(notificationServiceProvider);
-    ref.listen(currentUserProvider, (previous, next) {
-      final userId = next.asData?.value?.id;
-      if (userId != null) {
-        _syncBookingApprovalListener(
-          userId: userId,
-          notificationService: notifService,
-        );
-
-        // Efficiently save FCM Token for the logged-in user
-        notifService.updateToken(userId);
-
-        // Start live Firestore notification listener
-        notifService.startFirestoreNotificationListener(userId);
-      } else {
-        _syncBookingApprovalListener(
-          userId: null,
-          notificationService: notifService,
-        );
-      }
-    });
-
-    // Dismiss loading on auth change
-    ref.listen(authStateChangesProvider, (prev, next) {
-      if (!next.isLoading) {
-        EasyLoading.dismiss();
-      }
-    });
-
     final router = ref.watch(routerProvider);
     final themeMode = ref.watch(themeModeProvider);
 

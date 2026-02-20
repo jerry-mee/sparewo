@@ -285,15 +285,18 @@ class AuthRepository {
 
   // --- Password Management ---
 
-  Future<void> sendPasswordResetEmail() async {
-    final user = _auth.currentUser;
-    if (user == null || user.email == null) {
-      throw Exception('No signed-in user with an email address found.');
+  Future<void> sendPasswordResetEmail({String? email}) async {
+    final targetEmail = email ?? _auth.currentUser?.email;
+    if (targetEmail == null) {
+      throw Exception('No email address provided for password reset.');
     }
 
     try {
-      await _auth.sendPasswordResetEmail(email: user.email!);
+      await _auth.sendPasswordResetEmail(email: targetEmail);
     } on FirebaseAuthException catch (e) {
+      if (e.code == 'user-not-found') {
+        throw Exception('No account found with this email address.');
+      }
       throw Exception('Failed to send reset email: ${e.message}');
     } catch (_) {
       throw Exception('Failed to send reset email. Please try again.');

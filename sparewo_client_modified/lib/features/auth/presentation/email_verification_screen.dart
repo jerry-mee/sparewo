@@ -44,7 +44,6 @@ class _EmailVerificationScreenState
     super.initState();
     _startTimer();
     _setupAutoFill();
-    _startClipboardMonitoring();
   }
 
   @override
@@ -58,36 +57,6 @@ class _EmailVerificationScreenState
       node.dispose();
     }
     super.dispose();
-  }
-
-  void _startClipboardMonitoring() {
-    // Check clipboard every second for verification code
-    _clipboardTimer = Timer.periodic(const Duration(seconds: 1), (_) async {
-      if (_isVerifying) return;
-
-      try {
-        final clipboardData = await Clipboard.getData('text/plain');
-        if (clipboardData != null && clipboardData.text != null) {
-          final text = clipboardData.text!.trim();
-          final code = text.replaceAll(RegExp(r'[^0-9]'), '');
-
-          // Check if it's a 6-digit code
-          if (code.length == 6 && _controllers[0].text.isEmpty) {
-            setState(() {
-              for (int i = 0; i < 6; i++) {
-                _controllers[i].text = code[i];
-              }
-            });
-            // Clear clipboard after use
-            Clipboard.setData(const ClipboardData(text: ''));
-            // Auto-verify
-            Future.delayed(const Duration(milliseconds: 300), _verifyCode);
-          }
-        }
-      } catch (_) {
-        // Ignore clipboard errors
-      }
-    });
   }
 
   void _setupAutoFill() {
@@ -458,17 +427,6 @@ class _EmailVerificationScreenState
                                 ),
                               ),
                             ],
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Code will auto-paste from your clipboard',
-                            style: TextStyle(
-                              color: colorScheme.onSurface.withValues(
-                                alpha: 0.5,
-                              ),
-                              fontSize: 12,
-                              fontStyle: FontStyle.italic,
-                            ),
                           ),
                         ],
                       ),

@@ -122,3 +122,37 @@ export function getAutoHubApprovedEmailHtml(customerName: string, bookingNumber:
 
   return getEmailWrapper("AutoHub Request Approved", content);
 }
+
+export function getAutoHubStatusEmailHtml(
+  customerName: string,
+  bookingNumber: string,
+  status: 'confirmed' | 'in_progress' | 'completed' | 'cancelled'
+) {
+  const titleMap = {
+    confirmed: 'AutoHub Request Confirmed',
+    in_progress: 'AutoHub Service In Progress',
+    completed: 'AutoHub Service Completed',
+    cancelled: 'AutoHub Request Cancelled',
+  } as const;
+
+  const messageMap = {
+    confirmed: 'Your AutoHub request has been confirmed. Our team will contact you shortly with coordination details.',
+    in_progress: 'Your AutoHub request is currently being worked on by our team.',
+    completed: 'Your AutoHub request has been completed. Thank you for choosing SpareWo.',
+    cancelled: 'Your AutoHub request has been cancelled. If this is unexpected, please contact support.',
+  } as const;
+
+  const content = `
+    <p>Hello <strong>${customerName}</strong>,</p>
+    <p>${messageMap[status]}</p>
+    <div style="margin: 24px 0; padding: 14px 16px; border-radius: 8px; background: #f8fafc; border: 1px solid #e2e8f0;">
+      <p style="margin: 0; color: #334155; font-size: 14px;">
+        <strong>Booking reference:</strong> ${bookingNumber}<br>
+        <strong>Current status:</strong> ${status.replace('_', ' ')}
+      </p>
+    </div>
+    <p style="font-size: 14px; color: #475569;">Open the SpareWo app to view full booking details and progress updates.</p>
+  `;
+
+  return getEmailWrapper(titleMap[status], content);
+}

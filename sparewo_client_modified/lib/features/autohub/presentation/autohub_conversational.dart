@@ -736,61 +736,68 @@ class _AutoHubConversationalScreenState
     return _buildStepContainer(
       title: "Where are you?",
       subtitle: "Enter the pickup address.",
-      child: Column(
-        children: [
-          Container(
-            decoration: BoxDecoration(
-              color: Theme.of(context).cardColor,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: AppShadows.cardShadow,
-              border: Border.all(
-                color: Theme.of(context).dividerColor.withValues(alpha: 0.5),
-              ),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: TextField(
-              controller: _locationController,
-              maxLines: 3,
-              style: AppTextStyles.bodyLarge,
-              decoration: const InputDecoration(
-                hintText: "Street address, apartment, etc...",
-                border: InputBorder.none,
-                enabledBorder: InputBorder.none,
-                focusedBorder: InputBorder.none,
-                icon: Icon(
-                  Icons.location_on_outlined,
-                  color: AppColors.primary,
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              decoration: BoxDecoration(
+                color: Theme.of(context).cardColor,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: AppShadows.cardShadow,
+                border: Border.all(
+                  color: Theme.of(context).dividerColor.withValues(alpha: 0.5),
                 ),
               ),
-              onChanged: (val) {
-                // Update state, triggering rebuild of the Next button
-                ref
-                    .read(bookingFlowNotifierProvider.notifier)
-                    .setPickupLocation(val);
-              },
-            ),
-          ),
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppColors.info.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.info_outline, color: AppColors.info, size: 20),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    "We currently offer free pickup within Kampala limits.",
-                    style: AppTextStyles.bodySmall,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: TextField(
+                controller: _locationController,
+                maxLines: 3,
+                style: AppTextStyles.bodyLarge,
+                decoration: const InputDecoration(
+                  hintText: "Street address, apartment, etc...",
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  icon: Icon(
+                    Icons.location_on_outlined,
+                    color: AppColors.primary,
                   ),
                 ),
-              ],
+                onChanged: (val) {
+                  // Update state, triggering rebuild of the Next button
+                  ref
+                      .read(bookingFlowNotifierProvider.notifier)
+                      .setPickupLocation(val);
+                },
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.info.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.info_outline,
+                    color: AppColors.info,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      "We currently offer free pickup within Kampala limits.",
+                      style: AppTextStyles.bodySmall,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

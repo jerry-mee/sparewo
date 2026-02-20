@@ -20,7 +20,7 @@ class ScaffoldWithNavBar extends ConsumerWidget {
     final isDark = theme.brightness == Brightness.dark;
     final isIOS = theme.platform == TargetPlatform.iOS;
     final isAuthenticated =
-        ref.watch(currentUserProvider).asData?.value != null;
+        ref.watch(authStateChangesProvider).asData?.value != null;
 
     // Hide nav bar on specific high-focus screens
     if (location.startsWith('/product/') ||
@@ -187,7 +187,7 @@ class ScaffoldWithNavBar extends ConsumerWidget {
 
     // Guests should access app settings from the last tab instead of profile.
     if (!isAuthenticated && index == 3) {
-      context.push('/settings');
+      context.go('/settings');
       return;
     }
 

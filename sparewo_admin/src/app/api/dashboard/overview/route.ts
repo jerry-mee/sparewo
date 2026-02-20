@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth, db } from '@/lib/firebase/admin';
 import { normalizeRole } from '@/lib/auth/roles';
+import { enforceRateLimit, getRequestIp, RateLimitError } from '@/lib/security/rate-limit';
 
 const countByStatus = async (collectionName: string, status: string): Promise<number> => {
   const snapshot = await db.collection(collectionName).where('status', '==', status).get();
@@ -9,6 +10,14 @@ const countByStatus = async (collectionName: string, status: string): Promise<nu
 
 export async function POST(req: Request) {
   try {
+    const ip = getRequestIp(req);
+    await enforceRateLimit({
+      key: 'api:dashboard_overview:ip',
+      identifier: ip,
+      windowSeconds: 60,
+      maxRequests: 120,
+    });
+
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -16,6 +25,12 @@ export async function POST(req: Request) {
 
     const token = authHeader.split('Bearer ')[1];
     const decodedToken = await auth.verifyIdToken(token);
+    await enforceRateLimit({
+      key: 'api:dashboard_overview:user',
+      identifier: decodedToken.uid,
+      windowSeconds: 60,
+      maxRequests: 90,
+    });
 
     const adminSnap = await db.collection('adminUsers').doc(decodedToken.uid).get();
     const role = normalizeRole(adminSnap.data()?.role);
@@ -87,6 +102,13 @@ export async function POST(req: Request) {
       role,
     });
   } catch (error: unknown) {
+    if (error instanceof RateLimitError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 429, headers: { 'Retry-After': String(error.retryAfterSeconds) } }
+      );
+    }
+
     console.error('Dashboard overview API error:', error);
     const message = error instanceof Error ? error.message : 'Internal Server Error';
     return NextResponse.json({ error: message }, { status: 500 });

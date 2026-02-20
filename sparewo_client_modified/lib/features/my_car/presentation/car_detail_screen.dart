@@ -142,55 +142,176 @@ class CarDetailScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(
-        backgroundColor: theme.scaffoldBackgroundColor,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, size: 20),
-          onPressed: () => context.pop(),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.edit_outlined),
-            onPressed: () {
-              final current = carAsync.asData?.value ?? initialCar;
-              if (current != null) _openCarEditor(context, current);
-            },
-          ),
-          const SizedBox(width: 4),
-        ],
-      ),
       body: carAsync.when(
         data: (car) {
           final data = car ?? initialCar;
           if (data == null) return const Center(child: Text('Car not found'));
           final gallery = _imageGallery(data);
+          final imageUrl = _primaryImageUrl(data);
+          final hasImage = imageUrl != null && imageUrl.isNotEmpty;
 
-          return ListView(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 120),
-            children: [
-              _HeroVehicleCard(
-                car: data,
-                imageUrl: _primaryImageUrl(data),
-                compact: true,
-              ).animate().fadeIn(duration: 250.ms),
-              const SizedBox(height: 16),
-              _buildStatsCard(
-                context,
-                data,
-              ).animate().fadeIn(delay: 120.ms).slideY(begin: 0.06, end: 0),
-              const SizedBox(height: 16),
-              _VehicleDetailsCard(
-                car: data,
-                onEdit: () => _openCarEditor(context, data),
-              ).animate().fadeIn(delay: 180.ms),
-              if (gallery.isNotEmpty) ...[
-                const SizedBox(height: 16),
-                _VehicleGalleryCard(gallery: gallery),
-              ],
-              const SizedBox(height: 16),
-              _buildActions(context, ref, data).animate().fadeIn(delay: 220.ms),
+          return CustomScrollView(
+            slivers: [
+              // Immersive Hero App Bar
+              SliverAppBar(
+                expandedHeight: 320,
+                pinned: true,
+                stretch: true,
+                backgroundColor: theme.scaffoldBackgroundColor,
+                leadingWidth: 56,
+                leading: Padding(
+                  padding: const EdgeInsets.only(left: 12),
+                  child: Center(
+                    child: IconButton.filled(
+                      onPressed: () => context.pop(),
+                      style: IconButton.styleFrom(
+                        backgroundColor: Colors.black.withValues(alpha: 0.35),
+                        foregroundColor: Colors.white,
+                      ),
+                      icon: const Icon(Icons.arrow_back_ios_new, size: 20),
+                    ),
+                  ),
+                ),
+                actions: [
+                  Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: IconButton.filled(
+                      onPressed: () {
+                        final current = carAsync.asData?.value ?? initialCar;
+                        if (current != null) _openCarEditor(context, current);
+                      },
+                      style: IconButton.styleFrom(
+                        backgroundColor: Colors.black.withValues(alpha: 0.35),
+                        foregroundColor: Colors.white,
+                      ),
+                      icon: const Icon(Icons.edit_outlined, size: 20),
+                    ),
+                  ),
+                ],
+                flexibleSpace: FlexibleSpaceBar(
+                  stretchModes: const [
+                    StretchMode.zoomBackground,
+                    StretchMode.blurBackground,
+                  ],
+                  titlePadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 16,
+                  ),
+                  centerTitle: false,
+                  title: AnimatedOpacity(
+                    duration: const Duration(milliseconds: 200),
+                    opacity: 1.0,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          data.displayName,
+                          style: AppTextStyles.h4.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w900,
+                            shadows: [
+                              Shadow(
+                                color: Colors.black.withValues(alpha: 0.5),
+                                blurRadius: 4,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Text(
+                          data.plateNumber?.toUpperCase() ?? 'NO PLATE',
+                          style: AppTextStyles.labelSmall.copyWith(
+                            color: Colors.white70,
+                            fontSize: 10,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  background: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      if (hasImage)
+                        CachedNetworkImage(
+                          imageUrl: imageUrl,
+                          fit: BoxFit.cover,
+                          errorWidget: (_, __, ___) =>
+                              _HeroFallback(theme: theme),
+                        )
+                      else
+                        _HeroFallback(theme: theme),
+
+                      // Gradient to ensure legibility
+                      Positioned.fill(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Colors.black.withValues(alpha: 0.2),
+                                Colors.transparent,
+                                Colors.black.withValues(alpha: 0.8),
+                              ],
+                              stops: const [0.0, 0.4, 1.0],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // Content List
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(20, 24, 20, 120),
+                sliver: SliverList(
+                  delegate: SliverChildListDelegate([
+                    _buildStatsCard(context, data)
+                        .animate()
+                        .fadeIn(delay: 100.ms)
+                        .slideY(begin: 0.05, end: 0),
+                    const SizedBox(height: 20),
+
+                    Text(
+                      'VEHICLE MANAGEMENT',
+                      style: AppTextStyles.labelSmall.copyWith(
+                        letterSpacing: 1.2,
+                        color: theme.hintColor,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    _buildActions(
+                      context,
+                      ref,
+                      data,
+                    ).animate().fadeIn(delay: 200.ms),
+                    const SizedBox(height: 24),
+
+                    _VehicleDetailsCard(
+                      car: data,
+                      onEdit: () => _openCarEditor(context, data),
+                    ).animate().fadeIn(delay: 300.ms),
+
+                    if (gallery.isNotEmpty) ...[
+                      const SizedBox(height: 24),
+                      Text(
+                        'GALLERY',
+                        style: AppTextStyles.labelSmall.copyWith(
+                          letterSpacing: 1.2,
+                          color: theme.hintColor,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      _VehicleGalleryCard(
+                        gallery: gallery,
+                      ).animate().fadeIn(delay: 400.ms),
+                    ],
+                  ]),
+                ),
+              ),
             ],
           );
         },
@@ -417,13 +538,7 @@ class CarDetailScreen extends ConsumerWidget {
 class _HeroVehicleCard extends StatelessWidget {
   final CarModel car;
   final String? imageUrl;
-  final bool compact;
-
-  const _HeroVehicleCard({
-    required this.car,
-    required this.imageUrl,
-    this.compact = false,
-  });
+  const _HeroVehicleCard({required this.car, required this.imageUrl});
 
   @override
   Widget build(BuildContext context) {
@@ -431,7 +546,7 @@ class _HeroVehicleCard extends StatelessWidget {
     final hasImage = imageUrl != null && imageUrl!.isNotEmpty;
 
     return Container(
-      height: compact ? 270 : 320,
+      height: 320,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(28),
         boxShadow: AppShadows.cardShadow,

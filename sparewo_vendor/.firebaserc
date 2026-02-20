@@ -1,9 +1,9 @@
 {
   "projects": {
-    "default": "sparewo-vendor"
+    "default": "sparewoapp"
   },
   "targets": {
-    "sparewo-vendor": {
+    "sparewoapp": {
       "hosting": {
         "main": [
           "sparewo-vendor"

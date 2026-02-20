@@ -80,6 +80,15 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         }
 
         final data = productSnap.data()!;
+
+        // Stock Validation
+        final stockQuantity = (data['stockQuantity'] ?? 0) as int;
+        if (stockQuantity < buyNowArgs.quantity) {
+          throw Exception(
+            'Product is out of stock (Requested: ${buyNowArgs.quantity}, Available: $stockQuantity)',
+          );
+        }
+
         final price = (data['price'] ?? 0).toDouble();
         final name = (data['partName'] as String?) ?? 'Unknown product';
         final quantity = buyNowArgs.quantity <= 0 ? 1 : buyNowArgs.quantity;
@@ -103,6 +112,16 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           if (!productSnap.exists) continue;
 
           final data = productSnap.data()!;
+
+          // Stock Validation
+          final stockQuantity = (data['stockQuantity'] ?? 0) as int;
+          if (stockQuantity < item.quantity) {
+            final partName = (data['partName'] as String?) ?? 'Item';
+            throw Exception(
+              '$partName is out of stock (Requested: ${item.quantity}, Available: $stockQuantity)',
+            );
+          }
+
           final price = (data['price'] ?? 0).toDouble();
           final name = (data['partName'] as String?) ?? 'Unknown product';
           final lineTotal = price * item.quantity;

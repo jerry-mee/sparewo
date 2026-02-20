@@ -21,8 +21,18 @@ class CartRepository {
     final clientsDoc = _firestore.collection('clients').doc(userId);
     final usersSnap = await usersDoc.get();
     if (usersSnap.exists) return usersDoc;
+
+    // Subcollections may exist even when the parent user document is missing.
+    // Prefer the canonical users/{uid}/cart if it already has cart data.
+    final usersCartSnap = await usersDoc.collection('cart').limit(1).get();
+    if (usersCartSnap.docs.isNotEmpty) return usersDoc;
+
     final clientsSnap = await clientsDoc.get();
     if (clientsSnap.exists) return clientsDoc;
+
+    final clientsCartSnap = await clientsDoc.collection('cart').limit(1).get();
+    if (clientsCartSnap.docs.isNotEmpty) return clientsDoc;
+
     return usersDoc;
   }
 
