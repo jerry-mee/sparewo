@@ -115,6 +115,7 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
   bool _obscureConfirm = true;
   bool _agreedToTerms = false;
   Timer? _emailCheckDebounce;
+  final Map<String, bool> _emailAvailabilityCache = <String, bool>{};
   bool _isCheckingEmail = false;
   bool _isEmailTaken = false;
   bool _isEmailAvailable = false;
@@ -190,7 +191,18 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
       _showEmailStatus = true;
     });
 
-    _emailCheckDebounce = Timer(const Duration(milliseconds: 500), () async {
+    final cached = _emailAvailabilityCache[email];
+    if (cached != null) {
+      setState(() {
+        _isCheckingEmail = false;
+        _isEmailTaken = cached;
+        _isEmailAvailable = !cached;
+        _showEmailStatus = true;
+      });
+      return;
+    }
+
+    _emailCheckDebounce = Timer(const Duration(milliseconds: 250), () async {
       try {
         final exists = await ref
             .read(authRepositoryProvider)
@@ -204,6 +216,7 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
           _isEmailAvailable = !exists;
           _showEmailStatus = true;
         });
+        _emailAvailabilityCache[email] = exists;
       } catch (_) {
         if (!mounted) return;
         setState(() {

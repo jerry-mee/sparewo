@@ -3,6 +3,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
@@ -169,10 +170,12 @@ class _MyAppState extends ConsumerState<MyApp> {
   StreamSubscription? _notificationSubscription;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
   _bookingApprovalSubscription;
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
   ProviderSubscription<AsyncValue<fb_auth.User?>>? _authStateListener;
   ProviderSubscription<AsyncValue<fb_auth.User?>>? _easyLoadingListener;
   final Map<String, String> _knownBookingStatuses = <String, String>{};
   String? _bookingListenerUserId;
+  bool _isOffline = false;
 
   @override
   void initState() {
@@ -232,9 +235,61 @@ class _MyAppState extends ConsumerState<MyApp> {
       );
 
       AppLogger.info('MyApp', 'Services wired up');
+      _startConnectivityMonitoring();
     } catch (e, st) {
       AppLogger.error('MyApp', 'Service Init Failed', error: e, stackTrace: st);
     }
+  }
+
+  Future<void> _startConnectivityMonitoring() async {
+    final connectivity = Connectivity();
+
+    Future<void> handleResults(List<ConnectivityResult> results) async {
+      final isOfflineNow = results.every(
+        (result) => result == ConnectivityResult.none,
+      );
+
+      if (_isOffline == isOfflineNow) return;
+      _isOffline = isOfflineNow;
+
+      if (isOfflineNow) {
+        rootScaffoldMessengerKey.currentState?.hideCurrentSnackBar();
+        rootScaffoldMessengerKey.currentState?.showSnackBar(
+          SnackBar(
+            content: const Text(
+              'You are offline. Please check your internet connection.',
+            ),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(days: 1),
+            action: SnackBarAction(
+              label: 'Dismiss',
+              textColor: Colors.white,
+              onPressed: () {
+                rootScaffoldMessengerKey.currentState?.hideCurrentSnackBar();
+              },
+            ),
+          ),
+        );
+        return;
+      }
+
+      rootScaffoldMessengerKey.currentState?.hideCurrentSnackBar();
+      rootScaffoldMessengerKey.currentState?.showSnackBar(
+        SnackBar(
+          content: const Text('Back online'),
+          backgroundColor: AppColors.success,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+
+    final initialResults = await connectivity.checkConnectivity();
+    await handleResults(initialResults);
+    _connectivitySubscription = connectivity.onConnectivityChanged.listen(
+      handleResults,
+    );
   }
 
   void _syncBookingApprovalListener({
@@ -370,6 +425,7 @@ class _MyAppState extends ConsumerState<MyApp> {
   void dispose() {
     _notificationSubscription?.cancel();
     _bookingApprovalSubscription?.cancel();
+    _connectivitySubscription?.cancel();
     _authStateListener?.close();
     _easyLoadingListener?.close();
     ref.read(notificationServiceProvider).stopFirestoreNotificationListener();
