@@ -35,3 +35,6 @@ dist-ssr
 # Firebase / cloud local artifacts
 **/.firebase/
 **/firebase-debug.log
+
+# Local-only docs
+**/*.md
