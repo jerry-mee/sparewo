@@ -1,4 +1,6 @@
 // lib/features/auth/presentation/signup_screen.dart
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -107,16 +109,36 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  final _passwordFocusNode = FocusNode();
+  final _confirmPasswordFocusNode = FocusNode();
   bool _obscure = true;
   bool _obscureConfirm = true;
   bool _agreedToTerms = false;
+  Timer? _emailCheckDebounce;
+  bool _isCheckingEmail = false;
+  bool _isEmailTaken = false;
+  bool _showEmailStatus = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _passwordFocusNode.addListener(_refreshUi);
+    _confirmPasswordFocusNode.addListener(_refreshUi);
+  }
+
+  void _refreshUi() {
+    if (mounted) setState(() {});
+  }
 
   @override
   void dispose() {
+    _emailCheckDebounce?.cancel();
     _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
+    _passwordFocusNode.dispose();
+    _confirmPasswordFocusNode.dispose();
     super.dispose();
   }
 
@@ -142,6 +164,53 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
     return 'Strong password';
   }
 
+  bool _isValidEmailFormat(String email) {
+    return RegExp(r'^[\w\.\-]+@([\w\-]+\.)+[\w\-]{2,}$').hasMatch(email);
+  }
+
+  void _onEmailChanged(String rawValue) {
+    _emailCheckDebounce?.cancel();
+    final email = rawValue.trim().toLowerCase();
+
+    if (email.isEmpty || !_isValidEmailFormat(email)) {
+      setState(() {
+        _isCheckingEmail = false;
+        _isEmailTaken = false;
+        _showEmailStatus = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _isCheckingEmail = true;
+      _isEmailTaken = false;
+      _showEmailStatus = true;
+    });
+
+    _emailCheckDebounce = Timer(const Duration(milliseconds: 500), () async {
+      try {
+        final exists = await ref
+            .read(authRepositoryProvider)
+            .isEmailRegistered(email);
+        if (!mounted || _emailController.text.trim().toLowerCase() != email) {
+          return;
+        }
+        setState(() {
+          _isCheckingEmail = false;
+          _isEmailTaken = exists;
+          _showEmailStatus = exists;
+        });
+      } catch (_) {
+        if (!mounted) return;
+        setState(() {
+          _isCheckingEmail = false;
+          _isEmailTaken = false;
+          _showEmailStatus = false;
+        });
+      }
+    });
+  }
+
   Future<void> _openTermsAndConditions() async {
     LegalModal.showTermsAndConditions(context);
   }
@@ -162,7 +231,7 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
       await ref
           .read(authNotifierProvider.notifier)
           .signUp(
-            email: _emailController.text.trim(),
+            email: _emailController.text.trim().toLowerCase(),
             password: _passwordController.text.trim(),
             name: _nameController.text.trim(),
           );
@@ -233,6 +302,17 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
     final theme = Theme.of(context);
     final password = _passwordController.text;
     final strengthScore = _passwordScore(password);
+    final isStrongPassword =
+        password.length >= 8 &&
+        RegExp(r'[A-Z]').hasMatch(password) &&
+        RegExp(r'[a-z]').hasMatch(password) &&
+        RegExp(r'[0-9]').hasMatch(password) &&
+        RegExp(r'[^A-Za-z0-9]').hasMatch(password);
+    final shouldShowPasswordGuide =
+        password.isNotEmpty &&
+        (_passwordFocusNode.hasFocus ||
+            _confirmPasswordFocusNode.hasFocus ||
+            !isStrongPassword);
 
     return AutofillGroup(
       child: Form(
@@ -282,6 +362,7 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
               autofillHints: const [AutofillHints.email],
               keyboardType: TextInputType.emailAddress,
               textInputAction: TextInputAction.next,
+              onChanged: _onEmailChanged,
               decoration: InputDecoration(
                 labelText: 'Email',
                 prefixIcon: const Icon(Icons.email_outlined),
@@ -289,13 +370,49 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
                   borderRadius: BorderRadius.circular(20),
                 ),
               ),
-              validator: (v) =>
-                  v?.contains('@') == true ? null : 'Invalid email',
+              validator: (v) => (v?.contains('@') != true)
+                  ? 'Invalid email'
+                  : (_isEmailTaken ? 'This email is already registered' : null),
             ),
+            if (_isCheckingEmail || _showEmailStatus) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  if (_isCheckingEmail) ...[
+                    const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Checking email availability...',
+                      style: TextStyle(color: theme.hintColor, fontSize: 12),
+                    ),
+                  ] else if (_isEmailTaken) ...[
+                    const Icon(
+                      Icons.error_outline,
+                      size: 14,
+                      color: AppColors.error,
+                    ),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'That email is already in use',
+                      style: TextStyle(
+                        color: AppColors.error,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ],
             SizedBox(height: widget.compact ? 14 : 20),
             TextFormField(
               controller: _passwordController,
               obscureText: _obscure,
+              focusNode: _passwordFocusNode,
               autofillHints: const [AutofillHints.newPassword],
               textInputAction: TextInputAction.next,
               decoration: InputDecoration(
@@ -327,16 +444,10 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
               },
             ),
             SizedBox(height: widget.compact ? 10 : 14),
-            _PasswordGuide(
-              password: password,
-              score: strengthScore,
-              color: _strengthColor(strengthScore),
-              label: _strengthLabel(strengthScore),
-            ),
-            SizedBox(height: widget.compact ? 14 : 20),
             TextFormField(
               controller: _confirmPasswordController,
               obscureText: _obscureConfirm,
+              focusNode: _confirmPasswordFocusNode,
               autofillHints: const [AutofillHints.newPassword],
               textInputAction: TextInputAction.done,
               decoration: InputDecoration(
@@ -365,6 +476,15 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
                 return null;
               },
             ),
+            if (shouldShowPasswordGuide) ...[
+              SizedBox(height: widget.compact ? 10 : 14),
+              _PasswordGuide(
+                password: password,
+                score: strengthScore,
+                color: _strengthColor(strengthScore),
+                label: _strengthLabel(strengthScore),
+              ),
+            ],
 
             SizedBox(height: widget.compact ? 16 : 24),
 

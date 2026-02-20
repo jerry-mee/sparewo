@@ -40,6 +40,18 @@ class AuthRepository {
     return UserModel.fromJson({'id': user.uid, ...doc.data()!});
   }
 
+  Future<bool> isEmailRegistered(String email) async {
+    final normalized = email.trim().toLowerCase();
+    if (normalized.isEmpty) return false;
+
+    final snapshot = await _firestore
+        .collection('users')
+        .where('email', isEqualTo: normalized)
+        .limit(1)
+        .get();
+    return snapshot.docs.isNotEmpty;
+  }
+
   // --- Email & Password Auth ---
 
   Future<UserModel> signInWithEmailAndPassword({
@@ -80,12 +92,8 @@ class AuthRepository {
         throw Exception('Please enter a valid email address');
       }
 
-      final existingUserByEmail = await _firestore
-          .collection('users')
-          .where('email', isEqualTo: email)
-          .limit(1)
-          .get();
-      if (existingUserByEmail.docs.isNotEmpty) {
+      final exists = await isEmailRegistered(email);
+      if (exists) {
         throw Exception(
           'This email is already registered. Please login instead.',
         );
@@ -325,7 +333,7 @@ class AuthRepository {
     }
 
     final userData = {
-      'email': user.email!,
+      'email': user.email!.toLowerCase(),
       'name': name ?? user.displayName ?? 'User',
       'createdAt': FieldValue.serverTimestamp(),
     };
