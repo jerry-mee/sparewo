@@ -208,7 +208,9 @@ class _LoginFormState extends ConsumerState<_LoginForm> {
               TextFormField(
                 controller: emailController,
                 autofocus: true,
+                autofillHints: const [AutofillHints.email],
                 keyboardType: TextInputType.emailAddress,
+                textInputAction: TextInputAction.done,
                 decoration: InputDecoration(
                   labelText: 'Email',
                   prefixIcon: const Icon(Icons.email_outlined),
@@ -257,160 +259,168 @@ class _LoginFormState extends ConsumerState<_LoginForm> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Form(
-      key: _formKey,
-      child: Column(
-        children: [
-          TextFormField(
-            controller: _emailController,
-            autofillHints: const [AutofillHints.email],
-            keyboardType: TextInputType.emailAddress,
-            decoration: InputDecoration(
-              labelText: 'Email',
-              prefixIcon: const Icon(Icons.email_outlined),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(20),
-                borderSide: BorderSide(color: theme.dividerColor),
-              ),
-            ),
-            validator: (v) => v?.contains('@') == true ? null : 'Invalid email',
-          ),
-          SizedBox(height: widget.compact ? 14 : 24),
-          TextFormField(
-            controller: _passwordController,
-            obscureText: _obscure,
-            autofillHints: const [AutofillHints.password],
-            decoration: InputDecoration(
-              labelText: 'Password',
-              prefixIcon: const Icon(Icons.lock_outline),
-              suffixIcon: IconButton(
-                icon: Icon(
-                  _obscure
-                      ? Icons.visibility_outlined
-                      : Icons.visibility_off_outlined,
+    return AutofillGroup(
+      child: Form(
+        key: _formKey,
+        child: Column(
+          children: [
+            TextFormField(
+              controller: _emailController,
+              autofillHints: const [AutofillHints.email],
+              keyboardType: TextInputType.emailAddress,
+              textInputAction: TextInputAction.next,
+              decoration: InputDecoration(
+                labelText: 'Email',
+                prefixIcon: const Icon(Icons.email_outlined),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(20),
                 ),
-                onPressed: () => setState(() => _obscure = !_obscure),
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(20),
-                borderSide: BorderSide(color: theme.dividerColor),
-              ),
-            ),
-            validator: (v) =>
-                (v?.length ?? 0) < 6 ? 'Password too short' : null,
-          ),
-
-          SizedBox(height: widget.compact ? 10 : 16),
-
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton(
-              onPressed: () => _showForgotPasswordDialog(context),
-              child: const Text('Forgot Password?'),
-            ),
-          ),
-
-          SizedBox(height: widget.compact ? 20 : 32),
-
-          SizedBox(
-            width: double.infinity,
-            height: widget.compact ? 52 : 56,
-            child: FilledButton(
-              onPressed: _handleLogin,
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(30),
-                ),
-                elevation: 4,
-                shadowColor: AppColors.primary.withValues(alpha: 0.3),
-              ),
-              child: const Text(
-                'Login',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-            ),
-          ),
-
-          SizedBox(height: widget.compact ? 8 : 12),
-          TextButton(
-            onPressed: _continueAsGuest,
-            child: Text(
-              'Continue as Guest',
-              style: TextStyle(
-                color: theme.hintColor,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-
-          SizedBox(height: widget.compact ? 16 : 24),
-
-          Row(
-            children: [
-              Expanded(child: Divider(color: theme.dividerColor)),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Text(
-                  'Or continue with',
-                  style: TextStyle(color: theme.hintColor),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(20),
+                  borderSide: BorderSide(color: theme.dividerColor),
                 ),
               ),
-              Expanded(child: Divider(color: theme.dividerColor)),
-            ],
-          ),
-
-          SizedBox(height: widget.compact ? 16 : 24),
-
-          SizedBox(
-            width: double.infinity,
-            height: widget.compact ? 52 : 56,
-            child: OutlinedButton.icon(
-              onPressed: _handleGoogleLogin,
-              icon: Image.asset('assets/icons/Google Logo Icon.png', width: 24),
-              label: const Text('Continue with Google'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: theme.textTheme.bodyLarge?.color,
-                side: BorderSide(color: theme.dividerColor),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(30),
-                ),
-              ),
+              validator: (v) =>
+                  v?.contains('@') == true ? null : 'Invalid email',
             ),
-          ),
-
-          SizedBox(height: widget.compact ? 20 : 32),
-
-          GestureDetector(
-            onTap: () {
-              final route = widget.returnTo != null
-                  ? '/signup?returnTo=${Uri.encodeComponent(widget.returnTo!)}'
-                  : '/signup';
-              context.push(route);
-            },
-            child: RichText(
-              text: TextSpan(
-                text: "Don't have an account? ",
-                style: TextStyle(color: theme.hintColor, fontSize: 15),
-                children: const [
-                  TextSpan(
-                    text: 'Sign Up',
-                    style: TextStyle(
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.bold,
-                    ),
+            SizedBox(height: widget.compact ? 14 : 24),
+            TextFormField(
+              controller: _passwordController,
+              obscureText: _obscure,
+              autofillHints: const [AutofillHints.password],
+              textInputAction: TextInputAction.done,
+              decoration: InputDecoration(
+                labelText: 'Password',
+                prefixIcon: const Icon(Icons.lock_outline),
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    _obscure
+                        ? Icons.visibility_outlined
+                        : Icons.visibility_off_outlined,
                   ),
-                ],
+                  onPressed: () => setState(() => _obscure = !_obscure),
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(20),
+                  borderSide: BorderSide(color: theme.dividerColor),
+                ),
+              ),
+              validator: (v) =>
+                  (v?.length ?? 0) < 6 ? 'Password too short' : null,
+            ),
+
+            SizedBox(height: widget.compact ? 10 : 16),
+
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () => _showForgotPasswordDialog(context),
+                child: const Text('Forgot Password?'),
               ),
             ),
-          ),
-        ],
+
+            SizedBox(height: widget.compact ? 20 : 32),
+
+            SizedBox(
+              width: double.infinity,
+              height: widget.compact ? 52 : 56,
+              child: FilledButton(
+                onPressed: _handleLogin,
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                  elevation: 4,
+                  shadowColor: AppColors.primary.withValues(alpha: 0.3),
+                ),
+                child: const Text(
+                  'Login',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+
+            SizedBox(height: widget.compact ? 8 : 12),
+            TextButton(
+              onPressed: _continueAsGuest,
+              child: Text(
+                'Continue as Guest',
+                style: TextStyle(
+                  color: theme.hintColor,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+
+            SizedBox(height: widget.compact ? 16 : 24),
+
+            Row(
+              children: [
+                Expanded(child: Divider(color: theme.dividerColor)),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(
+                    'Or continue with',
+                    style: TextStyle(color: theme.hintColor),
+                  ),
+                ),
+                Expanded(child: Divider(color: theme.dividerColor)),
+              ],
+            ),
+
+            SizedBox(height: widget.compact ? 16 : 24),
+
+            SizedBox(
+              width: double.infinity,
+              height: widget.compact ? 52 : 56,
+              child: OutlinedButton.icon(
+                onPressed: _handleGoogleLogin,
+                icon: Image.asset(
+                  'assets/icons/Google Logo Icon.png',
+                  width: 24,
+                ),
+                label: const Text('Continue with Google'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: theme.textTheme.bodyLarge?.color,
+                  side: BorderSide(color: theme.dividerColor),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                ),
+              ),
+            ),
+
+            SizedBox(height: widget.compact ? 20 : 32),
+
+            GestureDetector(
+              onTap: () {
+                final route = widget.returnTo != null
+                    ? '/signup?returnTo=${Uri.encodeComponent(widget.returnTo!)}'
+                    : '/signup';
+                context.push(route);
+              },
+              child: RichText(
+                text: TextSpan(
+                  text: "Don't have an account? ",
+                  style: TextStyle(color: theme.hintColor, fontSize: 15),
+                  children: const [
+                    TextSpan(
+                      text: 'Sign Up',
+                      style: TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

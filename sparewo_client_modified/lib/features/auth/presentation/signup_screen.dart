@@ -1,5 +1,6 @@
 // lib/features/auth/presentation/signup_screen.dart
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -150,6 +151,7 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
   }
 
   Future<void> _handleSignUp() async {
+    TextInput.finishAutofillContext();
     if (!_agreedToTerms) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please agree to the Terms & Conditions')),
@@ -176,6 +178,7 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
   }
 
   Future<void> _handleGoogleSignUp() async {
+    TextInput.finishAutofillContext();
     if (!_agreedToTerms) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -231,281 +234,295 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
     final password = _passwordController.text;
     final strengthScore = _passwordScore(password);
 
-    return Form(
-      key: _formKey,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: double.infinity,
-            child: Text(
-              'Create Account',
-              textAlign: TextAlign.center,
-              style: AppTextStyles.displaySmall.copyWith(
-                fontWeight: FontWeight.w800,
-                color: Colors.white,
-              ),
-            ).animate().fadeIn().slideX(begin: -0.1, end: 0),
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: const Text(
-              'Start your journey with SpareWo.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.white, fontSize: 16),
-            ).animate().fadeIn(delay: 100.ms),
-          ),
-
-          SizedBox(height: widget.compact ? 18 : 32),
-
-          TextFormField(
-            controller: _nameController,
-            decoration: InputDecoration(
-              labelText: 'Full Name',
-              prefixIcon: const Icon(Icons.person_outline),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-            ),
-            validator: (v) => (v?.length ?? 0) < 2 ? 'Name too short' : null,
-          ),
-          SizedBox(height: widget.compact ? 14 : 20),
-          TextFormField(
-            controller: _emailController,
-            keyboardType: TextInputType.emailAddress,
-            decoration: InputDecoration(
-              labelText: 'Email',
-              prefixIcon: const Icon(Icons.email_outlined),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-            ),
-            validator: (v) => v?.contains('@') == true ? null : 'Invalid email',
-          ),
-          SizedBox(height: widget.compact ? 14 : 20),
-          TextFormField(
-            controller: _passwordController,
-            obscureText: _obscure,
-            decoration: InputDecoration(
-              labelText: 'Password',
-              prefixIcon: const Icon(Icons.lock_outline),
-              suffixIcon: IconButton(
-                icon: Icon(
-                  _obscure
-                      ? Icons.visibility_outlined
-                      : Icons.visibility_off_outlined,
-                ),
-                onPressed: () => setState(() => _obscure = !_obscure),
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-            ),
-            onChanged: (_) => setState(() {}),
-            validator: (v) {
-              final value = v ?? '';
-              if (value.length < 8) {
-                return 'Use at least 8 characters';
-              }
-              if (!RegExp(r'[A-Z]').hasMatch(value) ||
-                  !RegExp(r'[0-9]').hasMatch(value)) {
-                return 'Add at least 1 uppercase letter and 1 number';
-              }
-              return null;
-            },
-          ),
-          SizedBox(height: widget.compact ? 10 : 14),
-          _PasswordGuide(
-            password: password,
-            score: strengthScore,
-            color: _strengthColor(strengthScore),
-            label: _strengthLabel(strengthScore),
-          ),
-          SizedBox(height: widget.compact ? 14 : 20),
-          TextFormField(
-            controller: _confirmPasswordController,
-            obscureText: _obscureConfirm,
-            decoration: InputDecoration(
-              labelText: 'Confirm Password',
-              prefixIcon: const Icon(Icons.lock_person_outlined),
-              suffixIcon: IconButton(
-                icon: Icon(
-                  _obscureConfirm
-                      ? Icons.visibility_outlined
-                      : Icons.visibility_off_outlined,
-                ),
-                onPressed: () =>
-                    setState(() => _obscureConfirm = !_obscureConfirm),
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-            ),
-            validator: (v) {
-              if ((v ?? '').isEmpty) {
-                return 'Confirm your password';
-              }
-              if (v != _passwordController.text) {
-                return 'Passwords do not match';
-              }
-              return null;
-            },
-          ),
-
-          SizedBox(height: widget.compact ? 16 : 24),
-
-          Row(
-            children: [
-              Checkbox(
-                value: _agreedToTerms,
-                onChanged: (v) => setState(() => _agreedToTerms = v ?? false),
-                activeColor: AppColors.primary,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ),
-              Expanded(
-                child: Wrap(
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    GestureDetector(
-                      onTap: () =>
-                          setState(() => _agreedToTerms = !_agreedToTerms),
-                      child: Text(
-                        'I agree to the ',
-                        style: TextStyle(color: theme.hintColor),
-                      ),
-                    ),
-                    GestureDetector(
-                      onTap: _openTermsAndConditions,
-                      child: const Text(
-                        'Terms & Conditions',
-                        style: TextStyle(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.bold,
-                          decoration: TextDecoration.underline,
-                        ),
-                      ),
-                    ),
-                    Text(' and ', style: TextStyle(color: theme.hintColor)),
-                    GestureDetector(
-                      onTap: _openPrivacyPolicy,
-                      child: const Text(
-                        'Privacy Policy',
-                        style: TextStyle(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.bold,
-                          decoration: TextDecoration.underline,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-
-          SizedBox(height: widget.compact ? 20 : 28),
-
-          SizedBox(
-            width: double.infinity,
-            height: widget.compact ? 52 : 56,
-            child: FilledButton(
-              onPressed: _handleSignUp,
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(30),
-                ),
-                elevation: 4,
-                shadowColor: AppColors.primary.withValues(alpha: 0.3),
-              ),
-              child: const Text(
-                'Create Account',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-            ),
-          ),
-
-          SizedBox(height: widget.compact ? 16 : 24),
-
-          Row(
-            children: [
-              Expanded(child: Divider(color: theme.dividerColor)),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Text(
-                  'Or sign up with',
-                  style: TextStyle(color: theme.hintColor),
-                ),
-              ),
-              Expanded(child: Divider(color: theme.dividerColor)),
-            ],
-          ),
-
-          SizedBox(height: widget.compact ? 16 : 24),
-
-          SizedBox(
-            width: double.infinity,
-            height: widget.compact ? 52 : 56,
-            child: OutlinedButton.icon(
-              onPressed: _handleGoogleSignUp,
-              icon: Image.asset('assets/icons/Google Logo Icon.png', width: 24),
-              label: const Text('Continue with Google'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: theme.textTheme.bodyLarge?.color,
-                side: BorderSide(color: theme.dividerColor),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(30),
-                ),
-              ),
-            ),
-          ),
-
-          SizedBox(height: widget.compact ? 20 : 32),
-
-          Center(
-            child: GestureDetector(
-              onTap: () {
-                final route = widget.returnTo != null
-                    ? '/login?returnTo=${Uri.encodeComponent(widget.returnTo!)}'
-                    : '/login';
-                context.go(route);
-              },
-              child: RichText(
-                text: TextSpan(
-                  text: "Already have an account? ",
-                  style: TextStyle(color: theme.hintColor, fontSize: 15),
-                  children: const [
-                    TextSpan(
-                      text: 'Login',
-                      style: TextStyle(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          Center(
-            child: TextButton(
-              onPressed: _continueAsGuest,
+    return AutofillGroup(
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: double.infinity,
               child: Text(
-                'Continue as Guest',
-                style: TextStyle(
-                  color: theme.hintColor,
-                  fontWeight: FontWeight.w600,
+                'Create Account',
+                textAlign: TextAlign.center,
+                style: AppTextStyles.displaySmall.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                ),
+              ).animate().fadeIn().slideX(begin: -0.1, end: 0),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: const Text(
+                'Start your journey with SpareWo.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white, fontSize: 16),
+              ).animate().fadeIn(delay: 100.ms),
+            ),
+
+            SizedBox(height: widget.compact ? 18 : 32),
+
+            TextFormField(
+              controller: _nameController,
+              autofillHints: const [AutofillHints.name],
+              textInputAction: TextInputAction.next,
+              decoration: InputDecoration(
+                labelText: 'Full Name',
+                prefixIcon: const Icon(Icons.person_outline),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ),
+              validator: (v) => (v?.length ?? 0) < 2 ? 'Name too short' : null,
+            ),
+            SizedBox(height: widget.compact ? 14 : 20),
+            TextFormField(
+              controller: _emailController,
+              autofillHints: const [AutofillHints.email],
+              keyboardType: TextInputType.emailAddress,
+              textInputAction: TextInputAction.next,
+              decoration: InputDecoration(
+                labelText: 'Email',
+                prefixIcon: const Icon(Icons.email_outlined),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ),
+              validator: (v) =>
+                  v?.contains('@') == true ? null : 'Invalid email',
+            ),
+            SizedBox(height: widget.compact ? 14 : 20),
+            TextFormField(
+              controller: _passwordController,
+              obscureText: _obscure,
+              autofillHints: const [AutofillHints.newPassword],
+              textInputAction: TextInputAction.next,
+              decoration: InputDecoration(
+                labelText: 'Password',
+                prefixIcon: const Icon(Icons.lock_outline),
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    _obscure
+                        ? Icons.visibility_outlined
+                        : Icons.visibility_off_outlined,
+                  ),
+                  onPressed: () => setState(() => _obscure = !_obscure),
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ),
+              onChanged: (_) => setState(() {}),
+              validator: (v) {
+                final value = v ?? '';
+                if (value.length < 8) {
+                  return 'Use at least 8 characters';
+                }
+                if (!RegExp(r'[A-Z]').hasMatch(value) ||
+                    !RegExp(r'[0-9]').hasMatch(value)) {
+                  return 'Add at least 1 uppercase letter and 1 number';
+                }
+                return null;
+              },
+            ),
+            SizedBox(height: widget.compact ? 10 : 14),
+            _PasswordGuide(
+              password: password,
+              score: strengthScore,
+              color: _strengthColor(strengthScore),
+              label: _strengthLabel(strengthScore),
+            ),
+            SizedBox(height: widget.compact ? 14 : 20),
+            TextFormField(
+              controller: _confirmPasswordController,
+              obscureText: _obscureConfirm,
+              autofillHints: const [AutofillHints.newPassword],
+              textInputAction: TextInputAction.done,
+              decoration: InputDecoration(
+                labelText: 'Confirm Password',
+                prefixIcon: const Icon(Icons.lock_person_outlined),
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    _obscureConfirm
+                        ? Icons.visibility_outlined
+                        : Icons.visibility_off_outlined,
+                  ),
+                  onPressed: () =>
+                      setState(() => _obscureConfirm = !_obscureConfirm),
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ),
+              validator: (v) {
+                if ((v ?? '').isEmpty) {
+                  return 'Confirm your password';
+                }
+                if (v != _passwordController.text) {
+                  return 'Passwords do not match';
+                }
+                return null;
+              },
+            ),
+
+            SizedBox(height: widget.compact ? 16 : 24),
+
+            Row(
+              children: [
+                Checkbox(
+                  value: _agreedToTerms,
+                  onChanged: (v) => setState(() => _agreedToTerms = v ?? false),
+                  activeColor: AppColors.primary,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+                Expanded(
+                  child: Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      GestureDetector(
+                        onTap: () =>
+                            setState(() => _agreedToTerms = !_agreedToTerms),
+                        child: Text(
+                          'I agree to the ',
+                          style: TextStyle(color: theme.hintColor),
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: _openTermsAndConditions,
+                        child: const Text(
+                          'Terms & Conditions',
+                          style: TextStyle(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.bold,
+                            decoration: TextDecoration.underline,
+                          ),
+                        ),
+                      ),
+                      Text(' and ', style: TextStyle(color: theme.hintColor)),
+                      GestureDetector(
+                        onTap: _openPrivacyPolicy,
+                        child: const Text(
+                          'Privacy Policy',
+                          style: TextStyle(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.bold,
+                            decoration: TextDecoration.underline,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+
+            SizedBox(height: widget.compact ? 20 : 28),
+
+            SizedBox(
+              width: double.infinity,
+              height: widget.compact ? 52 : 56,
+              child: FilledButton(
+                onPressed: _handleSignUp,
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                  elevation: 4,
+                  shadowColor: AppColors.primary.withValues(alpha: 0.3),
+                ),
+                child: const Text(
+                  'Create Account',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
               ),
             ),
-          ),
-        ],
+
+            SizedBox(height: widget.compact ? 16 : 24),
+
+            Row(
+              children: [
+                Expanded(child: Divider(color: theme.dividerColor)),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(
+                    'Or sign up with',
+                    style: TextStyle(color: theme.hintColor),
+                  ),
+                ),
+                Expanded(child: Divider(color: theme.dividerColor)),
+              ],
+            ),
+
+            SizedBox(height: widget.compact ? 16 : 24),
+
+            SizedBox(
+              width: double.infinity,
+              height: widget.compact ? 52 : 56,
+              child: OutlinedButton.icon(
+                onPressed: _handleGoogleSignUp,
+                icon: Image.asset(
+                  'assets/icons/Google Logo Icon.png',
+                  width: 24,
+                ),
+                label: const Text('Continue with Google'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: theme.textTheme.bodyLarge?.color,
+                  side: BorderSide(color: theme.dividerColor),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                ),
+              ),
+            ),
+
+            SizedBox(height: widget.compact ? 20 : 32),
+
+            Center(
+              child: GestureDetector(
+                onTap: () {
+                  final route = widget.returnTo != null
+                      ? '/login?returnTo=${Uri.encodeComponent(widget.returnTo!)}'
+                      : '/login';
+                  context.go(route);
+                },
+                child: RichText(
+                  text: TextSpan(
+                    text: "Already have an account? ",
+                    style: TextStyle(color: theme.hintColor, fontSize: 15),
+                    children: const [
+                      TextSpan(
+                        text: 'Login',
+                        style: TextStyle(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            Center(
+              child: TextButton(
+                onPressed: _continueAsGuest,
+                child: Text(
+                  'Continue as Guest',
+                  style: TextStyle(
+                    color: theme.hintColor,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
