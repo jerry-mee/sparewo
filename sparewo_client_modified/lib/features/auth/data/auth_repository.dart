@@ -16,6 +16,7 @@ class AuthRepository {
   final Map<String, String> _verificationCodes = {};
   final Map<String, DateTime> _codeExpiry = {};
   final Map<String, Map<String, dynamic>> _pendingUsers = {};
+  final Map<String, String> _verificationMethods = {};
 
   AuthRepository({
     FirebaseAuth? auth,
@@ -114,28 +115,34 @@ class AuthRepository {
       }
 
       final code = _generateVerificationCode();
-
       final emailSent = await _emailService.sendVerificationEmail(
         to: email,
         code: code,
         customerName: name,
       );
 
-      if (!emailSent) {
-        throw Exception(_verificationEmailFailureMessage());
+      if (emailSent) {
+        _verificationCodes[email] = code;
+        _codeExpiry[email] = DateTime.now().add(const Duration(minutes: 30));
+        _pendingUsers[email] = {
+          'email': email,
+          'password': password,
+          'name': name,
+        };
+        _verificationMethods[email] = 'code';
+        return;
       }
 
-      _verificationCodes[email] = code;
-      _codeExpiry[email] = DateTime.now().add(const Duration(minutes: 30));
-      _pendingUsers[email] = {
-        'email': email,
-        'password': password,
-        'name': name,
-      };
+      await _startLinkBasedVerification(
+        email: email,
+        password: password,
+        name: name,
+      );
     } catch (e) {
       _verificationCodes.remove(email);
       _codeExpiry.remove(email);
       _pendingUsers.remove(email);
+      _verificationMethods.remove(email);
       rethrow;
     }
   }
@@ -144,6 +151,47 @@ class AuthRepository {
     required String email,
     required String code,
   }) async {
+    final method = _verificationMethods[email] ?? 'code';
+    if (method == 'link') {
+      final user = _auth.currentUser;
+      if (user == null || user.email?.toLowerCase() != email.toLowerCase()) {
+        throw Exception(
+          'Please sign in with this email first, then tap "I have verified".',
+        );
+      }
+
+      await user.reload();
+      final refreshed = _auth.currentUser;
+      if (refreshed == null || !refreshed.emailVerified) {
+        throw Exception(
+          'Please open the verification email and tap the link first.',
+        );
+      }
+
+      final userData = _pendingUsers[email] ?? {'name': refreshed.displayName};
+      final model = await _getOrCreateUserData(
+        refreshed,
+        name: userData['name'] as String?,
+      );
+
+      _verificationCodes.remove(email);
+      _codeExpiry.remove(email);
+      _pendingUsers.remove(email);
+      _verificationMethods.remove(email);
+
+      try {
+        await _emailService.sendWelcomeEmail(
+          to: email,
+          customerName:
+              userData['name'] as String? ??
+              refreshed.displayName ??
+              'Customer',
+        );
+      } catch (_) {}
+
+      return model;
+    }
+
     final storedCode = _verificationCodes[email];
     if (storedCode == null) {
       throw Exception('No verification code found. Please request a new one.');
@@ -183,6 +231,7 @@ class AuthRepository {
       _verificationCodes.remove(email);
       _codeExpiry.remove(email);
       _pendingUsers.remove(email);
+      _verificationMethods.remove(email);
 
       await _emailService.sendWelcomeEmail(
         to: email,
@@ -208,6 +257,17 @@ class AuthRepository {
   }
 
   Future<void> resendVerificationCode({required String email}) async {
+    if ((_verificationMethods[email] ?? 'code') == 'link') {
+      final user = _auth.currentUser;
+      if (user == null || user.email?.toLowerCase() != email.toLowerCase()) {
+        throw Exception(
+          'Please sign in again to resend the verification link.',
+        );
+      }
+      await user.sendEmailVerification();
+      return;
+    }
+
     final userData = _pendingUsers[email];
     if (userData == null) {
       throw Exception(
@@ -234,6 +294,41 @@ class AuthRepository {
   String _generateVerificationCode() {
     final random = Random();
     return (100000 + random.nextInt(900000)).toString();
+  }
+
+  bool isLinkVerificationMode(String email) {
+    return (_verificationMethods[email] ?? 'code') == 'link';
+  }
+
+  Future<void> _startLinkBasedVerification({
+    required String email,
+    required String password,
+    required String name,
+  }) async {
+    UserCredential? credential;
+    try {
+      credential = await _auth.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      await credential.user?.updateDisplayName(name);
+      await credential.user?.sendEmailVerification();
+
+      _pendingUsers[email] = {'email': email, 'name': name};
+      _verificationMethods[email] = 'link';
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'email-already-in-use') {
+        throw Exception(
+          'This email is already registered. Please login instead.',
+        );
+      }
+      throw Exception('Could not start verification. Please try again.');
+    } catch (_) {
+      try {
+        await credential?.user?.delete();
+      } catch (_) {}
+      throw Exception(_verificationEmailFailureMessage());
+    }
   }
 
   String _verificationEmailFailureMessage() {

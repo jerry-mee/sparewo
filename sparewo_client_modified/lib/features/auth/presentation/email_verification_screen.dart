@@ -40,10 +40,14 @@ class _EmailVerificationScreenState
   bool _canResend = false;
   bool _isVerifying = false;
   Timer? _clipboardTimer;
+  bool _isLinkVerificationMode = false;
 
   @override
   void initState() {
     super.initState();
+    _isLinkVerificationMode = ref
+        .read(authRepositoryProvider)
+        .isLinkVerificationMode(widget.email);
     _startTimer();
     _setupAutoFill();
   }
@@ -125,8 +129,10 @@ class _EmailVerificationScreenState
   Future<void> _verifyCode() async {
     if (_isVerifying) return;
 
-    final code = _controllers.map((c) => c.text).join();
-    if (code.length != 6) {
+    final code = _isLinkVerificationMode
+        ? '__LINK__'
+        : _controllers.map((c) => c.text).join();
+    if (!_isLinkVerificationMode && code.length != 6) {
       EasyLoading.showError('Please enter the complete code');
       return;
     }
@@ -167,8 +173,10 @@ class _EmailVerificationScreenState
           }
 
           if (widget.returnTo != null) {
+            if (!mounted) return;
             context.go(widget.returnTo!);
           } else {
+            if (!mounted) return;
             context.go('/home');
           }
         }
@@ -270,90 +278,103 @@ class _EmailVerificationScreenState
 
                     const SizedBox(height: 40),
 
-                    // Code Input Fields
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: List.generate(6, (index) {
-                        return SizedBox(
-                          width: 50,
-                          height: 60,
-                          child: TextFormField(
-                            controller: _controllers[index],
-                            focusNode: _focusNodes[index],
-                            keyboardType: TextInputType.number,
-                            textAlign: TextAlign.center,
-                            maxLength: 1,
-                            enabled: !_isVerifying,
-                            style: theme.textTheme.headlineSmall?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: colorScheme.onSurface,
-                            ),
-                            decoration: InputDecoration(
-                              counterText: '',
-                              filled: true,
-                              fillColor: colorScheme.surfaceVariant.withValues(
-                                alpha: 0.5,
+                    if (!_isLinkVerificationMode)
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: List.generate(6, (index) {
+                          return SizedBox(
+                            width: 50,
+                            height: 60,
+                            child: TextFormField(
+                              controller: _controllers[index],
+                              focusNode: _focusNodes[index],
+                              keyboardType: TextInputType.number,
+                              textAlign: TextAlign.center,
+                              maxLength: 1,
+                              enabled: !_isVerifying,
+                              style: theme.textTheme.headlineSmall?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: colorScheme.onSurface,
                               ),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(
-                                  color: colorScheme.onSurface.withValues(
-                                    alpha: 0.1,
+                              decoration: InputDecoration(
+                                counterText: '',
+                                filled: true,
+                                fillColor: colorScheme.surfaceContainerHighest
+                                    .withValues(alpha: 0.5),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide(
+                                    color: colorScheme.onSurface.withValues(
+                                      alpha: 0.1,
+                                    ),
+                                  ),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide(
+                                    color: colorScheme.onSurface.withValues(
+                                      alpha: 0.1,
+                                    ),
+                                  ),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(
+                                    color: AppColors.primary,
+                                    width: 2,
+                                  ),
+                                ),
+                                disabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide(
+                                    color: colorScheme.onSurface.withValues(
+                                      alpha: 0.05,
+                                    ),
+                                    width: 1,
                                   ),
                                 ),
                               ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(
-                                  color: colorScheme.onSurface.withValues(
-                                    alpha: 0.1,
-                                  ),
-                                ),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(
-                                  color: AppColors.primary,
-                                  width: 2,
-                                ),
-                              ),
-                              disabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(
-                                  color: colorScheme.onSurface.withValues(
-                                    alpha: 0.05,
-                                  ),
-                                  width: 1,
-                                ),
-                              ),
-                            ),
-                            inputFormatters: [
-                              FilteringTextInputFormatter.digitsOnly,
-                              LengthLimitingTextInputFormatter(1),
-                            ],
-                            onChanged: (value) {
-                              if (value.isNotEmpty) {
-                                if (index < 5) {
-                                  _focusNodes[index + 1].requestFocus();
-                                } else {
-                                  // Last field filled - auto verify
-                                  final code = _controllers
-                                      .map((c) => c.text)
-                                      .join();
-                                  if (code.length == 6) {
-                                    FocusScope.of(context).unfocus();
-                                    _verifyCode();
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                                LengthLimitingTextInputFormatter(1),
+                              ],
+                              onChanged: (value) {
+                                if (value.isNotEmpty) {
+                                  if (index < 5) {
+                                    _focusNodes[index + 1].requestFocus();
+                                  } else {
+                                    final code = _controllers
+                                        .map((c) => c.text)
+                                        .join();
+                                    if (code.length == 6) {
+                                      FocusScope.of(context).unfocus();
+                                      _verifyCode();
+                                    }
                                   }
+                                } else if (value.isEmpty && index > 0) {
+                                  _focusNodes[index - 1].requestFocus();
                                 }
-                              } else if (value.isEmpty && index > 0) {
-                                // Handle backspace
-                                _focusNodes[index - 1].requestFocus();
-                              }
-                            },
+                              },
+                            ),
+                          );
+                        }),
+                      ).animate().fadeIn(delay: 250.ms)
+                    else
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          'We sent a verification link to your email. Open it, then return here and tap "I have verified".',
+                          style: TextStyle(
+                            color: colorScheme.onSurface.withValues(alpha: 0.8),
+                            fontSize: 14,
                           ),
-                        );
-                      }),
-                    ).animate().fadeIn(delay: 250.ms),
+                        ),
+                      ).animate().fadeIn(delay: 250.ms),
 
                     const SizedBox(height: 40),
 
@@ -380,9 +401,11 @@ class _EmailVerificationScreenState
                                   ),
                                 ),
                               )
-                            : const Text(
-                                'Verify Email',
-                                style: TextStyle(
+                            : Text(
+                                _isLinkVerificationMode
+                                    ? 'I have verified'
+                                    : 'Verify Email',
+                                style: const TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -395,7 +418,9 @@ class _EmailVerificationScreenState
                     // Resend Code
                     if (!_canResend)
                       Text(
-                        'Resend code in $_secondsRemaining seconds',
+                        _isLinkVerificationMode
+                            ? 'Resend link in $_secondsRemaining seconds'
+                            : 'Resend code in $_secondsRemaining seconds',
                         style: TextStyle(
                           color: colorScheme.onSurface.withValues(alpha: 0.6),
                           fontSize: 14,
@@ -405,7 +430,7 @@ class _EmailVerificationScreenState
                       TextButton(
                         onPressed: _resendCode,
                         child: const Text(
-                          'Resend Code',
+                          'Resend Verification',
                           style: TextStyle(
                             color: AppColors.primary,
                             fontSize: 16,

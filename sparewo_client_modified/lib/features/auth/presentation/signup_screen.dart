@@ -111,6 +111,7 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
   bool _isEmailAvailable = false;
   bool _isEmailCheckUnavailable = false;
   bool _showEmailStatus = false;
+  final GlobalKey _passwordGuideKey = GlobalKey();
 
   @override
   void initState() {
@@ -120,7 +121,9 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
   }
 
   void _refreshUi() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    setState(() {});
+    _ensurePasswordGuideVisible();
   }
 
   @override
@@ -133,6 +136,20 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
     _passwordFocusNode.dispose();
     _confirmPasswordFocusNode.dispose();
     super.dispose();
+  }
+
+  void _ensurePasswordGuideVisible() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final context = _passwordGuideKey.currentContext;
+      if (context == null) return;
+      Scrollable.ensureVisible(
+        context,
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOut,
+        alignment: 0.25,
+      );
+    });
   }
 
   int _passwordScore(String password) {
@@ -453,15 +470,15 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
                     ),
                   ] else if (_isEmailTaken) ...[
                     const Icon(
-                      Icons.error_outline,
+                      Icons.info_outline,
                       size: 14,
-                      color: AppColors.error,
+                      color: AppColors.warning,
                     ),
                     const SizedBox(width: 8),
-                    const Text(
+                    Text(
                       'That email is already in use',
                       style: TextStyle(
-                        color: AppColors.error,
+                        color: theme.hintColor,
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                       ),
@@ -525,7 +542,10 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
                   borderRadius: BorderRadius.circular(20),
                 ),
               ),
-              onChanged: (_) => setState(() {}),
+              onChanged: (_) {
+                setState(() {});
+                _ensurePasswordGuideVisible();
+              },
               validator: (v) {
                 final value = v ?? '';
                 if (value.length < 8) {
@@ -548,7 +568,10 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
               autocorrect: false,
               enableSuggestions: false,
               textInputAction: TextInputAction.done,
-              onChanged: (_) => setState(() {}),
+              onChanged: (_) {
+                setState(() {});
+                _ensurePasswordGuideVisible();
+              },
               decoration: InputDecoration(
                 labelText: 'Confirm Password',
                 prefixIcon: const Icon(Icons.lock_person_outlined),
@@ -610,11 +633,14 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
             ],
             if (shouldShowPasswordGuide) ...[
               SizedBox(height: widget.compact ? 10 : 14),
-              _PasswordGuide(
-                password: password,
-                score: strengthScore,
-                color: _strengthColor(strengthScore),
-                label: _strengthLabel(strengthScore),
+              Container(
+                key: _passwordGuideKey,
+                child: _PasswordGuide(
+                  password: password,
+                  score: strengthScore,
+                  color: _strengthColor(strengthScore),
+                  label: _strengthLabel(strengthScore),
+                ),
               ),
             ],
 
