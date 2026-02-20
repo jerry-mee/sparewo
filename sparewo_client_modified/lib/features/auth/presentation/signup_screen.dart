@@ -117,6 +117,7 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
   Timer? _emailCheckDebounce;
   bool _isCheckingEmail = false;
   bool _isEmailTaken = false;
+  bool _isEmailAvailable = false;
   bool _showEmailStatus = false;
 
   @override
@@ -176,6 +177,7 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
       setState(() {
         _isCheckingEmail = false;
         _isEmailTaken = false;
+        _isEmailAvailable = false;
         _showEmailStatus = false;
       });
       return;
@@ -184,6 +186,7 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
     setState(() {
       _isCheckingEmail = true;
       _isEmailTaken = false;
+      _isEmailAvailable = false;
       _showEmailStatus = true;
     });
 
@@ -198,13 +201,15 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
         setState(() {
           _isCheckingEmail = false;
           _isEmailTaken = exists;
-          _showEmailStatus = exists;
+          _isEmailAvailable = !exists;
+          _showEmailStatus = true;
         });
       } catch (_) {
         if (!mounted) return;
         setState(() {
           _isCheckingEmail = false;
           _isEmailTaken = false;
+          _isEmailAvailable = false;
           _showEmailStatus = false;
         });
       }
@@ -404,6 +409,21 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
+                  ] else if (_isEmailAvailable) ...[
+                    const Icon(
+                      Icons.check_circle_outline,
+                      size: 14,
+                      color: AppColors.success,
+                    ),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'Email is available',
+                      style: TextStyle(
+                        color: AppColors.success,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ],
                 ],
               ),
@@ -414,6 +434,9 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
               obscureText: _obscure,
               focusNode: _passwordFocusNode,
               autofillHints: const [AutofillHints.newPassword],
+              keyboardType: TextInputType.visiblePassword,
+              autocorrect: false,
+              enableSuggestions: false,
               textInputAction: TextInputAction.next,
               decoration: InputDecoration(
                 labelText: 'Password',
@@ -449,7 +472,11 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
               obscureText: _obscureConfirm,
               focusNode: _confirmPasswordFocusNode,
               autofillHints: const [AutofillHints.newPassword],
+              keyboardType: TextInputType.visiblePassword,
+              autocorrect: false,
+              enableSuggestions: false,
               textInputAction: TextInputAction.done,
+              onChanged: (_) => setState(() {}),
               decoration: InputDecoration(
                 labelText: 'Confirm Password',
                 prefixIcon: const Icon(Icons.lock_person_outlined),
@@ -476,6 +503,39 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
                 return null;
               },
             ),
+            if (_confirmPasswordController.text.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(
+                    _confirmPasswordController.text == _passwordController.text
+                        ? Icons.check_circle_outline
+                        : Icons.error_outline,
+                    size: 14,
+                    color:
+                        _confirmPasswordController.text ==
+                            _passwordController.text
+                        ? AppColors.success
+                        : AppColors.error,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    _confirmPasswordController.text == _passwordController.text
+                        ? 'Passwords match'
+                        : 'Passwords do not match',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color:
+                          _confirmPasswordController.text ==
+                              _passwordController.text
+                          ? AppColors.success
+                          : AppColors.error,
+                    ),
+                  ),
+                ],
+              ),
+            ],
             if (shouldShowPasswordGuide) ...[
               SizedBox(height: widget.compact ? 10 : 14),
               _PasswordGuide(
