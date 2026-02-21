@@ -4,7 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:sparewo_client/core/router/navigation_extensions.dart';
 import 'package:sparewo_client/core/theme/app_theme.dart';
+import 'package:sparewo_client/features/addresses/application/saved_address_provider.dart';
+import 'package:sparewo_client/features/addresses/domain/saved_address.dart';
 import 'package:sparewo_client/features/auth/application/auth_provider.dart';
 import 'package:sparewo_client/features/cart/application/cart_provider.dart';
 import 'package:sparewo_client/features/cart/domain/checkout_buy_now_args.dart';
@@ -31,6 +34,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   final _phoneController = TextEditingController();
   String _paymentMethod = 'Cash on Delivery';
   bool _isPlacingOrder = false;
+  bool _didPrefillAddress = false;
+  String? _selectedAddressId;
+  bool _saveAsDefaultAddress = false;
 
   @override
   void dispose() {
@@ -45,7 +51,35 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     return 0.0;
   }
 
-  Future<void> _placeOrder({CheckoutBuyNowArgs? buyNowArgs}) async {
+  SavedAddress? _resolveSelectedAddress(List<SavedAddress> addresses) {
+    if (addresses.isEmpty) return null;
+    if (_selectedAddressId != null) {
+      for (final address in addresses) {
+        if (address.id == _selectedAddressId) return address;
+      }
+    }
+    for (final address in addresses) {
+      if (address.isDefault) return address;
+    }
+    return addresses.first;
+  }
+
+  void _applyAddressToForm(SavedAddress address, {bool markSelected = true}) {
+    _addressController.text = address.fullAddress.isNotEmpty
+        ? address.fullAddress
+        : address.line1;
+    if ((address.phone ?? '').trim().isNotEmpty) {
+      _phoneController.text = address.phone!.trim();
+    }
+    if (markSelected) {
+      _selectedAddressId = address.id;
+    }
+  }
+
+  Future<void> _placeOrder({
+    CheckoutBuyNowArgs? buyNowArgs,
+    List<SavedAddress> savedAddresses = const [],
+  }) async {
     if (!_formKey.currentState!.validate()) return;
 
     final user = ref.read(currentUserProvider).asData?.value;
@@ -154,13 +188,28 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
       const deliveryFee = 5000.0;
       final totalAmount = subtotal + deliveryFee;
+      final selectedAddress = _resolveSelectedAddress(savedAddresses);
+      final deliveryAddressText = _addressController.text.trim();
+      final deliveryAddressDetails = {
+        'street': deliveryAddressText,
+        'line1': selectedAddress?.line1 ?? deliveryAddressText,
+        'line2': selectedAddress?.line2 ?? '',
+        'city': selectedAddress?.city ?? '',
+        'landmark': selectedAddress?.landmark ?? '',
+        'country': 'Uganda',
+        'label': selectedAddress?.label ?? '',
+        'recipientName': selectedAddress?.recipientName ?? user.name,
+      };
+      final contactPhone = _phoneController.text.trim();
 
       await firestore.collection('orders').add({
         'userId': user.id,
         'userName': user.name,
         'userEmail': user.email,
-        'deliveryAddress': _addressController.text.trim(),
-        'contactPhone': _phoneController.text.trim(),
+        'deliveryAddress': deliveryAddressText,
+        'deliveryAddressDetails': deliveryAddressDetails,
+        'contactPhone': contactPhone,
+        'customerPhone': contactPhone,
         'createdAt': FieldValue.serverTimestamp(),
         'status': 'pending',
         'paymentMethod': _paymentMethod == 'Cash on Delivery'
@@ -172,6 +221,27 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         'items': items,
         'checkoutMode': buyNowArgs != null ? 'buy_now' : 'cart',
       });
+
+      if (_saveAsDefaultAddress) {
+        final selected = _resolveSelectedAddress(savedAddresses);
+        await ref
+            .read(savedAddressRepositoryProvider)
+            .saveAddress(
+              userId: user.id,
+              makeDefault: true,
+              address: SavedAddress(
+                id: selected?.id ?? '',
+                label: selected?.label ?? 'Home',
+                line1: _addressController.text.trim(),
+                phone: _phoneController.text.trim(),
+                city: selected?.city,
+                line2: selected?.line2,
+                landmark: selected?.landmark,
+                recipientName: selected?.recipientName ?? user.name,
+                isDefault: true,
+              ),
+            );
+      }
 
       if (buyNowArgs == null) {
         await ref.read(cartNotifierProvider.notifier).clearCart();
@@ -192,16 +262,34 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   @override
   Widget build(BuildContext context) {
     final cartAsync = ref.watch(cartNotifierProvider);
+    final subtotalAsync = ref.watch(cartSubtotalProvider);
+    final estimatedCartSubtotal = subtotalAsync.asData?.value;
     final user = ref.watch(currentUserProvider).asData?.value;
+    final savedAddressesAsync = ref.watch(savedAddressesStreamProvider);
+    final savedAddresses = savedAddressesAsync.asData?.value;
     final buyNowArgs = widget.buyNowArgs;
     final buyNowProductAsync = buyNowArgs != null
         ? ref.watch(productByIdProvider(buyNowArgs.productId))
         : null;
     final theme = Theme.of(context);
 
-    // Prefill
-    if (user?.phone != null && _phoneController.text.isEmpty) {
-      _phoneController.text = user!.phone!;
+    // One-time prefill from saved/default address and account phone.
+    if (!_didPrefillAddress && user != null) {
+      if (!savedAddressesAsync.isLoading) {
+        if (savedAddresses != null && savedAddresses.isNotEmpty) {
+          final selected = _resolveSelectedAddress(savedAddresses);
+          if (selected != null) {
+            _applyAddressToForm(selected);
+          }
+        } else {
+          _saveAsDefaultAddress = true;
+        }
+        _didPrefillAddress = true;
+      }
+      if (_phoneController.text.isEmpty &&
+          (user.phone ?? '').trim().isNotEmpty) {
+        _phoneController.text = user.phone!.trim();
+      }
     }
 
     if (user == null) {
@@ -214,7 +302,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             backgroundColor: theme.scaffoldBackgroundColor,
             leading: IconButton(
               icon: const Icon(Icons.arrow_back_ios_new, size: 20),
-              onPressed: () => context.pop(),
+              onPressed: () => context.goBackOr('/cart'),
             ),
           ),
           body: _buildGuestCheckoutState(),
@@ -242,20 +330,40 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           backgroundColor: theme.scaffoldBackgroundColor,
           leading: IconButton(
             icon: const Icon(Icons.arrow_back_ios_new, size: 20),
-            onPressed: () => context.pop(),
+            onPressed: () => context.goBackOr('/cart'),
           ),
         ),
         body: buyNowArgs != null && buyNowProductAsync != null
-            ? _buildBuyNowMobile(buyNowProductAsync, buyNowArgs)
-            : _buildMobile(cartAsync),
+            ? _buildBuyNowMobile(
+                buyNowProductAsync,
+                buyNowArgs,
+                savedAddresses ?? const [],
+              )
+            : _buildMobile(
+                cartAsync,
+                estimatedCartSubtotal,
+                savedAddresses ?? const [],
+              ),
       ),
       desktop: buyNowArgs != null && buyNowProductAsync != null
-          ? _buildBuyNowDesktop(buyNowProductAsync, buyNowArgs)
-          : _buildDesktop(cartAsync),
+          ? _buildBuyNowDesktop(
+              buyNowProductAsync,
+              buyNowArgs,
+              savedAddresses ?? const [],
+            )
+          : _buildDesktop(
+              cartAsync,
+              estimatedCartSubtotal,
+              savedAddresses ?? const [],
+            ),
     );
   }
 
-  Widget _buildMobile(AsyncValue cartAsync) {
+  Widget _buildMobile(
+    AsyncValue cartAsync,
+    double? estimatedCartSubtotal,
+    List<SavedAddress> savedAddresses,
+  ) {
     return cartAsync.when(
       data: (cart) {
         if (cart.items.isEmpty) return const Center(child: Text('Empty Cart'));
@@ -265,7 +373,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           child: _buildCheckoutForm(
             totalItems: cart.totalItems,
             deliveryFee: deliveryFee,
-            onConfirm: () => _placeOrder(),
+            estimatedSubtotal: estimatedCartSubtotal,
+            savedAddresses: savedAddresses,
+            onConfirm: () => _placeOrder(savedAddresses: savedAddresses),
           ),
         );
       },
@@ -277,6 +387,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   Widget _buildBuyNowMobile(
     AsyncValue<ProductModel?> productAsync,
     CheckoutBuyNowArgs buyNowArgs,
+    List<SavedAddress> savedAddresses,
   ) {
     return productAsync.when(
       data: (product) {
@@ -293,9 +404,13 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               _buildCheckoutForm(
                 totalItems: buyNowArgs.quantity,
                 deliveryFee: deliveryFee,
-                onConfirm: () => _placeOrder(buyNowArgs: buyNowArgs),
                 confirmLabel: 'Buy Now',
                 estimatedSubtotal: product.unitPrice * buyNowArgs.quantity,
+                savedAddresses: savedAddresses,
+                onConfirm: () => _placeOrder(
+                  buyNowArgs: buyNowArgs,
+                  savedAddresses: savedAddresses,
+                ),
               ),
             ],
           ),
@@ -306,7 +421,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     );
   }
 
-  Widget _buildDesktop(AsyncValue cartAsync) {
+  Widget _buildDesktop(
+    AsyncValue cartAsync,
+    double? estimatedCartSubtotal,
+    List<SavedAddress> savedAddresses,
+  ) {
     return DesktopScaffold(
       widthTier: DesktopWidthTier.wide,
       child: cartAsync.when(
@@ -336,7 +455,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       child: _buildCheckoutForm(
                         totalItems: cart.totalItems,
                         deliveryFee: deliveryFee,
-                        onConfirm: () => _placeOrder(),
+                        estimatedSubtotal: estimatedCartSubtotal,
+                        savedAddresses: savedAddresses,
+                        onConfirm: () =>
+                            _placeOrder(savedAddresses: savedAddresses),
                         includeSummarySection: false,
                       ),
                     ),
@@ -349,6 +471,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                             null,
                             totalItems: cart.totalItems,
                             deliveryFee: deliveryFee,
+                            estimatedSubtotal: estimatedCartSubtotal,
                           ),
                           const SizedBox(height: 16),
                           SizedBox(
@@ -356,7 +479,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                             child: FilledButton(
                               onPressed: _isPlacingOrder
                                   ? null
-                                  : () => _placeOrder(),
+                                  : () => _placeOrder(
+                                      savedAddresses: savedAddresses,
+                                    ),
                               style: FilledButton.styleFrom(
                                 minimumSize: const Size(0, 54),
                                 shape: RoundedRectangleBorder(
@@ -390,6 +515,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   Widget _buildBuyNowDesktop(
     AsyncValue<ProductModel?> productAsync,
     CheckoutBuyNowArgs buyNowArgs,
+    List<SavedAddress> savedAddresses,
   ) {
     return DesktopScaffold(
       widthTier: DesktopWidthTier.wide,
@@ -424,12 +550,15 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                           _buildCheckoutForm(
                             totalItems: buyNowArgs.quantity,
                             deliveryFee: deliveryFee,
-                            onConfirm: () =>
-                                _placeOrder(buyNowArgs: buyNowArgs),
+                            includeSummarySection: false,
                             confirmLabel: 'Buy Now',
                             estimatedSubtotal:
                                 product.unitPrice * buyNowArgs.quantity,
-                            includeSummarySection: false,
+                            savedAddresses: savedAddresses,
+                            onConfirm: () => _placeOrder(
+                              buyNowArgs: buyNowArgs,
+                              savedAddresses: savedAddresses,
+                            ),
                           ),
                         ],
                       ),
@@ -452,7 +581,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                             child: FilledButton(
                               onPressed: _isPlacingOrder
                                   ? null
-                                  : () => _placeOrder(buyNowArgs: buyNowArgs),
+                                  : () => _placeOrder(
+                                      buyNowArgs: buyNowArgs,
+                                      savedAddresses: savedAddresses,
+                                    ),
                               style: FilledButton.styleFrom(
                                 minimumSize: const Size(0, 54),
                                 shape: RoundedRectangleBorder(
@@ -601,10 +733,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     required int totalItems,
     required double deliveryFee,
     required VoidCallback onConfirm,
+    required List<SavedAddress> savedAddresses,
     String confirmLabel = 'Confirm Order',
     double? estimatedSubtotal,
     bool includeSummarySection = true,
   }) {
+    final selectedAddress = _resolveSelectedAddress(savedAddresses);
     return Form(
       key: _formKey,
       child: Column(
@@ -616,6 +750,52 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             null,
             child: Column(
               children: [
+                if (savedAddresses.isNotEmpty) ...[
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedAddress?.id,
+                    decoration: const InputDecoration(
+                      labelText: 'Saved Address',
+                      prefixIcon: Icon(Icons.bookmark_outline),
+                    ),
+                    items: savedAddresses
+                        .map(
+                          (address) => DropdownMenuItem<String>(
+                            value: address.id,
+                            child: Text(
+                              '${address.shortTitle} • ${address.subtitle}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      if (value == null) return;
+                      for (final address in savedAddresses) {
+                        if (address.id == value) {
+                          setState(() {
+                            _selectedAddressId = value;
+                            _applyAddressToForm(address, markSelected: false);
+                            _saveAsDefaultAddress = false;
+                          });
+                          break;
+                        }
+                      }
+                    },
+                  ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: () => context.push('/addresses'),
+                      icon: const Icon(
+                        Icons.edit_location_alt_outlined,
+                        size: 18,
+                      ),
+                      label: const Text('Manage addresses'),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
                 TextFormField(
                   controller: _addressController,
                   decoration: const InputDecoration(
@@ -633,6 +813,21 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   ),
                   keyboardType: TextInputType.phone,
                   validator: (v) => v?.isEmpty == true ? 'Required' : null,
+                ),
+                const SizedBox(height: 8),
+                CheckboxListTile(
+                  value: _saveAsDefaultAddress,
+                  contentPadding: EdgeInsets.zero,
+                  onChanged: (value) {
+                    setState(() {
+                      _saveAsDefaultAddress = value ?? false;
+                    });
+                  },
+                  title: const Text('Save as default delivery details'),
+                  subtitle: const Text(
+                    'Used for future checkout and AutoHub pickup.',
+                  ),
+                  controlAffinity: ListTileControlAffinity.leading,
                 ),
               ],
             ),

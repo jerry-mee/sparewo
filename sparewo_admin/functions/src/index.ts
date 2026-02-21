@@ -45,6 +45,23 @@ const toCurrency = (value: unknown): string => {
   return `UGX ${Math.round(amount).toLocaleString()}`;
 };
 
+const toAddressText = (value: unknown): string => {
+  if (typeof value === "string") {
+    return toText(value, "N/A");
+  }
+  if (value && typeof value === "object") {
+    const map = value as PlainObject;
+    const parts = [
+      toText(map.street || map.line1),
+      toText(map.line2),
+      toText(map.city || map.area),
+      toText(map.country),
+    ].filter((part) => part.length > 0);
+    if (parts.length > 0) return parts.join(", ");
+  }
+  return "N/A";
+};
+
 const formatValue = (value: unknown): string => {
   if (value === null) return "null";
   if (value === undefined) return "undefined";
@@ -268,9 +285,11 @@ const sendOrderOpsEmail = async (
   const status = toText(orderData.status, "pending");
   const customerName = toText(orderData.userName, "Customer");
   const customerEmail = toText(orderData.userEmail, "N/A");
-  const customerPhone = toText(orderData.contactPhone, "N/A");
+  const customerPhone = toText(orderData.customerPhone || orderData.contactPhone, "N/A");
   const totalAmount = toCurrency(orderData.totalAmount);
-  const deliveryAddress = toText(orderData.deliveryAddress, "N/A");
+  const deliveryAddress = toAddressText(
+    orderData.deliveryAddressDetails || orderData.deliveryAddress
+  );
 
   const items = Array.isArray(orderData.items) ? orderData.items : [];
   const itemCount = items.length;

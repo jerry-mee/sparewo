@@ -4,8 +4,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:sparewo_client/core/router/navigation_extensions.dart';
 import 'package:sparewo_client/core/logging/app_logger.dart';
 import 'package:sparewo_client/core/theme/app_theme.dart';
+import 'package:sparewo_client/features/addresses/application/saved_address_provider.dart';
+import 'package:sparewo_client/features/addresses/domain/saved_address.dart';
 import 'package:sparewo_client/features/autohub/application/autohub_provider.dart';
 import 'package:sparewo_client/features/autohub/domain/service_booking_model.dart';
 import 'package:sparewo_client/features/my_car/application/car_provider.dart';
@@ -43,6 +46,7 @@ class _AutoHubConversationalScreenState
   DateTime? selectedDate;
   String? selectedTime;
   bool _isSubmitting = false;
+  String? _selectedSavedAddressId;
 
   @override
   void initState() {
@@ -56,6 +60,30 @@ class _AutoHubConversationalScreenState
     _descriptionController.dispose();
     _locationController.dispose();
     super.dispose();
+  }
+
+  SavedAddress? _resolveSavedAddress(List<SavedAddress> addresses) {
+    if (addresses.isEmpty) return null;
+    if (_selectedSavedAddressId != null) {
+      for (final address in addresses) {
+        if (address.id == _selectedSavedAddressId) return address;
+      }
+    }
+    for (final address in addresses) {
+      if (address.isDefault) return address;
+    }
+    return addresses.first;
+  }
+
+  void _applyPickupAddress(SavedAddress address) {
+    final next = address.fullAddress.isNotEmpty
+        ? address.fullAddress
+        : address.line1;
+    _locationController.text = next;
+    ref.read(bookingFlowNotifierProvider.notifier).setPickupLocation(next);
+    setState(() {
+      _selectedSavedAddressId = address.id;
+    });
   }
 
   void _nextPage() {
@@ -73,7 +101,7 @@ class _AutoHubConversationalScreenState
       );
       setState(() => _currentStep--);
     } else {
-      context.pop();
+      context.goBackOr('/autohub');
     }
   }
 
@@ -733,13 +761,65 @@ class _AutoHubConversationalScreenState
   }
 
   Widget _buildStepLocation(BuildContext context) {
+    final savedAddresses = ref
+        .watch(savedAddressesStreamProvider)
+        .asData
+        ?.value;
+    final selectedAddress = _resolveSavedAddress(savedAddresses ?? const []);
+    if (_locationController.text.trim().isEmpty && selectedAddress != null) {
+      final next = selectedAddress.fullAddress.isNotEmpty
+          ? selectedAddress.fullAddress
+          : selectedAddress.line1;
+      _locationController.text = next;
+      ref.read(bookingFlowNotifierProvider.notifier).setPickupLocation(next);
+    }
+
     return _buildStepContainer(
       title: "Where are you?",
-      subtitle: "Enter the pickup address.",
+      subtitle: "Enter the pickup address or use a saved one.",
       child: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (savedAddresses != null && savedAddresses.isNotEmpty) ...[
+              DropdownButtonFormField<String>(
+                initialValue: selectedAddress?.id,
+                decoration: const InputDecoration(
+                  labelText: 'Saved pickup address',
+                  prefixIcon: Icon(Icons.bookmark_outline),
+                ),
+                items: savedAddresses
+                    .map(
+                      (address) => DropdownMenuItem<String>(
+                        value: address.id,
+                        child: Text(
+                          '${address.shortTitle} • ${address.subtitle}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) {
+                  if (value == null) return;
+                  for (final address in savedAddresses) {
+                    if (address.id == value) {
+                      _applyPickupAddress(address);
+                      break;
+                    }
+                  }
+                },
+              ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: () => context.push('/addresses'),
+                  icon: const Icon(Icons.edit_location_alt_outlined, size: 18),
+                  label: const Text('Manage addresses'),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
             Container(
               decoration: BoxDecoration(
                 color: Theme.of(context).cardColor,
@@ -765,6 +845,9 @@ class _AutoHubConversationalScreenState
                   ),
                 ),
                 onChanged: (val) {
+                  if (_selectedSavedAddressId != null) {
+                    setState(() => _selectedSavedAddressId = null);
+                  }
                   // Update state, triggering rebuild of the Next button
                   ref
                       .read(bookingFlowNotifierProvider.notifier)

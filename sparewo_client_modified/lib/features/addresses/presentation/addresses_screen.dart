@@ -1,15 +1,17 @@
 // lib/features/addresses/presentation/addresses_screen.dart
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:flutter_animate/flutter_animate.dart';
+import 'package:sparewo_client/core/router/navigation_extensions.dart';
 import 'package:sparewo_client/core/theme/app_theme.dart';
-import 'package:sparewo_client/features/auth/application/auth_provider.dart';
 import 'package:sparewo_client/core/widgets/desktop_scaffold.dart';
 import 'package:sparewo_client/core/widgets/desktop_section.dart';
 import 'package:sparewo_client/core/widgets/responsive_screen.dart';
 import 'package:sparewo_client/core/widgets/site_footer.dart';
+import 'package:sparewo_client/features/addresses/application/saved_address_provider.dart';
+import 'package:sparewo_client/features/addresses/domain/saved_address.dart';
+import 'package:sparewo_client/features/auth/application/auth_provider.dart';
 import 'package:sparewo_client/features/auth/presentation/widgets/auth_guard_modal.dart';
 
 class AddressesScreen extends ConsumerWidget {
@@ -41,12 +43,7 @@ class AddressesScreen extends ConsumerWidget {
       );
     }
 
-    final addressesStream = FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.id)
-        .collection('addresses')
-        .orderBy('createdAt', descending: true)
-        .snapshots();
+    final addressesAsync = ref.watch(savedAddressesStreamProvider);
 
     return ResponsiveScreen(
       mobile: Scaffold(
@@ -56,15 +53,15 @@ class AddressesScreen extends ConsumerWidget {
           centerTitle: true,
           leading: IconButton(
             icon: const Icon(Icons.arrow_back_ios_new, size: 20),
-            onPressed: () => context.pop(),
+            onPressed: () => context.goBackOr('/profile'),
           ),
         ),
         floatingActionButton: FloatingActionButton(
-          onPressed: () => _showAddAddressSheet(context, user.id),
+          onPressed: () => _showAddAddressSheet(context, ref, user.id),
           backgroundColor: AppColors.primary,
           child: const Icon(Icons.add, color: Colors.white),
         ),
-        body: _buildAddressStream(context, user.id, addressesStream, false),
+        body: _buildAddressList(context, ref, user.id, addressesAsync, false),
       ),
       desktop: DesktopScaffold(
         widthTier: DesktopWidthTier.standard,
@@ -79,13 +76,14 @@ class AddressesScreen extends ConsumerWidget {
                 child: Align(
                   alignment: Alignment.centerRight,
                   child: FilledButton.icon(
-                    onPressed: () => _showAddAddressSheet(context, user.id),
+                    onPressed: () =>
+                        _showAddAddressSheet(context, ref, user.id),
                     icon: const Icon(Icons.add),
                     label: const Text('Add Address'),
                   ),
                 ),
               ),
-              _buildAddressStream(context, user.id, addressesStream, true),
+              _buildAddressList(context, ref, user.id, addressesAsync, true),
               const SiteFooter(),
               const SizedBox(height: 120),
             ],
@@ -112,7 +110,7 @@ class AddressesScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 12),
             Text(
-              'Save delivery locations for faster checkout.',
+              'Save delivery locations for faster checkout and AutoHub pickup.',
               style: AppTextStyles.bodyMedium,
               textAlign: TextAlign.center,
             ),
@@ -138,21 +136,27 @@ class AddressesScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildAddressStream(
+  Widget _buildAddressList(
     BuildContext context,
+    WidgetRef ref,
     String userId,
-    Stream<QuerySnapshot> stream,
+    AsyncValue<List<SavedAddress>> addressesAsync,
     bool embedded,
   ) {
     final theme = Theme.of(context);
-    return StreamBuilder<QuerySnapshot>(
-      stream: stream,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+    return addressesAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (error, _) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            'Could not load addresses: $error',
+            textAlign: TextAlign.center,
+          ),
+        ),
+      ),
+      data: (addresses) {
+        if (addresses.isEmpty) {
           return Center(
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 48),
@@ -186,8 +190,6 @@ class AddressesScreen extends ConsumerWidget {
           );
         }
 
-        final docs = snapshot.data!.docs;
-
         return ListView.separated(
           padding: EdgeInsets.fromLTRB(
             AppSpacing.screenPadding,
@@ -199,13 +201,12 @@ class AddressesScreen extends ConsumerWidget {
           physics: embedded
               ? const NeverScrollableScrollPhysics()
               : const ClampingScrollPhysics(),
-          itemCount: docs.length,
+          itemCount: addresses.length,
           separatorBuilder: (_, __) => const SizedBox(height: 16),
           itemBuilder: (context, index) {
-            final data = docs[index].data() as Map<String, dynamic>;
+            final address = addresses[index];
             return _AddressCard(
-              data: data,
-              docId: docs[index].id,
+              address: address,
               userId: userId,
             ).animate().fadeIn(delay: (50 * index).ms).slideX();
           },
@@ -214,10 +215,24 @@ class AddressesScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _showAddAddressSheet(BuildContext context, String userId) async {
-    final line1Controller = TextEditingController();
-    final cityController = TextEditingController();
+  Future<void> _showAddAddressSheet(
+    BuildContext context,
+    WidgetRef ref,
+    String userId,
+  ) async {
+    final currentUser = ref.read(currentUserProvider).asData?.value;
     final labelController = TextEditingController(text: 'Home');
+    final line1Controller = TextEditingController();
+    final line2Controller = TextEditingController();
+    final cityController = TextEditingController();
+    final landmarkController = TextEditingController();
+    final phoneController = TextEditingController(
+      text: currentUser?.phone ?? '',
+    );
+    final recipientController = TextEditingController(
+      text: currentUser?.name ?? '',
+    );
+    final isDefault = ValueNotifier<bool>(true);
     final theme = Theme.of(context);
 
     await showModalBottomSheet(
@@ -245,15 +260,40 @@ class AddressesScreen extends ConsumerWidget {
                     prefixIcon: Icon(Icons.label_outline),
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: recipientController,
+                  decoration: const InputDecoration(
+                    labelText: 'Recipient Name',
+                    prefixIcon: Icon(Icons.person_outline),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: phoneController,
+                  decoration: const InputDecoration(
+                    labelText: 'Phone Number',
+                    prefixIcon: Icon(Icons.phone_outlined),
+                  ),
+                  keyboardType: TextInputType.phone,
+                ),
+                const SizedBox(height: 12),
                 TextField(
                   controller: line1Controller,
                   decoration: const InputDecoration(
-                    labelText: 'Address Line',
+                    labelText: 'Address Line 1',
                     prefixIcon: Icon(Icons.location_on_outlined),
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: line2Controller,
+                  decoration: const InputDecoration(
+                    labelText: 'Address Line 2 (Optional)',
+                    prefixIcon: Icon(Icons.home_work_outlined),
+                  ),
+                ),
+                const SizedBox(height: 12),
                 TextField(
                   controller: cityController,
                   decoration: const InputDecoration(
@@ -261,27 +301,51 @@ class AddressesScreen extends ConsumerWidget {
                     prefixIcon: Icon(Icons.map_outlined),
                   ),
                 ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: landmarkController,
+                  decoration: const InputDecoration(
+                    labelText: 'Landmark (Optional)',
+                    prefixIcon: Icon(Icons.pin_drop_outlined),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ValueListenableBuilder<bool>(
+                  valueListenable: isDefault,
+                  builder: (context, value, _) {
+                    return SwitchListTile.adaptive(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Set as default address'),
+                      value: value,
+                      onChanged: (next) => isDefault.value = next,
+                    );
+                  },
+                ),
+                const SizedBox(height: 12),
                 SizedBox(
                   width: double.infinity,
                   height: 56,
                   child: FilledButton(
                     onPressed: () async {
-                      if (line1Controller.text.isEmpty ||
-                          cityController.text.isEmpty) {
-                        return;
-                      }
+                      if (line1Controller.text.trim().isEmpty) return;
 
-                      await FirebaseFirestore.instance
-                          .collection('users')
-                          .doc(userId)
-                          .collection('addresses')
-                          .add({
-                            'label': labelController.text.trim(),
-                            'line1': line1Controller.text.trim(),
-                            'city': cityController.text.trim(),
-                            'createdAt': FieldValue.serverTimestamp(),
-                          });
+                      final repo = ref.read(savedAddressRepositoryProvider);
+                      await repo.saveAddress(
+                        userId: userId,
+                        makeDefault: isDefault.value,
+                        address: SavedAddress(
+                          id: '',
+                          label: labelController.text.trim(),
+                          line1: line1Controller.text.trim(),
+                          line2: line2Controller.text.trim(),
+                          city: cityController.text.trim(),
+                          landmark: landmarkController.text.trim(),
+                          phone: phoneController.text.trim(),
+                          recipientName: recipientController.text.trim(),
+                          isDefault: isDefault.value,
+                        ),
+                      );
+
                       if (context.mounted) Navigator.pop(context);
                     },
                     child: const Text('Save Address'),
@@ -296,27 +360,18 @@ class AddressesScreen extends ConsumerWidget {
   }
 }
 
-class _AddressCard extends StatelessWidget {
-  final Map<String, dynamic> data;
-  final String docId;
+class _AddressCard extends ConsumerWidget {
+  const _AddressCard({required this.address, required this.userId});
+
+  final SavedAddress address;
   final String userId;
 
-  const _AddressCard({
-    required this.data,
-    required this.docId,
-    required this.userId,
-  });
-
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
 
-    final label = (data['label'] as String?)?.trim();
-    final line1 = (data['line1'] as String?)?.trim() ?? '';
-    final city = (data['city'] as String?)?.trim() ?? '';
-
     return Dismissible(
-      key: Key(docId),
+      key: Key(address.id),
       direction: DismissDirection.endToStart,
       background: Container(
         alignment: Alignment.centerRight,
@@ -328,12 +383,9 @@ class _AddressCard extends StatelessWidget {
         child: const Icon(Icons.delete, color: Colors.white),
       ),
       onDismissed: (_) {
-        FirebaseFirestore.instance
-            .collection('users')
-            .doc(userId)
-            .collection('addresses')
-            .doc(docId)
-            .delete();
+        ref
+            .read(savedAddressRepositoryProvider)
+            .deleteAddress(userId: userId, addressId: address.id);
       },
       child: Container(
         padding: const EdgeInsets.all(20),
@@ -362,31 +414,26 @@ class _AddressCard extends StatelessWidget {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    'Delivery Address',
+                    address.shortTitle,
                     style: AppTextStyles.h4,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                if (label != null && label.isNotEmpty)
+                if (address.isDefault)
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 10,
                       vertical: 5,
                     ),
                     decoration: BoxDecoration(
-                      color: AppColors.primary.withValues(alpha: 0.1),
+                      color: AppColors.success.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(999),
                     ),
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 90),
-                      child: Text(
-                        label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.labelSmall.copyWith(
-                          color: AppColors.primary,
-                        ),
+                    child: Text(
+                      'Default',
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: AppColors.success,
                       ),
                     ),
                   ),
@@ -394,30 +441,42 @@ class _AddressCard extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             Text(
-              line1,
+              address.subtitle,
               style: AppTextStyles.bodyLarge.copyWith(
                 color: theme.textTheme.bodyLarge?.color,
               ),
-              maxLines: 2,
+              maxLines: 3,
               overflow: TextOverflow.ellipsis,
             ),
-            if (city.isNotEmpty) ...[
-              const SizedBox(height: 6),
-              Row(
-                children: [
-                  Icon(Icons.place_outlined, size: 14, color: theme.hintColor),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: Text(
-                      city,
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: theme.hintColor,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
+            if ((address.recipientName ?? '').trim().isNotEmpty ||
+                (address.phone ?? '').trim().isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                [
+                  (address.recipientName ?? '').trim(),
+                  (address.phone ?? '').trim(),
+                ].where((item) => item.isNotEmpty).join(' • '),
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: theme.hintColor,
+                ),
+              ),
+            ],
+            if (!address.isDefault) ...[
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: () {
+                    ref
+                        .read(savedAddressRepositoryProvider)
+                        .setDefaultAddress(
+                          userId: userId,
+                          addressId: address.id,
+                        );
+                  },
+                  icon: const Icon(Icons.check_circle_outline, size: 18),
+                  label: const Text('Set as default'),
+                ),
               ),
             ],
           ],

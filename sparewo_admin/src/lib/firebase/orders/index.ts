@@ -68,6 +68,47 @@ interface DeliveryAddress {
   country: string;
 }
 
+const normalizeDeliveryAddress = (value: unknown): DeliveryAddress | undefined => {
+  if (!value) return undefined;
+  if (typeof value === "string") {
+    const text = value.trim();
+    if (!text) return undefined;
+    return {
+      street: text,
+      city: "",
+      country: "Uganda",
+    };
+  }
+  if (typeof value === "object") {
+    const map = value as Record<string, unknown>;
+    const street = String(
+      map.street ?? map.line1 ?? map.addressLine1 ?? map.address ?? ""
+    ).trim();
+    const city = String(map.city ?? map.area ?? "").trim();
+    const country = String(map.country ?? "Uganda").trim() || "Uganda";
+    if (!street && !city) return undefined;
+    return { street, city, country };
+  }
+  return undefined;
+};
+
+const normalizeOrder = (id: string, data: Record<string, unknown>): Order => {
+  const normalized: Record<string, unknown> = { id, ...data };
+  normalized.customerPhone = String(
+    data.customerPhone ?? data.contactPhone ?? ""
+  ).trim();
+  normalized.deliveryAddress = normalizeDeliveryAddress(
+    data.deliveryAddressDetails ?? data.deliveryAddress
+  );
+  normalized.customerId = String(
+    data.customerId ?? data.userId ?? ""
+  ).trim();
+  normalized.orderNumber = String(
+    data.orderNumber ?? data.id ?? id
+  ).trim();
+  return normalized as Order;
+};
+
 interface OrderFulfillment {
   id: string;
   orderId: string;
@@ -173,7 +214,7 @@ export const getOrders = async (
     let lastVisible: DocumentData | undefined = undefined;
     
     querySnapshot.forEach((doc) => {
-      orders.push({ id: doc.id, ...doc.data() } as Order);
+      orders.push(normalizeOrder(doc.id, doc.data() as Record<string, unknown>));
       lastVisible = doc;
     });
     
@@ -191,7 +232,10 @@ export const getOrderById = async (id: string): Promise<Order | null> => {
     const docSnap = await getDoc(docRef);
 
     if (docSnap.exists()) {
-      return { id: docSnap.id, ...docSnap.data() } as Order;
+      return normalizeOrder(
+        docSnap.id,
+        docSnap.data() as Record<string, unknown>
+      );
     }
 
     return null;
