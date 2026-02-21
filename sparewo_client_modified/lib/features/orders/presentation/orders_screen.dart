@@ -17,12 +17,12 @@ import 'package:sparewo_client/features/auth/presentation/widgets/auth_guard_mod
 // --- Parts Orders Provider ---
 final myOrdersProvider = StreamProvider.autoDispose<List<Map<String, dynamic>>>(
   (ref) {
-    final user = ref.watch(currentUserProvider).asData?.value;
-    if (user == null) return Stream.value([]);
+    final uid = ref.watch(currentUidProvider);
+    if (uid == null || uid.isEmpty) return Stream.value([]);
 
     return FirebaseFirestore.instance
         .collection('orders')
-        .where('userId', isEqualTo: user.id)
+        .where('userId', isEqualTo: uid)
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) {
@@ -43,12 +43,12 @@ final myOrdersProvider = StreamProvider.autoDispose<List<Map<String, dynamic>>>(
 final myBookingsProvider = StreamProvider.autoDispose<List<ServiceBooking>>((
   ref,
 ) {
-  final user = ref.watch(currentUserProvider).asData?.value;
-  if (user == null) return Stream.value([]);
+  final uid = ref.watch(currentUidProvider);
+  if (uid == null || uid.isEmpty) return Stream.value([]);
 
   return FirebaseFirestore.instance
       .collection('service_bookings')
-      .where('userId', isEqualTo: user.id)
+      .where('userId', isEqualTo: uid)
       .orderBy('createdAt', descending: true)
       .snapshots()
       .map((snapshot) {

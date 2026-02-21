@@ -39,13 +39,13 @@ final cartSubtotalProvider = FutureProvider<double>((ref) async {
 });
 
 // 2. Cart Stream Provider
-final cartStreamProvider = StreamProvider.autoDispose<CartModel>((ref) {
-  final user = ref.watch(authStateChangesProvider).asData?.value;
-  if (user == null) {
+final cartStreamProvider = StreamProvider<CartModel>((ref) {
+  final uid = ref.watch(currentUidProvider);
+  if (uid == null || uid.isEmpty) {
     return Stream.value(const CartModel(items: []));
   }
 
-  final repository = ref.watch(cartRepositoryProvider);
+  final repository = CartRepository(userId: uid);
   return repository.getUserCart();
 });
 
@@ -86,11 +86,14 @@ class CartNotifier extends AsyncNotifier<CartModel> {
         final wasLoggedIn = prev?.asData?.value != null;
         final isLoggedIn = next.asData?.value != null;
         if (!wasLoggedIn && isLoggedIn) {
+          final uid = next.asData?.value?.uid;
+          if (uid == null || uid.isEmpty) return;
           Future.microtask(() async {
             await migrateLocalCart();
-            ref.invalidate(cartStreamProvider);
             try {
-              final latest = await ref.read(cartStreamProvider.future);
+              final latest = await CartRepository(
+                userId: uid,
+              ).getUserCart().first;
               state = AsyncData(latest);
             } catch (_) {
               // Ignore transient stream races during auth transitions
@@ -112,7 +115,7 @@ class CartNotifier extends AsyncNotifier<CartModel> {
           next.whenData((cart) => state = AsyncData(cart));
         });
       }
-      return await ref.read(cartStreamProvider.future);
+      return await CartRepository(userId: fbUser.uid).getUserCart().first;
     } else {
       // Use local cart when logged out
       return _localCart;
@@ -131,9 +134,9 @@ class CartNotifier extends AsyncNotifier<CartModel> {
       final user = _effectiveAuthUser();
 
       if (user != null) {
-        final repository = ref.read(cartRepositoryProvider);
+        final repository = CartRepository(userId: user.uid);
         await repository.addItem(productId: productId, quantity: quantity);
-        return await ref.read(cartStreamProvider.future);
+        return await repository.getUserCart().first;
       } else {
         final currentItems = List<CartItemModel>.from(_localCart.items);
         final existingIndex = currentItems.indexWhere(
@@ -170,12 +173,12 @@ class CartNotifier extends AsyncNotifier<CartModel> {
       final user = _effectiveAuthUser();
 
       if (user != null) {
-        final repository = ref.read(cartRepositoryProvider);
+        final repository = CartRepository(userId: user.uid);
         await repository.updateQuantity(
           productId: productId,
           quantity: quantity,
         );
-        return await ref.read(cartStreamProvider.future);
+        return await repository.getUserCart().first;
       } else {
         if (quantity <= 0) {
           await removeItem(productId);
@@ -208,9 +211,9 @@ class CartNotifier extends AsyncNotifier<CartModel> {
       final user = _effectiveAuthUser();
 
       if (user != null) {
-        final repository = ref.read(cartRepositoryProvider);
+        final repository = CartRepository(userId: user.uid);
         await repository.removeItem(productId);
-        return await ref.read(cartStreamProvider.future);
+        return await repository.getUserCart().first;
       } else {
         final currentItems = List<CartItemModel>.from(_localCart.items);
         currentItems.removeWhere((item) => item.productId == productId);
@@ -230,9 +233,9 @@ class CartNotifier extends AsyncNotifier<CartModel> {
       final user = _effectiveAuthUser();
 
       if (user != null) {
-        final repository = ref.read(cartRepositoryProvider);
+        final repository = CartRepository(userId: user.uid);
         await repository.clearCart();
-        return await ref.read(cartStreamProvider.future);
+        return await repository.getUserCart().first;
       } else {
         _localCart = const CartModel(items: []);
         await _clearPersistedLocalCart();

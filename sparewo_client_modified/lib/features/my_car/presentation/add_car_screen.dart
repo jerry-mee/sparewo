@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:sparewo_client/core/router/navigation_extensions.dart';
 import 'package:sparewo_client/core/logging/app_logger.dart';
 import 'package:sparewo_client/core/theme/app_theme.dart';
 import 'package:sparewo_client/features/auth/application/auth_provider.dart';
@@ -197,7 +198,7 @@ class _AddCarScreenState extends ConsumerState<AddCarScreen> {
           backgroundColor: theme.scaffoldBackgroundColor,
           leading: IconButton(
             icon: const Icon(Icons.arrow_back_ios_new, size: 20),
-            onPressed: () => context.pop(),
+            onPressed: () => context.goBackOr('/my-cars'),
           ),
           actions: [
             if (isEditing)
@@ -783,7 +784,7 @@ class _AddCarScreenState extends ConsumerState<AddCarScreen> {
       }
 
       EasyLoading.dismiss();
-      if (mounted) context.pop();
+      if (mounted) context.go('/my-cars');
     } catch (e) {
       AppLogger.error('AddCarScreen', 'Save error', error: e);
       EasyLoading.showError('Failed: $e');

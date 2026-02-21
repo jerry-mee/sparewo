@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:sparewo_client/core/router/navigation_extensions.dart';
 import 'package:sparewo_client/core/theme/app_theme.dart';
 import 'package:sparewo_client/core/widgets/desktop_scaffold.dart';
 import 'package:sparewo_client/core/widgets/desktop_section.dart';
@@ -28,15 +29,15 @@ class CartScreen extends ConsumerWidget {
     return ResponsiveScreen(
       mobile: Scaffold(
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        appBar: AppBar(
+                appBar: AppBar(
           title: const Text('Shopping Cart'),
           elevation: 0,
           backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new, size: 20),
-            onPressed: () => context.pop(),
-          ),
-        ),
+                  leading: IconButton(
+                    icon: const Icon(Icons.arrow_back_ios_new, size: 20),
+                    onPressed: () => context.goBackOr('/home'),
+                  ),
+                ),
         body: cartAsync.when(
           data: (cart) {
             if (cart.items.isEmpty) {

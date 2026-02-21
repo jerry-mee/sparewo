@@ -111,7 +111,8 @@ export async function POST(req: Request) {
       };
 
       if (userId) {
-        await db.collection('notifications').add({
+        const notificationId = `booking_${bookingId}_${status}`;
+        await db.collection('notifications').doc(notificationId).set({
           userId,
           recipientId: userId,
           title: titleByStatus[status],
@@ -128,7 +129,7 @@ export async function POST(req: Request) {
           statusLabel,
           createdAt: now,
           updatedAt: now,
-        });
+        }, { merge: true });
       }
 
       if (userEmail) {

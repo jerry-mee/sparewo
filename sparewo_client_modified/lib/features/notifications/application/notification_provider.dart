@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:sparewo_client/core/logging/app_logger.dart';
 import 'package:sparewo_client/features/auth/application/auth_provider.dart';
 
 class UserNotification {
@@ -54,10 +56,22 @@ class UserNotification {
 
 final userNotificationsProvider =
     StreamProvider.autoDispose<List<UserNotification>>((ref) {
-      final authUser = ref.watch(authStateChangesProvider).asData?.value;
-      final uid = authUser?.uid;
+      final link = ref.keepAlive();
+      Timer? timer;
+      ref.onCancel(() {
+        timer = Timer(const Duration(minutes: 5), link.close);
+      });
+      ref.onResume(() => timer?.cancel());
+      ref.onDispose(() => timer?.cancel());
+
+      final uid = ref.watch(currentUidProvider);
       if (uid == null || uid.isEmpty) return Stream.value(const []);
 
+      AppLogger.debug(
+        'NotificationsProvider',
+        'Subscribing to notifications stream',
+        extra: {'uid': uid},
+      );
       return FirebaseFirestore.instance
           .collection('notifications')
           .where('recipientId', isEqualTo: uid)
@@ -81,26 +95,52 @@ class NotificationActions {
 
   final FirebaseFirestore _firestore;
 
+  Iterable<List<String>> _chunkIds(List<String> ids) sync* {
+    for (var i = 0; i < ids.length; i += 500) {
+      final end = (i + 500 < ids.length) ? i + 500 : ids.length;
+      yield ids.sublist(i, end);
+    }
+  }
+
   Future<void> markRead(List<String> ids) async {
     if (ids.isEmpty) return;
-    final batch = _firestore.batch();
-    for (final id in ids) {
-      final ref = _firestore.collection('notifications').doc(id);
-      batch.set(ref, {'read': true}, SetOptions(merge: true));
+    AppLogger.info(
+      'NotificationActions',
+      'Marking notifications as read',
+      extra: {'count': ids.length},
+    );
+    for (final chunk in _chunkIds(ids)) {
+      final batch = _firestore.batch();
+      for (final id in chunk) {
+        final ref = _firestore.collection('notifications').doc(id);
+        batch.set(ref, {'read': true}, SetOptions(merge: true));
+      }
+      await batch.commit();
     }
-    await batch.commit();
   }
 
   Future<void> delete(List<String> ids) async {
     if (ids.isEmpty) return;
-    final batch = _firestore.batch();
-    for (final id in ids) {
-      batch.delete(_firestore.collection('notifications').doc(id));
+    AppLogger.info(
+      'NotificationActions',
+      'Deleting notifications',
+      extra: {'count': ids.length},
+    );
+    for (final chunk in _chunkIds(ids)) {
+      final batch = _firestore.batch();
+      for (final id in chunk) {
+        batch.delete(_firestore.collection('notifications').doc(id));
+      }
+      await batch.commit();
     }
-    await batch.commit();
   }
 
   Future<void> markAllRead(String userId) async {
+    AppLogger.debug(
+      'NotificationActions',
+      'Marking all notifications as read',
+      extra: {'uid': userId},
+    );
     final snapshot = await _firestore
         .collection('notifications')
         .where('recipientId', isEqualTo: userId)
@@ -115,6 +155,11 @@ class NotificationActions {
   }
 
   Future<void> deleteAll(String userId) async {
+    AppLogger.debug(
+      'NotificationActions',
+      'Deleting all notifications',
+      extra: {'uid': userId},
+    );
     final snapshot = await _firestore
         .collection('notifications')
         .where('recipientId', isEqualTo: userId)

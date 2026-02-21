@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -30,11 +29,14 @@ import 'package:sparewo_client/features/profile/presentation/settings_screen.dar
 import 'package:sparewo_client/features/profile/presentation/support_screen.dart';
 import 'package:sparewo_client/features/profile/presentation/about_screen.dart';
 import 'package:sparewo_client/features/notifications/presentation/notifications_screen.dart';
+import 'package:sparewo_client/core/router/shared_preferences_provider.dart';
+import 'package:sparewo_client/core/logging/app_logger.dart';
 // Added Imports
 import 'package:sparewo_client/features/autohub/domain/service_booking_model.dart';
 import 'package:sparewo_client/features/orders/presentation/booking_detail_screen.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
+GoRouter? _routerInstance;
 
 final hasSeenWelcomeProvider = NotifierProvider<HasSeenWelcomeNotifier, bool>(
   HasSeenWelcomeNotifier.new,
@@ -42,17 +44,34 @@ final hasSeenWelcomeProvider = NotifierProvider<HasSeenWelcomeNotifier, bool>(
 
 class HasSeenWelcomeNotifier extends Notifier<bool> {
   @override
-  bool build() => false;
-  void completeWelcome() => state = true;
+  bool build() {
+    final prefs = ref.read(sharedPreferencesProvider);
+    return prefs.getBool('hasSeenWelcome') ?? false;
+  }
+
+  void completeWelcome() {
+    state = true;
+    ref.read(sharedPreferencesProvider).setBool('hasSeenWelcome', true);
+  }
 }
 
 final routerProvider = Provider<GoRouter>((ref) {
-  final refresh = GoRouterRefreshStream(
-    ref.read(authRepositoryProvider).authStateChanges,
-  );
-  ref.onDispose(refresh.dispose);
+  if (_routerInstance != null) {
+    return _routerInstance!;
+  }
 
-  return GoRouter(
+  final refresh = GoRouterRefreshNotifier();
+  ref.listen(authStateChangesProvider, (_, __) => refresh.trigger());
+  ref.listen(currentUserProvider, (_, __) => refresh.trigger());
+  ref.listen(registrationInProgressProvider, (_, __) => refresh.trigger());
+  ref.listen(hasSeenWelcomeProvider, (_, __) => refresh.trigger());
+  ref.onDispose(() {
+    refresh.dispose();
+    _routerInstance?.dispose();
+    _routerInstance = null;
+  });
+
+  _routerInstance = GoRouter(
     navigatorKey: _rootNavigatorKey,
     initialLocation: '/splash',
     refreshListenable: refresh,
@@ -252,6 +271,7 @@ final routerProvider = Provider<GoRouter>((ref) {
     redirect: (BuildContext context, GoRouterState state) {
       final authState = ref.read(authStateChangesProvider);
       final hasSeenWelcome = ref.read(hasSeenWelcomeProvider);
+      final isRegistering = ref.read(registrationInProgressProvider);
       final user = authState.hasValue ? authState.value : null;
       final location = state.matchedLocation;
       final isAuthRoute =
@@ -265,6 +285,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       final isLoading = authState.isLoading;
 
       final isLoggedIn = user != null;
+      String redirectWithLog(String target, String reason) {
+        AppLogger.debug(
+          'RouterRedirect',
+          reason,
+          extra: {'from': location, 'to': target, 'uid': user?.uid},
+        );
+        return target;
+      }
 
       // -----------------------------------------------------------------------
       // 1. Loading State
@@ -275,6 +303,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         return null;
       }
 
+      if (isRegistering) {
+        return null;
+      }
+
       // -----------------------------------------------------------------------
       // 2. Web Entry Point (Skip Splash/Welcome)
       // -----------------------------------------------------------------------
@@ -282,7 +314,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         // On Web, we want instant entry.
         // If logged in -> Home (or let router handle it)
         // If guest -> Home
-        return '/home';
+        return redirectWithLog('/home', 'Web splash redirect');
       }
 
       // -----------------------------------------------------------------------
@@ -291,11 +323,17 @@ final routerProvider = Provider<GoRouter>((ref) {
       if (!kIsWeb && location == '/splash') {
         // If user hasn't seen onboarding, show it
         if (!hasSeenWelcome) {
-          return '/welcome';
+          return redirectWithLog(
+            '/welcome',
+            'First launch onboarding redirect',
+          );
         }
         // After onboarding, unauthenticated users continue to signup/login flow.
         // Do not skip directly to Home, otherwise onboarding "Get Started" feels bypassed.
-        return isLoggedIn ? '/home' : '/signup';
+        return redirectWithLog(
+          isLoggedIn ? '/home' : '/signup',
+          'Mobile splash redirect',
+        );
       }
 
       // -----------------------------------------------------------------------
@@ -305,9 +343,39 @@ final routerProvider = Provider<GoRouter>((ref) {
       // 5. Logged In Logic
       // -----------------------------------------------------------------------
       if (isLoggedIn) {
-        // If user is logged in but on an auth screen (login/signup), send to Home
-        if (isAuthRoute) {
-          return '/home';
+        final profileState = ref.read(currentUserProvider);
+        if (profileState.isLoading) {
+          return null;
+        }
+        final profile = profileState.asData?.value;
+        // During auth transitions, profile stream can momentarily be null/stale.
+        // Suppress verification redirects until profile has caught up to auth user.
+        if (profile == null || profile.id != user.uid) {
+          return null;
+        }
+        final isVerified = profile.isEmailVerified == true;
+        if (!isVerified && !location.startsWith('/verify-email')) {
+          final encodedEmail = Uri.encodeComponent(user.email ?? '');
+          return redirectWithLog(
+            '/verify-email?email=$encodedEmail&partial=1',
+            'Unverified user blocked from non-verification routes',
+          );
+        }
+        if (isVerified && location.startsWith('/verify-email')) {
+          return redirectWithLog(
+            '/home',
+            'Verified user redirected away from verification route',
+          );
+        }
+        // If user is logged in and verified but on a non-verification auth route,
+        // send to Home. Unverified users must remain on /verify-email.
+        if (isVerified &&
+            isAuthRoute &&
+            !location.startsWith('/verify-email')) {
+          return redirectWithLog(
+            '/home',
+            'Authenticated user redirected away from auth route',
+          );
         }
         return null; // Proceed as requested
       }
@@ -334,7 +402,10 @@ final routerProvider = Provider<GoRouter>((ref) {
 
         if (requiresAuth) {
           final encodedReturnTo = Uri.encodeComponent(state.uri.toString());
-          return '/login?returnTo=$encodedReturnTo&reason=auth_required';
+          return redirectWithLog(
+            '/login?returnTo=$encodedReturnTo&reason=auth_required',
+            'Guest redirected to login for protected route',
+          );
         }
 
         // Default: Allow public access (Home, Catalog, Cart, AutoHub Intro)
@@ -344,21 +415,9 @@ final routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
   );
+  return _routerInstance!;
 });
 
-class GoRouterRefreshStream extends ChangeNotifier {
-  GoRouterRefreshStream(Stream<dynamic> stream) {
-    notifyListeners();
-    _subscription = stream.asBroadcastStream().listen(
-      (dynamic _) => notifyListeners(),
-    );
-  }
-
-  late final StreamSubscription<dynamic> _subscription;
-
-  @override
-  void dispose() {
-    _subscription.cancel();
-    super.dispose();
-  }
+class GoRouterRefreshNotifier extends ChangeNotifier {
+  void trigger() => notifyListeners();
 }

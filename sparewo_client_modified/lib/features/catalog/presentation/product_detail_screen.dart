@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
+import 'package:sparewo_client/core/router/navigation_extensions.dart';
 import 'package:sparewo_client/core/theme/app_theme.dart';
 import 'package:sparewo_client/features/catalog/application/product_provider.dart';
 import 'package:sparewo_client/features/cart/application/cart_provider.dart';
@@ -272,7 +273,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
           ),
           child: IconButton(
             icon: const Icon(Icons.arrow_back_ios_new, size: 20),
-            onPressed: () => context.pop(),
+            onPressed: () => context.goBackOr('/catalog'),
           ),
         ),
         actions: [

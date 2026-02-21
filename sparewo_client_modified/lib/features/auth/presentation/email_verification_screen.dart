@@ -330,6 +330,7 @@ class _EmailVerificationScreenState
                             textAlign: TextAlign.center,
                             maxLength: 1,
                             enabled: !_isVerifying,
+                            showCursor: true,
                             enableInteractiveSelection: false,
                             autofillHints: const [AutofillHints.oneTimeCode],
                             cursorColor: AppColors.primary,
@@ -391,20 +392,8 @@ class _EmailVerificationScreenState
                                 );
                                 value = digit;
                               }
-                              if (value.isNotEmpty) {
-                                if (index < 5) {
-                                  _focusNodes[index + 1].requestFocus();
-                                } else {
-                                  final code = _controllers
-                                      .map((c) => c.text)
-                                      .join();
-                                  if (code.length == 6) {
-                                    FocusScope.of(context).unfocus();
-                                    _verifyCode();
-                                  }
-                                }
-                              } else if (value.isEmpty && index > 0) {
-                                _focusNodes[index - 1].requestFocus();
+                              if (value.isNotEmpty && index < 5) {
+                                _focusNodes[index + 1].requestFocus();
                               }
                             },
                           ),

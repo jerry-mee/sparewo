@@ -1,34 +1,41 @@
 // lib/features/auth/data/auth_repository.dart
 import 'dart:math';
-import 'package:firebase_auth/firebase_auth.dart';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sparewo_client/core/logging/app_logger.dart';
+import 'package:sparewo_client/features/auth/data/verification_session_store.dart';
 import 'package:sparewo_client/features/auth/domain/user_model.dart';
 import 'package:sparewo_client/features/shared/services/email_service.dart';
 
 class AuthRepository {
-  final FirebaseAuth _auth;
-  final FirebaseFirestore _firestore;
-  final EmailService _emailService;
-  final GoogleSignIn _googleSignIn;
-
-  final Map<String, String> _verificationCodes = {};
-  final Map<String, DateTime> _codeExpiry = {};
-  final Map<String, Map<String, dynamic>> _pendingUsers = {};
-  bool _lastRegistrationWasPartial = false;
-
   AuthRepository({
     FirebaseAuth? auth,
     FirebaseFirestore? firestore,
     EmailService? emailService,
     GoogleSignIn? googleSignIn,
+    VerificationSessionStore? verificationSessionStore,
   }) : _auth = auth ?? FirebaseAuth.instance,
        _firestore = firestore ?? FirebaseFirestore.instance,
        _emailService = emailService ?? EmailService(),
-       _googleSignIn = googleSignIn ?? GoogleSignIn();
+       _googleSignIn = googleSignIn ?? GoogleSignIn(),
+       _verificationStore =
+           verificationSessionStore ?? VerificationSessionStore();
+
+  static const _verificationExpiry = Duration(minutes: 30);
+  static const _maxVerificationAttempts = 5;
+
+  final FirebaseAuth _auth;
+  final FirebaseFirestore _firestore;
+  final EmailService _emailService;
+  final GoogleSignIn _googleSignIn;
+  final VerificationSessionStore _verificationStore;
+
+  bool _lastRegistrationWasPartial = false;
 
   Stream<User?> get authStateChanges => _auth.authStateChanges();
+
   Stream<UserModel?> get userProfileChanges {
     return _auth.authStateChanges().asyncExpand((user) {
       if (user == null) {
@@ -45,6 +52,7 @@ class AuthRepository {
   }
 
   User? get currentUser => _auth.currentUser;
+
   String _normalizeEmail(String email) => email.trim().toLowerCase();
 
   bool takeLastRegistrationWasPartial() {
@@ -63,35 +71,17 @@ class AuthRepository {
     return UserModel.fromJson({'id': user.uid, ...doc.data()!});
   }
 
-  Future<bool> isEmailRegistered(String email) async {
-    final normalized = _normalizeEmail(email);
-    if (normalized.isEmpty) return false;
-    try {
-      // ignore: deprecated_member_use
-      final methods = await _auth.fetchSignInMethodsForEmail(normalized);
-      return methods.isNotEmpty;
-    } on FirebaseAuthException catch (e) {
-      // Do not return false on transient/blocked checks; that causes false
-      // "email available" messaging in UI.
-      if (e.code == 'operation-not-allowed' || e.code == 'too-many-requests') {
-        throw FirebaseException(
-          plugin: 'firebase_auth',
-          code: 'email-check-unavailable',
-          message: 'Email lookup is temporarily unavailable.',
-        );
-      }
-      rethrow;
-    }
-  }
-
-  // --- Email & Password Auth ---
-
   Future<UserModel> signInWithEmailAndPassword({
     required String email,
     required String password,
   }) async {
+    final normalizedEmail = _normalizeEmail(email);
+    AppLogger.info(
+      'AuthRepository.signIn',
+      'Attempting email sign-in',
+      extra: {'email': normalizedEmail},
+    );
     try {
-      final normalizedEmail = _normalizeEmail(email);
       final credential = await _auth.signInWithEmailAndPassword(
         email: normalizedEmail,
         password: password,
@@ -101,25 +91,48 @@ class AuthRepository {
       final profileData = profile.data();
       final isEmailVerified = profileData?['isEmailVerified'] == true;
       if (!profile.exists || !isEmailVerified) {
+        AppLogger.warn(
+          'AuthRepository.signIn',
+          'Signed in user has incomplete setup',
+          extra: {'uid': user.uid, 'email': normalizedEmail},
+        );
         await _auth.signOut();
         throw Exception(
           '__INCOMPLETE_SETUP__Account setup incomplete. Verify your email to finish onboarding.',
         );
       }
+      AppLogger.info(
+        'AuthRepository.signIn',
+        'Sign-in succeeded',
+        extra: {'uid': user.uid, 'email': normalizedEmail},
+      );
       return UserModel.fromJson({'id': user.uid, ...profileData!});
     } on FirebaseAuthException catch (e) {
+      AppLogger.warn(
+        'AuthRepository.signIn',
+        'FirebaseAuthException',
+        extra: {'email': normalizedEmail, 'code': e.code, 'message': e.message},
+      );
       if (e.code == 'user-not-found') {
         throw Exception('No account found with this email address');
-      } else if (e.code == 'wrong-password') {
-        throw Exception('Incorrect password');
-      } else if (e.code == 'invalid-email') {
-        throw Exception('Invalid email address');
-      } else if (e.code == 'user-disabled') {
-        throw Exception('This account has been disabled');
-      } else {
-        throw Exception('Login failed: ${e.message}');
       }
+      if (e.code == 'wrong-password') {
+        throw Exception('Incorrect password');
+      }
+      if (e.code == 'invalid-email') {
+        throw Exception('Invalid email address');
+      }
+      if (e.code == 'user-disabled') {
+        throw Exception('This account has been disabled');
+      }
+      throw Exception('Login failed: ${e.message}');
     } catch (e) {
+      AppLogger.error(
+        'AuthRepository.signIn',
+        'Unexpected sign-in failure',
+        error: e,
+        extra: {'email': normalizedEmail},
+      );
       if (e is Exception) rethrow;
       throw Exception('An unexpected error occurred. Please try again.');
     }
@@ -132,6 +145,11 @@ class AuthRepository {
   }) async {
     final normalizedEmail = _normalizeEmail(email);
     User? createdUser;
+    AppLogger.info(
+      'AuthRepository.startRegistration',
+      'Starting registration',
+      extra: {'email': normalizedEmail},
+    );
     try {
       _lastRegistrationWasPartial = false;
       if (!RegExp(
@@ -140,30 +158,6 @@ class AuthRepository {
         throw Exception('Please enter a valid email address');
       }
 
-      try {
-        if (await isEmailRegistered(normalizedEmail)) {
-          AppLogger.info(
-            'AuthRepository',
-            'Signup blocked: email already has account',
-            extra: {'email': normalizedEmail},
-          );
-          await _resumeExistingRegistration(
-            email: normalizedEmail,
-            password: password,
-            name: name,
-          );
-          return;
-        }
-      } on FirebaseException catch (e) {
-        AppLogger.warn(
-          'AuthRepository',
-          'Email precheck unavailable',
-          extra: {'error': e.code},
-        );
-      }
-
-      // Create the auth user now so "partial onboarding" is persistent across
-      // app restarts. Completion is still gated by code verification.
       UserCredential credential;
       try {
         credential = await _auth.createUserWithEmailAndPassword(
@@ -191,42 +185,75 @@ class AuthRepository {
         }
         rethrow;
       }
+
       createdUser = credential.user;
       if (createdUser == null) {
         throw Exception('Failed to create your account. Please try again.');
       }
-      if (name.trim().isNotEmpty) {
-        await createdUser.updateDisplayName(name.trim());
+      final resolvedName = name.trim().isNotEmpty
+          ? name.trim()
+          : 'SpareWo User';
+      if (resolvedName.isNotEmpty) {
+        await createdUser.updateDisplayName(resolvedName);
       }
       await _getOrCreateUserData(
         createdUser,
-        name: name.trim().isNotEmpty ? name.trim() : null,
+        name: resolvedName,
         markEmailVerified: false,
       );
 
       final code = _generateVerificationCode();
-      final emailSent = await _emailService.sendVerificationEmail(
-        to: normalizedEmail,
-        code: code,
-        customerName: name,
-      );
+      final emailSent = await _emailService
+          .sendVerificationEmail(
+            to: normalizedEmail,
+            code: code,
+            customerName: resolvedName,
+          )
+          .timeout(const Duration(seconds: 4), onTimeout: () => false);
 
       if (!emailSent) {
-        throw Exception(_verificationEmailFailureMessage());
+        AppLogger.warn(
+          'AuthRepository.startRegistration',
+          'Initial verification email send deferred/failed; user can resend from verification screen',
+          extra: {'email': normalizedEmail},
+        );
       }
 
-      _verificationCodes[normalizedEmail] = code;
-      _codeExpiry[normalizedEmail] = DateTime.now().add(
-        const Duration(minutes: 30),
+      await _verificationStore.save(
+        PendingVerificationSession(
+          email: normalizedEmail,
+          password: password,
+          name: resolvedName,
+          code: code,
+          expiresAt: DateTime.now().add(_verificationExpiry),
+          existingAccount: true,
+          attemptCount: 0,
+        ),
       );
-      _pendingUsers[normalizedEmail] = {
-        'email': normalizedEmail,
-        'password': password,
-        'name': name,
-        'existingAccount': true,
-      };
+      AppLogger.info(
+        'AuthRepository.startRegistration',
+        'Verification session saved',
+        extra: {
+          'email': normalizedEmail,
+          'expiresAt': DateTime.now()
+              .add(_verificationExpiry)
+              .toIso8601String(),
+        },
+      );
+
       await _auth.signOut();
+      AppLogger.info(
+        'AuthRepository.startRegistration',
+        'Registration staged and user signed out pending verification',
+        extra: {'email': normalizedEmail},
+      );
     } catch (e) {
+      AppLogger.error(
+        'AuthRepository.startRegistration',
+        'Registration start failed',
+        error: e,
+        extra: {'email': normalizedEmail, 'createdUid': createdUser?.uid},
+      );
       if (createdUser != null) {
         try {
           await _firestore.collection('users').doc(createdUser.uid).delete();
@@ -235,9 +262,7 @@ class AuthRepository {
           await createdUser.delete();
         } catch (_) {}
       }
-      _verificationCodes.remove(normalizedEmail);
-      _codeExpiry.remove(normalizedEmail);
-      _pendingUsers.remove(normalizedEmail);
+      await _verificationStore.clear(normalizedEmail);
       rethrow;
     }
   }
@@ -248,10 +273,14 @@ class AuthRepository {
     String? name,
   }) async {
     final normalizedEmail = _normalizeEmail(email);
-    UserCredential? credential;
+    AppLogger.info(
+      'AuthRepository.resumeIncomplete',
+      'Attempting resume incomplete onboarding',
+      extra: {'email': normalizedEmail},
+    );
     try {
       _lastRegistrationWasPartial = false;
-      credential = await _auth.signInWithEmailAndPassword(
+      final credential = await _auth.signInWithEmailAndPassword(
         email: normalizedEmail,
         password: password,
       );
@@ -264,6 +293,11 @@ class AuthRepository {
       final profileData = profile.data();
       final isEmailVerified = profileData?['isEmailVerified'] == true;
       if (profile.exists && isEmailVerified) {
+        AppLogger.warn(
+          'AuthRepository.resumeIncomplete',
+          'Resume blocked: account already verified',
+          extra: {'email': normalizedEmail, 'uid': user.uid},
+        );
         await _auth.signOut();
         throw Exception(
           'This email is already registered. Please login instead.',
@@ -275,36 +309,55 @@ class AuthRepository {
           : (user.displayName?.trim().isNotEmpty == true
                 ? user.displayName!.trim()
                 : 'SpareWo User');
+
       await _getOrCreateUserData(
         user,
         name: displayName,
         markEmailVerified: false,
       );
+
       final code = _generateVerificationCode();
-      final emailSent = await _emailService.sendVerificationEmail(
-        to: normalizedEmail,
-        code: code,
-        customerName: displayName,
-      );
+      final emailSent = await _emailService
+          .sendVerificationEmail(
+            to: normalizedEmail,
+            code: code,
+            customerName: displayName,
+          )
+          .timeout(const Duration(seconds: 4), onTimeout: () => false);
 
       await _auth.signOut();
 
       if (!emailSent) {
-        throw Exception(_verificationEmailFailureMessage());
+        AppLogger.warn(
+          'AuthRepository.resumeIncomplete',
+          'Initial verification email resend deferred/failed; user can resend from verification screen',
+          extra: {'email': normalizedEmail},
+        );
       }
 
-      _verificationCodes[normalizedEmail] = code;
-      _codeExpiry[normalizedEmail] = DateTime.now().add(
-        const Duration(minutes: 30),
+      await _verificationStore.save(
+        PendingVerificationSession(
+          email: normalizedEmail,
+          password: password,
+          name: displayName,
+          code: code,
+          expiresAt: DateTime.now().add(_verificationExpiry),
+          existingAccount: true,
+          attemptCount: 0,
+        ),
       );
-      _pendingUsers[normalizedEmail] = {
-        'email': normalizedEmail,
-        'password': password,
-        'name': displayName,
-        'existingAccount': true,
-      };
       _lastRegistrationWasPartial = true;
+      AppLogger.info(
+        'AuthRepository.resumeIncomplete',
+        'Resume succeeded and verification session refreshed',
+        extra: {'email': normalizedEmail, 'uid': user.uid},
+      );
     } on FirebaseAuthException catch (e) {
+      AppLogger.warn(
+        'AuthRepository.resumeIncomplete',
+        'FirebaseAuthException while resuming',
+        extra: {'email': normalizedEmail, 'code': e.code, 'message': e.message},
+      );
       try {
         await _auth.signOut();
       } catch (_) {}
@@ -327,84 +380,113 @@ class AuthRepository {
     required String code,
   }) async {
     final normalizedEmail = _normalizeEmail(email);
-    final storedCode = _verificationCodes[normalizedEmail];
-    if (storedCode == null) {
+    AppLogger.info(
+      'AuthRepository.verifyCode',
+      'Attempting verification completion',
+      extra: {'email': normalizedEmail},
+    );
+    final session = await _verificationStore.load(normalizedEmail);
+    if (session == null) {
+      AppLogger.warn(
+        'AuthRepository.verifyCode',
+        'No pending session found',
+        extra: {'email': normalizedEmail},
+      );
       throw Exception('No verification code found. Please request a new one.');
     }
 
-    final expiry = _codeExpiry[normalizedEmail];
-    if (expiry == null || DateTime.now().isAfter(expiry)) {
-      _verificationCodes.remove(normalizedEmail);
-      _codeExpiry.remove(normalizedEmail);
+    if (DateTime.now().isAfter(session.expiresAt)) {
+      AppLogger.warn(
+        'AuthRepository.verifyCode',
+        'Session expired',
+        extra: {
+          'email': normalizedEmail,
+          'expiresAt': session.expiresAt.toIso8601String(),
+        },
+      );
+      await _verificationStore.clear(normalizedEmail);
       throw Exception(
         'Verification code has expired. Please request a new one.',
       );
     }
 
-    if (storedCode != code) {
-      throw Exception('Invalid verification code. Please check and try again.');
-    }
-
-    final userData = _pendingUsers[normalizedEmail];
-    if (userData == null) {
-      throw Exception('Registration data not found. Please start over.');
+    if (session.code != code) {
+      final updated = await _verificationStore.incrementAttempts(
+        normalizedEmail,
+      );
+      final attempts = updated?.attemptCount ?? (session.attemptCount + 1);
+      final remaining = _maxVerificationAttempts - attempts;
+      AppLogger.warn(
+        'AuthRepository.verifyCode',
+        'Invalid verification code',
+        extra: {
+          'email': normalizedEmail,
+          'attempts': attempts,
+          'remaining': remaining,
+        },
+      );
+      if (remaining <= 0) {
+        await _verificationStore.clear(normalizedEmail);
+        throw Exception(
+          'Too many invalid attempts. Request a new verification code and try again.',
+        );
+      }
+      throw Exception(
+        'Invalid verification code. Please check and try again. $remaining attempt(s) remaining.',
+      );
     }
 
     try {
-      final isExistingAccount = userData['existingAccount'] == true;
-      UserModel user;
-      if (isExistingAccount) {
-        final credential = await _auth.signInWithEmailAndPassword(
-          email: userData['email'],
-          password: userData['password'],
-        );
-        final fbUser = credential.user!;
-        if ((fbUser.displayName ?? '').trim().isEmpty) {
-          await fbUser.updateDisplayName(userData['name']);
-        }
-        user = await _getOrCreateUserData(
-          fbUser,
-          name: userData['name'],
-          markEmailVerified: true,
-        );
-      } else {
-        final credential = await _auth.createUserWithEmailAndPassword(
-          email: userData['email'],
-          password: userData['password'],
-        );
-
-        await credential.user!.updateDisplayName(userData['name']);
-
-        user = await _getOrCreateUserData(
-          credential.user!,
-          name: userData['name'],
-          markEmailVerified: true,
-        );
+      final credential = await _auth.signInWithEmailAndPassword(
+        email: session.email,
+        password: session.password,
+      );
+      final fbUser = credential.user!;
+      if ((fbUser.displayName ?? '').trim().isEmpty) {
+        await fbUser.updateDisplayName(session.name);
       }
 
-      _verificationCodes.remove(normalizedEmail);
-      _codeExpiry.remove(normalizedEmail);
-      _pendingUsers.remove(normalizedEmail);
+      final user = await _getOrCreateUserData(
+        fbUser,
+        name: session.name,
+        markEmailVerified: true,
+      );
+
+      await _verificationStore.clear(normalizedEmail);
+      AppLogger.info(
+        'AuthRepository.verifyCode',
+        'Verification completed successfully',
+        extra: {'email': normalizedEmail, 'uid': fbUser.uid},
+      );
 
       await _emailService.sendWelcomeEmail(
         to: normalizedEmail,
-        customerName: userData['name'],
+        customerName: session.name,
       );
 
       return user;
     } on FirebaseAuthException catch (e) {
-      if (e.code == 'email-already-in-use') {
+      AppLogger.warn(
+        'AuthRepository.verifyCode',
+        'FirebaseAuthException while completing verification',
+        extra: {'email': normalizedEmail, 'code': e.code, 'message': e.message},
+      );
+      if (e.code == 'invalid-credential' || e.code == 'wrong-password') {
         throw Exception(
-          'This email is already registered. Please login instead.',
+          'Could not verify your setup with the original credentials. Please restart signup.',
         );
-      } else if (e.code == 'weak-password') {
-        throw Exception(
-          'Password is too weak. Please use a stronger password.',
-        );
-      } else {
-        throw Exception('Registration failed: ${e.message}');
       }
+      if (e.code == 'user-not-found') {
+        throw Exception('Account session not found. Please sign up again.');
+      }
+      throw Exception('Registration failed: ${e.message}');
     } catch (e) {
+      AppLogger.error(
+        'AuthRepository.verifyCode',
+        'Unexpected verification failure',
+        error: e,
+        extra: {'email': normalizedEmail},
+      );
       if (e is Exception) rethrow;
       throw Exception('Failed to create account. Please try again.');
     }
@@ -412,47 +494,56 @@ class AuthRepository {
 
   Future<void> resendVerificationCode({required String email}) async {
     final normalizedEmail = _normalizeEmail(email);
-    final userData = _pendingUsers[normalizedEmail];
-    if (userData == null) {
+    AppLogger.info(
+      'AuthRepository.resendCode',
+      'Attempting verification code resend',
+      extra: {'email': normalizedEmail},
+    );
+    final session = await _verificationStore.load(normalizedEmail);
+    if (session == null) {
+      AppLogger.warn(
+        'AuthRepository.resendCode',
+        'Resend blocked: no pending session',
+        extra: {'email': normalizedEmail},
+      );
       throw Exception(
         'No pending registration found. Please start the signup process again.',
       );
     }
 
     final code = _generateVerificationCode();
-
-    _verificationCodes[normalizedEmail] = code;
-    _codeExpiry[normalizedEmail] = DateTime.now().add(
-      const Duration(minutes: 30),
+    final refreshed = session.copyWith(
+      code: code,
+      expiresAt: DateTime.now().add(_verificationExpiry),
+      attemptCount: 0,
     );
 
     final emailSent = await _emailService.sendVerificationEmail(
       to: normalizedEmail,
       code: code,
-      customerName: userData['name'],
+      customerName: refreshed.name,
     );
 
     if (!emailSent) {
+      AppLogger.warn(
+        'AuthRepository.resendCode',
+        'Verification resend failed',
+        extra: {'email': normalizedEmail},
+      );
       throw Exception('Failed to send verification email. Please try again.');
     }
+
+    await _verificationStore.save(refreshed);
+    AppLogger.info(
+      'AuthRepository.resendCode',
+      'Verification code resent successfully',
+      extra: {'email': normalizedEmail},
+    );
   }
 
   String _generateVerificationCode() {
-    final random = Random();
+    final random = Random.secure();
     return (100000 + random.nextInt(900000)).toString();
-  }
-
-  String _verificationEmailFailureMessage() {
-    switch (_emailService.lastFailureReason) {
-      case 'rate_limited':
-        return 'Too many verification attempts right now. Please wait a moment and try again.';
-      case 'permission_denied':
-        return 'Verification email is temporarily unavailable. Please try again in a few minutes.';
-      case 'network_error':
-        return 'Network issue while sending verification email. Check your connection and try again.';
-      default:
-        return 'We could not send the verification email right now. Please try again shortly.';
-    }
   }
 
   Future<void> _resumeExistingRegistration({
@@ -500,7 +591,6 @@ class AuthRepository {
         throw Exception('Failed to sign in with Google');
       }
 
-      // Ensure Firestore profile exists
       return _getOrCreateUserData(fbUser, name: fbUser.displayName);
     } on FirebaseAuthException catch (e) {
       if (e.code == 'account-exists-with-different-credential') {
@@ -508,9 +598,8 @@ class AuthRepository {
           'This email is already used with a different sign-in method. '
           'Please sign in with email and password, then link Google in Settings.',
         );
-      } else {
-        throw Exception('Google sign in failed: ${e.message}');
       }
+      throw Exception('Google sign in failed: ${e.message}');
     } catch (e) {
       AppLogger.error('AUTH', 'Google sign in catch-all error', error: e);
       throw Exception('Google sign in error: ${e.toString()}');
@@ -543,13 +632,13 @@ class AuthRepository {
     } on FirebaseAuthException catch (e) {
       if (e.code == 'provider-already-linked') {
         throw Exception('Google is already linked to this account.');
-      } else if (e.code == 'credential-already-in-use') {
+      }
+      if (e.code == 'credential-already-in-use') {
         throw Exception(
           'This Google account is already linked to another SpareWo account.',
         );
-      } else {
-        throw Exception('Failed to link Google account: ${e.message}');
       }
+      throw Exception('Failed to link Google account: ${e.message}');
     } catch (e) {
       throw Exception('Failed to link Google account. Please try again.');
     }
@@ -616,6 +705,11 @@ class AuthRepository {
   }
 
   Future<void> signOut() async {
+    AppLogger.info(
+      'AuthRepository.signOut',
+      'Signing out current user',
+      extra: {'uid': _auth.currentUser?.uid},
+    );
     await _googleSignIn.signOut();
     await _auth.signOut();
   }

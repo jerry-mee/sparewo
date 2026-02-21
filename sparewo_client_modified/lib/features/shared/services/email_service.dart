@@ -46,12 +46,6 @@ class EmailService {
           This code will expire in 30 minutes. If you didn't request this verification, please ignore this email.
         </p>
 
-        <div style="background-color: #FFF3E0; padding: 15px; border-radius: 6px; margin: 25px 0;">
-          <p style="margin: 0; color: #F57C00;">
-            <strong>Tip:</strong> Copy this code and it will automatically paste in the app!
-          </p>
-        </div>
-
         <div style="background-color: #1A1B4B; color: white; text-align: center; padding: 15px; border-radius: 6px; margin: 30px 0;">
           <p style="margin: 0; font-size: 16px;">Need help? Contact our support team:</p>
           <p style="margin: 5px 0 0; font-size: 16px;">
@@ -345,8 +339,12 @@ class EmailService {
         </div>
 
         <div style="text-align: center; margin: 30px 0;">
-          <a href="https://sparewo.ug/catalog" style="background-color: #FF9800; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Browse Parts</a>
+          <a href="sparewo://open/catalog" style="background-color: #FF9800; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Open SpareWo Catalogue</a>
         </div>
+        <p style="text-align: center; color: #777; font-size: 13px; margin-top: -10px;">
+          If the app does not open automatically,
+          <a href="https://sparewo.ug/catalog" style="color: #1A1B4B;">browse in web</a>.
+        </p>
 
         <div style="background-color: #FFF3E0; padding: 15px; border-radius: 6px; margin: 25px 0;">
           <p style="margin: 0; color: #F57C00;">

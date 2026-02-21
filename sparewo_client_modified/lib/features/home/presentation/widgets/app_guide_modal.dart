@@ -17,6 +17,7 @@ class AppGuideModal extends StatefulWidget {
 class _AppGuideModalState extends State<AppGuideModal> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
+  bool _dontShowAgain = true;
 
   String _onboardingKey() {
     final uid = FirebaseAuth.instance.currentUser?.uid;
@@ -26,9 +27,9 @@ class _AppGuideModalState extends State<AppGuideModal> {
 
   Future<void> _completeOnboarding() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_onboardingKey(), true);
+    await prefs.setBool(_onboardingKey(), _dontShowAgain);
     // Keep legacy key aligned for older checks.
-    await prefs.setBool('hasSeenOnboarding', true);
+    await prefs.setBool('hasSeenOnboarding', _dontShowAgain);
   }
 
   void _onNext() {
@@ -226,6 +227,28 @@ class _AppGuideModalState extends State<AppGuideModal> {
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
                             color: Colors.white,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      CheckboxListTile(
+                        value: _dontShowAgain,
+                        onChanged: (value) {
+                          setState(() => _dontShowAgain = value ?? true);
+                        },
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        visualDensity: const VisualDensity(
+                          horizontal: -4,
+                          vertical: -4,
+                        ),
+                        controlAffinity: ListTileControlAffinity.leading,
+                        title: Text(
+                          "Don't show this again",
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: theme.hintColor,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),

@@ -510,6 +510,273 @@ export const sendOpsEmailOnOrderUpdate = functions.firestore.onDocumentUpdated(
   }
 );
 
+
+const notificationPayload = (
+  notificationId: string,
+  notification: PlainObject
+): {title: string; body: string; data: Record<string, string>} => {
+  const entityType = toText(notification.entityType || notification.type, "update");
+  const entityId = toText(
+    notification.id || notification.orderId || notification.bookingId,
+    notificationId
+  );
+  const title = toText(notification.title, "SpareWo Update");
+  const body = toText(notification.message, "You have a new update.");
+  const link = toText(notification.link);
+  const status = toText(notification.status);
+
+  return {
+    title,
+    body,
+    data: {
+      type: entityType,
+      id: entityId,
+      link,
+      status,
+      notificationId,
+    },
+  };
+};
+
+export const fanOutPushOnNotificationCreate = functions.firestore.onDocumentCreated(
+  "notifications/{notificationId}",
+  async (event) => {
+    try {
+      const notificationId = event.params.notificationId as string;
+      const payload = (event.data?.data() || {}) as PlainObject;
+      const recipientId = toText(
+        payload.recipientId || payload.userId || payload.recipientUid
+      );
+      if (!recipientId) return;
+
+      const tokenSnap = await db
+        .collection("users")
+        .doc(recipientId)
+        .collection("tokens")
+        .get();
+
+      if (tokenSnap.empty) {
+        functions.logger.info("No tokens for notification recipient", {
+          recipientId,
+          notificationId,
+        });
+        return;
+      }
+
+      const tokenRefs = new Map<string, admin.firestore.DocumentReference>();
+      for (const doc of tokenSnap.docs) {
+        const data = doc.data();
+        const token = toText(data.token || doc.id);
+        if (token) tokenRefs.set(token, doc.ref);
+      }
+
+      const tokens = Array.from(tokenRefs.keys());
+      if (tokens.length === 0) return;
+
+      const notif = notificationPayload(notificationId, payload);
+      const response = await admin.messaging().sendEachForMulticast({
+        tokens,
+        notification: {
+          title: notif.title,
+          body: notif.body,
+        },
+        data: notif.data,
+        android: {
+          priority: "high",
+          notification: {
+            channelId: "sparewo_updates",
+          },
+        },
+        apns: {
+          payload: {
+            aps: {
+              sound: "default",
+            },
+          },
+        },
+      });
+
+      if (response.failureCount > 0) {
+        const staleRefs: admin.firestore.DocumentReference[] = [];
+        response.responses.forEach((result, index) => {
+          if (result.success) return;
+          const code = result.error?.code;
+          if (
+            code === "messaging/invalid-registration-token" ||
+            code === "messaging/registration-token-not-registered"
+          ) {
+            const token = tokens[index];
+            const ref = tokenRefs.get(token);
+            if (ref) staleRefs.push(ref);
+          }
+        });
+
+        if (staleRefs.length > 0) {
+          const batch = db.batch();
+          staleRefs.forEach((ref) => batch.delete(ref));
+          await batch.commit();
+        }
+      }
+
+      functions.logger.info("Notification push fanout complete", {
+        notificationId,
+        recipientId,
+        totalTokens: tokens.length,
+        successCount: response.successCount,
+        failureCount: response.failureCount,
+      });
+    } catch (error) {
+      functions.logger.error("fanOutPushOnNotificationCreate failed", error);
+    }
+  }
+);
+
+
+const orderStatusNotificationTitle: Record<string, string> = {
+  pending: "Order Received",
+  confirmed: "Order Confirmed",
+  processing: "Order Processing",
+  shipped: "Order Shipped",
+  delivered: "Order Delivered",
+  completed: "Order Completed",
+  cancelled: "Order Cancelled",
+};
+
+const bookingStatusNotificationTitle: Record<string, string> = {
+  pending: "AutoHub Request Pending",
+  confirmed: "AutoHub Request Confirmed",
+  mechanic_assigned: "Mechanic Assigned",
+  in_progress: "AutoHub Service In Progress",
+  completed: "AutoHub Service Completed",
+  cancelled: "AutoHub Request Cancelled",
+};
+
+const orderStatusMessage = (status: string, orderNumber: string): string => {
+  switch (status) {
+  case "pending":
+    return `Order ${orderNumber} has been received.`;
+  case "confirmed":
+    return `Order ${orderNumber} has been confirmed.`;
+  case "processing":
+    return `Order ${orderNumber} is now being prepared.`;
+  case "shipped":
+    return `Order ${orderNumber} has been shipped and is on the way.`;
+  case "delivered":
+    return `Order ${orderNumber} has been delivered.`;
+  case "completed":
+    return `Order ${orderNumber} has been completed.`;
+  case "cancelled":
+    return `Order ${orderNumber} was cancelled. Contact support if needed.`;
+  default:
+    return `Order ${orderNumber} status is now ${status}.`;
+  }
+};
+
+const bookingStatusMessage = (status: string, bookingNumber: string): string => {
+  switch (status) {
+  case "pending":
+    return `AutoHub request ${bookingNumber} is pending review.`;
+  case "confirmed":
+    return `AutoHub request ${bookingNumber} has been confirmed.`;
+  case "mechanic_assigned":
+    return `A mechanic has been assigned to AutoHub request ${bookingNumber}.`;
+  case "in_progress":
+    return `AutoHub request ${bookingNumber} is now in progress.`;
+  case "completed":
+    return `AutoHub request ${bookingNumber} has been completed.`;
+  case "cancelled":
+    return `AutoHub request ${bookingNumber} was cancelled.`;
+  default:
+    return `AutoHub request ${bookingNumber} status is now ${status}.`;
+  }
+};
+
+export const notifyClientOnOrderStatusChange = functions.firestore.onDocumentUpdated(
+  "orders/{orderId}",
+  async (event) => {
+    try {
+      const orderId = event.params.orderId as string;
+      const before = (event.data?.before.data() || {}) as PlainObject;
+      const after = (event.data?.after.data() || {}) as PlainObject;
+
+      const beforeStatus = toText(before.status);
+      const status = toText(after.status);
+      if (!status || beforeStatus === status) return;
+
+      const recipientId = toText(after.userId || after.customerId);
+      if (!recipientId) return;
+
+      const orderNumber = toText(after.orderNumber, orderId).toUpperCase();
+      const statusLabel = status.replace(/_/g, " ");
+      const notificationId = `order_${orderId}_${status}`;
+
+      await db.collection("notifications").doc(notificationId).set({
+        userId: recipientId,
+        recipientId,
+        title: orderStatusNotificationTitle[status] || "Order Update",
+        message: orderStatusMessage(status, orderNumber),
+        type: status === "cancelled" ? "warning" : "info",
+        entityType: "order",
+        id: orderId,
+        orderId,
+        orderNumber,
+        status,
+        statusLabel,
+        link: `/order/${orderId}`,
+        read: false,
+        isRead: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, {merge: true});
+    } catch (error) {
+      functions.logger.error("notifyClientOnOrderStatusChange failed", error);
+    }
+  }
+);
+
+export const notifyClientOnBookingStatusChange = functions.firestore.onDocumentUpdated(
+  "service_bookings/{bookingId}",
+  async (event) => {
+    try {
+      const bookingId = event.params.bookingId as string;
+      const before = (event.data?.before.data() || {}) as PlainObject;
+      const after = (event.data?.after.data() || {}) as PlainObject;
+
+      const beforeStatus = toText(before.status);
+      const status = toText(after.status);
+      if (!status || beforeStatus === status) return;
+
+      const recipientId = toText(after.userId);
+      if (!recipientId) return;
+
+      const bookingNumber = toText(after.bookingNumber, bookingId).toUpperCase();
+      const statusLabel = status.replace(/_/g, " ");
+      const notificationId = `booking_${bookingId}_${status}`;
+
+      await db.collection("notifications").doc(notificationId).set({
+        userId: recipientId,
+        recipientId,
+        title: bookingStatusNotificationTitle[status] || "AutoHub Update",
+        message: bookingStatusMessage(status, bookingNumber),
+        type: status === "cancelled" ? "warning" : "success",
+        entityType: "booking",
+        id: bookingId,
+        bookingId,
+        bookingNumber,
+        status,
+        statusLabel,
+        link: `/booking/${bookingId}`,
+        read: false,
+        isRead: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, {merge: true});
+    } catch (error) {
+      functions.logger.error("notifyClientOnBookingStatusChange failed", error);
+    }
+  }
+);
+
 export const sendClientTransactionalEmail = onCall(
   {
     timeoutSeconds: 20,

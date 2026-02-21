@@ -27,6 +27,16 @@
 		<dict>
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.sparewo.client</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>sparewo</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>com.googleusercontent.apps.858998050859-pfidlt9ikcvvf8ndqh21tol3omrc2edf</string>

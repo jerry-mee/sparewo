@@ -177,7 +177,6 @@ class _LoginFormState extends ConsumerState<_LoginForm> {
   }
 
   Future<void> _handleLogin() async {
-    TextInput.finishAutofillContext();
     if (_formKey.currentState?.validate() ?? false) {
       try {
         await ref
@@ -186,6 +185,7 @@ class _LoginFormState extends ConsumerState<_LoginForm> {
               _emailController.text.trim(),
               _passwordController.text.trim(),
             );
+        TextInput.finishAutofillContext(shouldSave: true);
         await _routeAfterAuth();
       } catch (error) {
         if (!mounted) return;
@@ -389,7 +389,10 @@ class _LoginFormState extends ConsumerState<_LoginForm> {
           children: [
             TextFormField(
               controller: _emailController,
-              autofillHints: const [AutofillHints.email],
+              autofillHints: const [
+                AutofillHints.username,
+                AutofillHints.email,
+              ],
               keyboardType: TextInputType.emailAddress,
               textInputAction: TextInputAction.next,
               decoration: InputDecoration(
@@ -411,6 +414,9 @@ class _LoginFormState extends ConsumerState<_LoginForm> {
               controller: _passwordController,
               obscureText: _obscure,
               autofillHints: const [AutofillHints.password],
+              keyboardType: TextInputType.visiblePassword,
+              enableSuggestions: false,
+              autocorrect: false,
               textInputAction: TextInputAction.done,
               decoration: InputDecoration(
                 labelText: 'Password',

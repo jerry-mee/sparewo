@@ -1,22 +1,21 @@
 // lib/main.dart
 
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb_auth;
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:sparewo_client/core/router/app_router.dart';
+import 'package:sparewo_client/core/router/shared_preferences_provider.dart';
 import 'package:sparewo_client/core/theme/app_theme.dart';
 import 'package:sparewo_client/core/theme/theme_mode_provider.dart';
 import 'package:sparewo_client/features/auth/application/auth_provider.dart';
@@ -33,20 +32,11 @@ Future<void> main() async {
   runZonedGuarded<Future<void>>(
     () async {
       WidgetsFlutterBinding.ensureInitialized();
+      await AppLogger.init();
 
       // Register Firebase Background Handler as early as possible
       FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-
-      // Load environment variables (optional in web builds)
-      try {
-        await dotenv.load(fileName: ".env");
-      } catch (e) {
-        AppLogger.info(
-          'Env',
-          'Skipping .env load',
-          extra: {'error': e.toString()},
-        );
-      }
+      final sharedPreferences = await SharedPreferences.getInstance();
 
       // Global Flutter error handler
       FlutterError.onError = (FlutterErrorDetails details) {
@@ -72,9 +62,6 @@ Future<void> main() async {
         return true;
       };
 
-      // Initialize logger without blocking first-frame startup.
-      unawaited(AppLogger.init());
-
       if (Firebase.apps.isEmpty) {
         await Firebase.initializeApp(
           options: DefaultFirebaseOptions.currentPlatform,
@@ -83,6 +70,11 @@ Future<void> main() async {
       } else {
         AppLogger.info('Firebase', 'Already initialized');
       }
+      await AppLogger.enableCrashlyticsForwarding(
+        includeInfo: true,
+        includeDebug: kDebugMode,
+        recordNonFatalErrors: true,
+      );
 
       // ----------------------------------------------------------------------
       // ASYNC INITIALIZATIONS (NON-BLOCKING)
@@ -95,7 +87,14 @@ Future<void> main() async {
 
       _configureEasyLoading();
 
-      runApp(const ProviderScope(child: MyApp()));
+      runApp(
+        ProviderScope(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(sharedPreferences),
+          ],
+          child: const MyApp(),
+        ),
+      );
     },
     (error, stack) {
       AppLogger.error('UncaughtZoneError', error.toString(), stackTrace: stack);
@@ -169,17 +168,11 @@ class MyApp extends ConsumerStatefulWidget {
 
 class _MyAppState extends ConsumerState<MyApp> {
   StreamSubscription? _notificationSubscription;
-  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
-  _bookingStatusSubscription;
-  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
-  _orderStatusSubscription;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
   ProviderSubscription<AsyncValue<fb_auth.User?>>? _authStateListener;
   ProviderSubscription<AsyncValue<fb_auth.User?>>? _easyLoadingListener;
-  final Map<String, String> _knownBookingStatuses = <String, String>{};
-  final Map<String, String> _knownOrderStatuses = <String, String>{};
-  String? _statusListenerUserId;
   String? _pendingNotificationUserId;
+  String? _lastAuthUid;
   bool _isOffline = false;
   bool _notificationsReady = false;
   late final NotificationService _notificationService;
@@ -252,10 +245,15 @@ class _MyAppState extends ConsumerState<MyApp> {
   }
 
   void _onAuthStateChanged(String? userId) {
-    _syncStatusChangeListeners(
-      userId: userId,
-      notificationService: _notificationService,
-    );
+    if (_lastAuthUid != userId) {
+      AppLogger.info(
+        'AuthLifecycle',
+        'Auth state transitioned',
+        extra: {'from': _lastAuthUid, 'to': userId},
+      );
+      _lastAuthUid = userId;
+      unawaited(AppLogger.setUserIdentifier(userId));
+    }
 
     if (!_notificationsReady) {
       _pendingNotificationUserId = userId;
@@ -265,9 +263,15 @@ class _MyAppState extends ConsumerState<MyApp> {
     if (userId != null && userId.isNotEmpty) {
       unawaited(_notificationService.updateToken(userId));
       _notificationService.startFirestoreNotificationListener(userId);
+      AppLogger.debug(
+        'Notifications',
+        'Started authenticated notification listeners',
+        extra: {'uid': userId},
+      );
       return;
     }
 
+    AppLogger.debug('Notifications', 'Stopped notification listeners');
     _notificationService.stopFirestoreNotificationListener();
   }
 
@@ -291,6 +295,7 @@ class _MyAppState extends ConsumerState<MyApp> {
       _isOffline = isOfflineNow;
 
       if (isOfflineNow) {
+        AppLogger.warn('Connectivity', 'Device offline');
         rootScaffoldMessengerKey.currentState?.hideCurrentSnackBar();
         rootScaffoldMessengerKey.currentState?.showSnackBar(
           SnackBar(
@@ -312,13 +317,14 @@ class _MyAppState extends ConsumerState<MyApp> {
         return;
       }
 
+      AppLogger.info('Connectivity', 'Device online');
       rootScaffoldMessengerKey.currentState?.hideCurrentSnackBar();
       rootScaffoldMessengerKey.currentState?.showSnackBar(
-        SnackBar(
-          content: const Text('Back online'),
+        const SnackBar(
+          content: Text('Back online'),
           backgroundColor: AppColors.success,
           behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 2),
+          duration: Duration(seconds: 2),
         ),
       );
     }
@@ -328,145 +334,6 @@ class _MyAppState extends ConsumerState<MyApp> {
     _connectivitySubscription = connectivity.onConnectivityChanged.listen(
       handleResults,
     );
-  }
-
-  void _syncStatusChangeListeners({
-    required String? userId,
-    required NotificationService notificationService,
-  }) {
-    if (userId == null || userId.isEmpty) {
-      _bookingStatusSubscription?.cancel();
-      _bookingStatusSubscription = null;
-      _orderStatusSubscription?.cancel();
-      _orderStatusSubscription = null;
-      _statusListenerUserId = null;
-      _knownBookingStatuses.clear();
-      _knownOrderStatuses.clear();
-      return;
-    }
-
-    if (_statusListenerUserId == userId &&
-        _bookingStatusSubscription != null &&
-        _orderStatusSubscription != null) {
-      return;
-    }
-
-    _bookingStatusSubscription?.cancel();
-    _orderStatusSubscription?.cancel();
-    _knownBookingStatuses.clear();
-    _knownOrderStatuses.clear();
-    _statusListenerUserId = userId;
-
-    _bookingStatusSubscription = FirebaseFirestore.instance
-        .collection('service_bookings')
-        .where('userId', isEqualTo: userId)
-        .snapshots()
-        .listen(
-          (snapshot) {
-            for (final doc in snapshot.docs) {
-              final data = doc.data();
-              final bookingId = doc.id;
-              final status = (data['status'] as String?) ?? '';
-              final bookingNumber =
-                  (data['bookingNumber'] as String?) ?? bookingId;
-
-              final previousStatus = _knownBookingStatuses[bookingId];
-              if (previousStatus != null &&
-                  previousStatus != status &&
-                  status.trim().isNotEmpty) {
-                notificationService.showLocalNotification(
-                  id: bookingId.hashCode,
-                  title: 'Booking Status Updated',
-                  body: _bookingStatusMessage(status, bookingNumber),
-                  payload: jsonEncode({'type': 'booking', 'id': bookingId}),
-                );
-              }
-
-              _knownBookingStatuses[bookingId] = status;
-            }
-          },
-          onError: (error, stack) {
-            AppLogger.error(
-              'MyApp',
-              'Booking status listener failed',
-              error: error,
-              stackTrace: stack,
-              extra: {'userId': userId},
-            );
-          },
-        );
-
-    _orderStatusSubscription = FirebaseFirestore.instance
-        .collection('orders')
-        .where('userId', isEqualTo: userId)
-        .snapshots()
-        .listen(
-          (snapshot) {
-            for (final doc in snapshot.docs) {
-              final data = doc.data();
-              final orderId = doc.id;
-              final status = (data['status'] as String?) ?? '';
-              final orderRef = orderId.substring(0, 8).toUpperCase();
-
-              final previousStatus = _knownOrderStatuses[orderId];
-              if (previousStatus != null &&
-                  previousStatus != status &&
-                  status.trim().isNotEmpty) {
-                notificationService.showLocalNotification(
-                  id: orderId.hashCode,
-                  title: 'Order Status Updated',
-                  body: _orderStatusMessage(status, orderRef),
-                  payload: jsonEncode({'type': 'order', 'id': orderId}),
-                );
-              }
-
-              _knownOrderStatuses[orderId] = status;
-            }
-          },
-          onError: (error, stack) {
-            AppLogger.error(
-              'MyApp',
-              'Order status listener failed',
-              error: error,
-              stackTrace: stack,
-              extra: {'userId': userId},
-            );
-          },
-        );
-  }
-
-  String _bookingStatusMessage(String status, String bookingNumber) {
-    switch (status.toLowerCase()) {
-      case 'confirmed':
-        return 'Booking $bookingNumber is confirmed. Our team will contact you shortly.';
-      case 'mechanic_assigned':
-      case 'in_progress':
-        return 'Booking $bookingNumber is now in progress.';
-      case 'completed':
-        return 'Booking $bookingNumber has been completed.';
-      case 'cancelled':
-        return 'Booking $bookingNumber was cancelled. Contact support if this is unexpected.';
-      default:
-        return 'Booking $bookingNumber status is now ${status.toUpperCase()}.';
-    }
-  }
-
-  String _orderStatusMessage(String status, String orderRef) {
-    switch (status.toLowerCase()) {
-      case 'confirmed':
-        return 'Order #$orderRef has been confirmed.';
-      case 'processing':
-        return 'Order #$orderRef is now being processed.';
-      case 'shipped':
-        return 'Order #$orderRef has been shipped.';
-      case 'delivered':
-      case 'completed':
-        return 'Order #$orderRef has been delivered successfully.';
-      case 'cancelled':
-        return 'Order #$orderRef was cancelled. Contact support if needed.';
-      default:
-        return 'Order #$orderRef status is now ${status.toUpperCase()}.';
-    }
   }
 
   /// Shows a custom styled SnackBar that matches the app aesthetic
@@ -540,8 +407,6 @@ class _MyAppState extends ConsumerState<MyApp> {
   @override
   void dispose() {
     _notificationSubscription?.cancel();
-    _bookingStatusSubscription?.cancel();
-    _orderStatusSubscription?.cancel();
     _connectivitySubscription?.cancel();
     _authStateListener?.close();
     _easyLoadingListener?.close();

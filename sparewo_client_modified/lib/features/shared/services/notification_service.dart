@@ -183,15 +183,8 @@ class NotificationService {
                   final safeData = _toJsonSafeMap(data);
                   final payloadData = _notificationPayloadFromDoc(safeData);
 
-                  // Show local notification
-                  showLocalNotification(
-                    id: change.doc.id.hashCode,
-                    title: title,
-                    body: body,
-                    payload: jsonEncode(payloadData),
-                  );
-
-                  // Also broadcast to the foreground stream so the in-app SnackBar shows up
+                  // Broadcast to foreground stream for in-app UI.
+                  // System-level delivery is handled by FCM push fanout from Cloud Functions.
                   _foregroundMessageController.add(
                     RemoteMessage(
                       notification: RemoteNotification(

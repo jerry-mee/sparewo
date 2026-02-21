@@ -278,8 +278,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                             .asData
                                             ?.value
                                             ?.email;
-                                        if (email == null)
+                                        if (email == null) {
                                           throw Exception('Email not found');
+                                        }
                                         await ref
                                             .read(authNotifierProvider.notifier)
                                             .sendPasswordResetEmail(

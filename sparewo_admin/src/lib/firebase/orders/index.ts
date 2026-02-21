@@ -14,6 +14,7 @@ import {
   QueryConstraint,
   startAfter,
   addDoc,
+  setDoc,
   Timestamp,
   FieldValue
 } from 'firebase/firestore';
@@ -317,7 +318,8 @@ const createOrderStatusNotification = async (
     cancelled: `Order ${orderNumber} was cancelled. Contact support if needed.`,
   };
 
-  await addDoc(collection(db, 'notifications'), {
+  const notificationId = `order_${order.id}_${status}`;
+  await setDoc(doc(db, 'notifications', notificationId), {
     userId: recipientId,
     recipientId,
     title: titleByStatus[status],
@@ -334,7 +336,7 @@ const createOrderStatusNotification = async (
     isRead: false,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
-  });
+  }, { merge: true });
 };
 
 export const updateOrderPaymentStatus = async (

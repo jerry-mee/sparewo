@@ -1,6 +1,5 @@
 // lib/features/catalog/data/catalog_repository.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart';
 import 'package:sparewo_client/core/logging/app_logger.dart';
 import 'package:sparewo_client/features/catalog/domain/product_model.dart';
 
@@ -109,7 +108,11 @@ class CatalogRepository {
           );
           products.add(product);
         } catch (e) {
-          debugPrint('Failed to parse product with ID ${doc.id}: $e');
+          AppLogger.warn(
+            'CatalogRepository',
+            'Failed to parse catalog product',
+            extra: {'productId': doc.id, 'error': e.toString()},
+          );
         }
       }
 
@@ -303,8 +306,10 @@ class CatalogRepository {
             try {
               products.add(ProductModel.fromFirestore(doc.id, doc.data()));
             } catch (e) {
-              debugPrint(
-                'Failed to parse featured product with ID ${doc.id}: $e',
+              AppLogger.warn(
+                'CatalogRepository',
+                'Failed to parse featured product',
+                extra: {'productId': doc.id, 'error': e.toString()},
               );
             }
           }

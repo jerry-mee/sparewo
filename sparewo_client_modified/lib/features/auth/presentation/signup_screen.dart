@@ -1,6 +1,8 @@
 // lib/features/auth/presentation/signup_screen.dart
+
 import 'dart:async';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -13,6 +15,7 @@ import 'package:sparewo_client/features/auth/application/auth_provider.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:sparewo_client/core/theme/app_theme.dart';
 import 'package:sparewo_client/core/router/app_router.dart';
+import 'package:sparewo_client/core/router/navigation_extensions.dart';
 import 'package:sparewo_client/core/widgets/responsive_screen.dart';
 import 'package:sparewo_client/core/logging/app_logger.dart';
 
@@ -54,7 +57,7 @@ class SignUpScreen extends ConsumerWidget {
               if (returnTo != null) {
                 context.go(returnTo);
               } else {
-                context.pop();
+                context.goBackOr('/welcome');
               }
             },
           ),
@@ -69,7 +72,7 @@ class SignUpScreen extends ConsumerWidget {
               if (returnTo != null) {
                 context.go(returnTo);
               } else {
-                context.pop();
+                context.goBackOr('/welcome');
               }
             },
           ),
@@ -106,13 +109,11 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
   bool _obscure = true;
   bool _obscureConfirm = true;
   bool _agreedToTerms = false;
-  Timer? _emailCheckDebounce;
-  final Map<String, bool> _emailAvailabilityCache = <String, bool>{};
-  bool _isCheckingEmail = false;
   bool _isEmailTaken = false;
-  bool _isEmailAvailable = false;
-  bool _isEmailCheckUnavailable = false;
-  bool _showEmailStatus = false;
+  bool _isSubmitting = false;
+  String? _emailInlineError;
+  Timer? _emailCheckDebounce;
+  int _emailCheckVersion = 0;
   final GlobalKey _passwordSectionKey = GlobalKey();
   bool _didFocusPasswordSection = false;
 
@@ -136,13 +137,13 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
 
   @override
   void dispose() {
-    _emailCheckDebounce?.cancel();
     _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     _passwordFocusNode.dispose();
     _confirmPasswordFocusNode.dispose();
+    _emailCheckDebounce?.cancel();
     super.dispose();
   }
 
@@ -200,67 +201,55 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
   }
 
   void _onEmailChanged(String rawValue) {
-    _emailCheckDebounce?.cancel();
     final email = rawValue.trim().toLowerCase();
+    _emailCheckDebounce?.cancel();
+    final version = ++_emailCheckVersion;
 
     if (email.isEmpty || !_isValidEmailFormat(email)) {
       setState(() {
-        _isCheckingEmail = false;
         _isEmailTaken = false;
-        _isEmailAvailable = false;
-        _isEmailCheckUnavailable = false;
-        _showEmailStatus = false;
+        _emailInlineError = email.isEmpty
+            ? null
+            : 'Enter a valid email address';
       });
       return;
     }
 
     setState(() {
-      _isCheckingEmail = true;
-      _isEmailTaken = false;
-      _isEmailAvailable = false;
-      _isEmailCheckUnavailable = false;
-      _showEmailStatus = true;
+      _emailInlineError = null;
     });
 
-    final cached = _emailAvailabilityCache[email];
-    if (cached != null) {
+    _emailCheckDebounce = Timer(const Duration(milliseconds: 450), () async {
+      final exists = await _emailExists(email);
+      if (!mounted || version != _emailCheckVersion) return;
       setState(() {
-        _isCheckingEmail = false;
-        _isEmailTaken = cached;
-        _isEmailAvailable = true;
-        _isEmailCheckUnavailable = false;
-        _showEmailStatus = true;
+        _isEmailTaken = exists;
+        _emailInlineError = exists
+            ? 'This email already has an account.'
+            : null;
       });
-      return;
-    }
-
-    _emailCheckDebounce = Timer(const Duration(milliseconds: 250), () async {
-      try {
-        final exists = await ref
-            .read(authRepositoryProvider)
-            .isEmailRegistered(email);
-        if (!mounted || _emailController.text.trim().toLowerCase() != email) {
-          return;
-        }
-        setState(() {
-          _isCheckingEmail = false;
-          _isEmailTaken = exists;
-          _isEmailAvailable = true;
-          _isEmailCheckUnavailable = false;
-          _showEmailStatus = true;
-        });
-        _emailAvailabilityCache[email] = exists;
-      } catch (_) {
-        if (!mounted) return;
-        setState(() {
-          _isCheckingEmail = false;
-          _isEmailTaken = false;
-          _isEmailAvailable = false;
-          _isEmailCheckUnavailable = true;
-          _showEmailStatus = true;
-        });
-      }
     });
+  }
+
+  Future<bool> _emailExists(String email) async {
+    try {
+      final users = await FirebaseFirestore.instance
+          .collection('users')
+          .where('email', isEqualTo: email)
+          .limit(1)
+          .get();
+      if (users.docs.isNotEmpty) return true;
+
+      final clients = await FirebaseFirestore.instance
+          .collection('clients')
+          .where('email', isEqualTo: email)
+          .limit(1)
+          .get();
+      return clients.docs.isNotEmpty;
+    } catch (_) {
+      // If this lookup is blocked by rules/network, avoid false positives.
+      return false;
+    }
   }
 
   Future<void> _openTermsAndConditions() async {
@@ -272,7 +261,7 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
   }
 
   Future<void> _handleSignUp() async {
-    TextInput.finishAutofillContext();
+    if (_isSubmitting) return;
     if (!_agreedToTerms) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please agree to the Terms & Conditions')),
@@ -280,6 +269,7 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
       return;
     }
     if (_formKey.currentState?.validate() ?? false) {
+      setState(() => _isSubmitting = true);
       try {
         if (_isEmailTaken) {
           AppLogger.info(
@@ -301,6 +291,7 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
               name: _nameController.text.trim(),
             );
         if (mounted) {
+          TextInput.finishAutofillContext(shouldSave: true);
           final normalizedEmail = _emailController.text.trim().toLowerCase();
           final wasPartial = ref
               .read(authRepositoryProvider)
@@ -325,6 +316,10 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
           },
         );
         if (_looksLikeExistingAccountError(message)) {
+          setState(() {
+            _isEmailTaken = true;
+            _emailInlineError = 'This email already has an account.';
+          });
           await _showExistingAccountDialog(
             'This email already has an account. If the email is unverified, tap "Complete setup" to continue verification.',
             canResume: true,
@@ -332,6 +327,10 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
           return;
         }
         _showSignupFeedback(message, isFailure: true);
+      } finally {
+        if (mounted) {
+          setState(() => _isSubmitting = false);
+        }
       }
     }
   }
@@ -587,125 +586,99 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
                   borderRadius: BorderRadius.circular(20),
                 ),
               ),
-              validator: (v) => (v?.contains('@') != true)
+              validator: (v) => !_isValidEmailFormat((v ?? '').trim())
                   ? 'Invalid email'
                   : (_isEmailTaken ? 'This email is already registered' : null),
             ),
-            if (_isCheckingEmail || _showEmailStatus) ...[
+            if (_emailInlineError != null) ...[
               const SizedBox(height: 8),
-              Row(
-                children: [
-                  if (_isCheckingEmail) ...[
-                    const SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Checking email availability...',
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(color: theme.hintColor, fontSize: 12),
-                      ),
-                    ),
-                  ] else if (_isEmailTaken) ...[
-                    const Icon(
-                      Icons.info_outline,
-                      size: 14,
-                      color: AppColors.warning,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'This email already has an account. If setup is incomplete, continue registration.',
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: theme.hintColor,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
+              _isEmailTaken
+                  ? Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        const Icon(
+                          Icons.info_outline,
+                          size: 14,
+                          color: AppColors.warning,
                         ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    TextButton(
-                      onPressed: _resumePartialOnboardingFromSignUp,
-                      style: TextButton.styleFrom(
-                        visualDensity: VisualDensity.compact,
-                        padding: const EdgeInsets.symmetric(horizontal: 6),
-                        minimumSize: const Size(0, 28),
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      child: const Text(
-                        'Complete setup',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.primary,
+                        SizedBox(
+                          width: MediaQuery.of(context).size.width - 130,
+                          child: Text(
+                            'This email already has an account. If setup is incomplete, continue registration.',
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: theme.hintColor,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                    TextButton(
-                      onPressed: () {
-                        final route = widget.returnTo != null
-                            ? '/login?returnTo=${Uri.encodeComponent(widget.returnTo!)}'
-                            : '/login';
-                        _goNow(route);
-                      },
-                      style: TextButton.styleFrom(
-                        visualDensity: VisualDensity.compact,
-                        padding: const EdgeInsets.symmetric(horizontal: 6),
-                        minimumSize: const Size(0, 0),
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      child: const Text(
-                        'Log in',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.primary,
+                        TextButton(
+                          onPressed: _resumePartialOnboardingFromSignUp,
+                          style: TextButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(horizontal: 6),
+                            minimumSize: const Size(0, 28),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: const Text(
+                            'Complete setup',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.primary,
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                  ] else if (_isEmailAvailable) ...[
-                    Icon(Icons.info_outline, size: 14, color: theme.hintColor),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Email format is valid. We verify account status at signup.',
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: theme.hintColor,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
+                        TextButton(
+                          onPressed: () {
+                            final route = widget.returnTo != null
+                                ? '/login?returnTo=${Uri.encodeComponent(widget.returnTo!)}'
+                                : '/login';
+                            _goNow(route);
+                          },
+                          style: TextButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(horizontal: 6),
+                            minimumSize: const Size(0, 0),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: const Text(
+                            'Log in',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.primary,
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                  ] else if (_isEmailCheckUnavailable) ...[
-                    const Icon(
-                      Icons.info_outline,
-                      size: 14,
-                      color: AppColors.warning,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Could not verify now. We will confirm on sign up.',
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: theme.hintColor,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
+                      ],
+                    )
+                  : Row(
+                      children: [
+                        const Icon(
+                          Icons.warning_amber_rounded,
+                          size: 14,
+                          color: AppColors.warning,
                         ),
-                      ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _emailInlineError!,
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: AppColors.warning,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ],
-              ),
             ],
             SizedBox(height: widget.compact ? 10 : 16),
             Container(
@@ -721,6 +694,7 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
                     keyboardType: TextInputType.visiblePassword,
                     autocorrect: false,
                     enableSuggestions: false,
+                    enableInteractiveSelection: false,
                     textInputAction: TextInputAction.next,
                     decoration: InputDecoration(
                       labelText: 'Password',
@@ -759,6 +733,7 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
                     keyboardType: TextInputType.visiblePassword,
                     autocorrect: false,
                     enableSuggestions: false,
+                    enableInteractiveSelection: false,
                     textInputAction: TextInputAction.done,
                     onChanged: (_) => setState(() {}),
                     decoration: InputDecoration(
@@ -898,7 +873,7 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
                   width: double.infinity,
                   height: widget.compact ? 46 : 50,
                   child: FilledButton(
-                    onPressed: _handleSignUp,
+                    onPressed: _isSubmitting ? null : _handleSignUp,
                     style: FilledButton.styleFrom(
                       backgroundColor: AppColors.primary,
                       shape: RoundedRectangleBorder(
@@ -907,13 +882,24 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
                       elevation: 3,
                       shadowColor: AppColors.primary.withValues(alpha: 0.28),
                     ),
-                    child: const Text(
-                      'Create Account',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                    child: _isSubmitting
+                        ? const SizedBox(
+                            height: 18,
+                            width: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.white,
+                              ),
+                            ),
+                          )
+                        : const Text(
+                            'Create Account',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                   ),
                 ),
               ),
@@ -959,7 +945,7 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
               width: double.infinity,
               height: widget.compact ? 46 : 48,
               child: OutlinedButton.icon(
-                onPressed: _handleGoogleSignUp,
+                onPressed: _isSubmitting ? null : _handleGoogleSignUp,
                 icon: Image.asset(
                   'assets/icons/Google Logo Icon.png',
                   width: 22,

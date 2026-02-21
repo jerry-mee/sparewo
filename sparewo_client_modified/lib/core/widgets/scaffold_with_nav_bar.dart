@@ -22,22 +22,22 @@ class ScaffoldWithNavBar extends ConsumerWidget {
     final isAuthenticated =
         ref.watch(authStateChangesProvider).asData?.value != null;
 
-    // Hide nav bar on specific high-focus screens
-    if (location.startsWith('/product/') ||
+    final hideNavBar =
+        location.startsWith('/product/') ||
         location == '/checkout' ||
         location == '/cart' ||
-        location == '/autohub/booking') {
-      return navigationShell;
-    }
+        location == '/autohub/booking';
 
     return LayoutBuilder(
       builder: (context, constraints) {
         if (constraints.maxWidth >= 800) {
-          return DesktopScaffold(
-            navigationShell: navigationShell,
-            useLayout: false,
-            child: navigationShell,
-          );
+          return hideNavBar
+              ? Scaffold(body: navigationShell)
+              : DesktopScaffold(
+                  navigationShell: navigationShell,
+                  useLayout: false,
+                  child: navigationShell,
+                );
         }
 
         // ---------------------------------------------------------------------
@@ -56,88 +56,92 @@ class ScaffoldWithNavBar extends ConsumerWidget {
 
         return Scaffold(
           // Critical: extendsBody allows content to scroll BEHIND the bottom bar
-          extendBody: true,
+          extendBody: !hideNavBar,
           body: navigationShell,
-          bottomNavigationBar: Padding(
-            padding: EdgeInsets.fromLTRB(
-              horizontalInset,
-              0,
-              horizontalInset,
-              floatingBottom,
-            ),
-            child: SizedBox(
-              height: dockHeight,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(cornerRadius),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(
-                      color: isDark
-                          ? const Color(0xFF1D2C49).withValues(alpha: 0.82)
-                          : Colors.white.withValues(alpha: 0.9),
+          bottomNavigationBar: hideNavBar
+              ? null
+              : Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    horizontalInset,
+                    0,
+                    horizontalInset,
+                    floatingBottom,
+                  ),
+                  child: SizedBox(
+                    height: dockHeight,
+                    child: ClipRRect(
                       borderRadius: BorderRadius.circular(cornerRadius),
-                      border: Border.all(
-                        color: isDark
-                            ? Colors.white.withValues(alpha: 0.14)
-                            : Colors.black.withValues(alpha: 0.08),
-                        width: 1.2,
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? const Color(
+                                    0xFF1D2C49,
+                                  ).withValues(alpha: 0.82)
+                                : Colors.white.withValues(alpha: 0.9),
+                            borderRadius: BorderRadius.circular(cornerRadius),
+                            border: Border.all(
+                              color: isDark
+                                  ? Colors.white.withValues(alpha: 0.14)
+                                  : Colors.black.withValues(alpha: 0.08),
+                              width: 1.2,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.18),
+                                blurRadius: 20,
+                                offset: const Offset(0, 8),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceAround,
+                            children: [
+                              _buildDockItem(
+                                icon: Icons.home_outlined,
+                                selectedIcon: Icons.home_rounded,
+                                isActive: navigationShell.currentIndex == 0,
+                                inactiveColor: iconColor,
+                                onTap: () =>
+                                    _onItemTapped(context, 0, isAuthenticated),
+                              ),
+                              _buildDockItem(
+                                icon: Icons.grid_view_outlined,
+                                selectedIcon: Icons.grid_view_rounded,
+                                isActive: navigationShell.currentIndex == 1,
+                                inactiveColor: iconColor,
+                                onTap: () =>
+                                    _onItemTapped(context, 1, isAuthenticated),
+                              ),
+                              _buildDockItem(
+                                icon: Icons.garage_outlined,
+                                selectedIcon: Icons.garage_rounded,
+                                isActive: navigationShell.currentIndex == 2,
+                                inactiveColor: iconColor,
+                                onTap: () =>
+                                    _onItemTapped(context, 2, isAuthenticated),
+                              ),
+                              _buildDockItem(
+                                icon: isAuthenticated
+                                    ? Icons.person_outline
+                                    : Icons.settings_outlined,
+                                selectedIcon: isAuthenticated
+                                    ? Icons.person_rounded
+                                    : Icons.settings_rounded,
+                                isActive: navigationShell.currentIndex == 3,
+                                inactiveColor: iconColor,
+                                onTap: () =>
+                                    _onItemTapped(context, 3, isAuthenticated),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.18),
-                          blurRadius: 20,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        _buildDockItem(
-                          icon: Icons.home_outlined,
-                          selectedIcon: Icons.home_rounded,
-                          isActive: navigationShell.currentIndex == 0,
-                          inactiveColor: iconColor,
-                          onTap: () =>
-                              _onItemTapped(context, 0, isAuthenticated),
-                        ),
-                        _buildDockItem(
-                          icon: Icons.grid_view_outlined,
-                          selectedIcon: Icons.grid_view_rounded,
-                          isActive: navigationShell.currentIndex == 1,
-                          inactiveColor: iconColor,
-                          onTap: () =>
-                              _onItemTapped(context, 1, isAuthenticated),
-                        ),
-                        _buildDockItem(
-                          icon: Icons.garage_outlined,
-                          selectedIcon: Icons.garage_rounded,
-                          isActive: navigationShell.currentIndex == 2,
-                          inactiveColor: iconColor,
-                          onTap: () =>
-                              _onItemTapped(context, 2, isAuthenticated),
-                        ),
-                        _buildDockItem(
-                          icon: isAuthenticated
-                              ? Icons.person_outline
-                              : Icons.settings_outlined,
-                          selectedIcon: isAuthenticated
-                              ? Icons.person_rounded
-                              : Icons.settings_rounded,
-                          isActive: navigationShell.currentIndex == 3,
-                          inactiveColor: iconColor,
-                          onTap: () =>
-                              _onItemTapped(context, 3, isAuthenticated),
-                        ),
-                      ],
                     ),
                   ),
                 ),
-              ),
-            ),
-          ),
         );
       },
     );

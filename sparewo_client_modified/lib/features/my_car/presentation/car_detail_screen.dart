@@ -6,6 +6,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:sparewo_client/core/router/navigation_extensions.dart';
 import 'package:sparewo_client/core/theme/app_theme.dart';
 import 'package:sparewo_client/core/widgets/desktop_scaffold.dart';
 import 'package:sparewo_client/core/widgets/desktop_section.dart';
@@ -163,7 +164,7 @@ class CarDetailScreen extends ConsumerWidget {
                   padding: const EdgeInsets.only(left: 12),
                   child: Center(
                     child: IconButton.filled(
-                      onPressed: () => context.pop(),
+                      onPressed: () => context.goBackOr('/my-cars'),
                       style: IconButton.styleFrom(
                         backgroundColor: Colors.black.withValues(alpha: 0.35),
                         foregroundColor: Colors.white,

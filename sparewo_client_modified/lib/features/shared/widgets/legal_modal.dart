@@ -14,7 +14,7 @@ class LegalModal extends StatelessWidget {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) =>
-          LegalModal(
+          const LegalModal(
             title: 'Terms & Conditions',
             content: _dummyTerms,
           ).animate().slideY(
@@ -32,7 +32,7 @@ class LegalModal extends StatelessWidget {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) =>
-          LegalModal(
+          const LegalModal(
             title: 'Privacy Policy',
             content: _dummyPrivacy,
           ).animate().slideY(
