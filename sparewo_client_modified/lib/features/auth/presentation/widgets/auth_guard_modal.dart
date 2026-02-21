@@ -288,10 +288,11 @@ class _AuthGuardModalState extends ConsumerState<AuthGuardModal> {
     final router = GoRouter.of(context);
     Navigator.of(context).pop();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      onLoginSuccess?.call();
-      if (onLoginSuccess == null && returnTo != null) {
+      if (returnTo != null) {
         router.go(returnTo);
+        return;
       }
+      onLoginSuccess?.call();
     });
   }
 

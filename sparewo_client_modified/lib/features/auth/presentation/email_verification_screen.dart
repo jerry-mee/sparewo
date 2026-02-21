@@ -69,28 +69,6 @@ class _EmailVerificationScreenState
     super.dispose();
   }
 
-  Future<void> _pasteFromClipboard() async {
-    final data = await Clipboard.getData(Clipboard.kTextPlain);
-    if (!mounted) return;
-    final raw = data?.text ?? '';
-    final code = raw.replaceAll(RegExp(r'[^0-9]'), '');
-    if (code.length < 6) {
-      EasyLoading.showInfo('Clipboard does not contain a 6-digit code');
-      return;
-    }
-    FocusScope.of(context).unfocus();
-    for (var i = 0; i < 6; i++) {
-      _controllers[i].value = TextEditingValue(
-        text: code[i],
-        selection: const TextSelection.collapsed(offset: 1),
-      );
-    }
-    if (!mounted) return;
-    await Future.delayed(const Duration(milliseconds: 80));
-    if (!mounted) return;
-    await _verifyCode();
-  }
-
   void _startTimer() {
     _canResend = false;
     _secondsRemaining = 30;
@@ -158,6 +136,11 @@ class _EmailVerificationScreenState
         // Navigate after a brief delay
         await Future.delayed(const Duration(seconds: 1));
         if (mounted) {
+          if (widget.returnTo != null) {
+            _goSafely(widget.returnTo!);
+            return;
+          }
+
           final uid = FirebaseAuth.instance.currentUser?.uid;
           if (uid != null && uid.isNotEmpty) {
             final prefs = await SharedPreferences.getInstance();
@@ -174,14 +157,8 @@ class _EmailVerificationScreenState
               return;
             }
           }
-
-          if (widget.returnTo != null) {
-            if (!mounted) return;
-            _goSafely(widget.returnTo!);
-          } else {
-            if (!mounted) return;
-            _goSafely('/home');
-          }
+          if (!mounted) return;
+          _goSafely('/home');
         }
       }
     } catch (e) {
@@ -320,6 +297,11 @@ class _EmailVerificationScreenState
                         final codeColor = isDark
                             ? Colors.white
                             : Colors.black87;
+                        final fieldFillColor = isDark
+                            ? const Color(0xFF2A2D3A)
+                            : colorScheme.surfaceContainerHighest.withValues(
+                                alpha: 0.6,
+                              );
                         return SizedBox(
                           width: 50,
                           height: 60,
@@ -342,8 +324,7 @@ class _EmailVerificationScreenState
                             decoration: InputDecoration(
                               counterText: '',
                               filled: true,
-                              fillColor: colorScheme.surfaceContainerHighest
-                                  .withValues(alpha: isDark ? 0.35 : 0.6),
+                              fillColor: fieldFillColor,
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
                                 borderSide: BorderSide(
@@ -394,22 +375,18 @@ class _EmailVerificationScreenState
                               }
                               if (value.isNotEmpty && index < 5) {
                                 _focusNodes[index + 1].requestFocus();
+                              } else if (value.isEmpty && index > 0) {
+                                _focusNodes[index - 1].requestFocus();
+                                _controllers[index - 1]
+                                    .selection = TextSelection.collapsed(
+                                  offset: _controllers[index - 1].text.length,
+                                );
                               }
                             },
                           ),
                         );
                       }),
                     ).animate().fadeIn(delay: 250.ms),
-
-                    const SizedBox(height: 12),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton.icon(
-                        onPressed: _isVerifying ? null : _pasteFromClipboard,
-                        icon: const Icon(Icons.content_paste_rounded, size: 16),
-                        label: const Text('Paste code'),
-                      ),
-                    ),
 
                     const SizedBox(height: 40),
 
