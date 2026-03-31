@@ -1,0 +1,3 @@
+Trigger production rebuild after Firebase env cleanup.
+- Removed NEXT_PUBLIC_FIREBASE_API from Vercel production env.
+- Date: 2026-03-31
