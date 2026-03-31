@@ -45,17 +45,28 @@ const maybeWriteHealthEvent = async (
   item: HealthItem
 ): Promise<void> => {
   const fingerprint = `system_health:${item.key}:${item.status}:${item.summary}`;
-  const existing = await db
-    .collection(EVENTS_COLLECTION)
-    .where('fingerprint', '==', fingerprint)
-    .orderBy('timestamp', 'desc')
-    .limit(1)
-    .get();
+  try {
+    // Keep this query index-safe: avoid where+orderBy composite index requirement.
+    const existing = await db
+      .collection(EVENTS_COLLECTION)
+      .where('fingerprint', '==', fingerprint)
+      .limit(5)
+      .get();
 
-  if (!existing.empty) {
-    const latest = existing.docs[0].data().timestamp;
-    const latestMs = typeof latest?.toMillis === 'function' ? latest.toMillis() : 0;
-    if (Date.now() - latestMs < HEALTH_EVENT_DEDUPE_MS) return;
+    if (!existing.empty) {
+      const latestMs = existing.docs.reduce((acc, doc) => {
+        const data = doc.data();
+        const createdAtMs = Number(data.createdAtMs || 0);
+        const timestampMs =
+          typeof data.timestamp?.toMillis === 'function'
+            ? data.timestamp.toMillis()
+            : 0;
+        return Math.max(acc, createdAtMs, timestampMs);
+      }, 0);
+      if (Date.now() - latestMs < HEALTH_EVENT_DEDUPE_MS) return;
+    }
+  } catch (error) {
+    console.error('System health event dedupe failed; continuing without dedupe', error);
   }
 
   await db.collection(EVENTS_COLLECTION).add({
@@ -218,6 +229,7 @@ export async function GET(req: Request) {
     if (error instanceof Error && error.message === 'forbidden') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+    console.error('System status overview failed', error);
     return NextResponse.json({ error: 'Failed to load system status' }, { status: 500 });
   }
 }

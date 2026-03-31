@@ -42,6 +42,14 @@ export default function ProductsPage() {
   const [hasMore, setHasMore] = useState(true);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    const queryFromUrl = (new URLSearchParams(window.location.search).get("query") || "").trim();
+    if (queryFromUrl) {
+      setSearchQuery(queryFromUrl);
+    }
+  }, []);
+
+  useEffect(() => {
     const fetchProducts = async () => {
       setLoading(true);
       try {

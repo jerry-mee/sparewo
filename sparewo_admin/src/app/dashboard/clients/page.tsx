@@ -56,10 +56,21 @@ export default function ClientsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleSearch = (event: React.FormEvent) => {
-    event.preventDefault();
-    fetchClients(true);
-  };
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const queryFromUrl = (new URLSearchParams(window.location.search).get("query") || "").trim();
+    if (queryFromUrl) {
+      setSearchQuery(queryFromUrl);
+    }
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      void fetchClients(true);
+    }, 240);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery]);
 
   const activeCount = useMemo(() => clients.filter((client) => !client.isSuspended).length, [clients]);
   const suspendedCount = useMemo(() => clients.filter((client) => client.isSuspended).length, [clients]);
@@ -130,17 +141,17 @@ export default function ClientsPage() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>Registered Users</CardTitle>
-            <form onSubmit={handleSearch} className="flex w-full max-w-sm items-center space-x-2">
+            <div className="flex w-full max-w-sm items-center space-x-2">
               <Input
                 placeholder="Search by name or email..."
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
                 className="h-9"
               />
-              <Button type="submit" size="sm" variant="secondary">
+              <Button type="button" size="sm" variant="secondary" onClick={() => void fetchClients(true)}>
                 <Search className="h-4 w-4" />
               </Button>
-            </form>
+            </div>
           </div>
         </CardHeader>
         <CardContent>

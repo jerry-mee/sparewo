@@ -52,6 +52,14 @@ export default function OrdersPage() {
   const [lastDoc, setLastDoc] = useState<DocumentData | undefined>(undefined);
   const [hasMore, setHasMore] = useState(true);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const queryFromUrl = (new URLSearchParams(window.location.search).get("query") || "").trim();
+    if (queryFromUrl) {
+      setSearchQuery(queryFromUrl);
+    }
+  }, []);
+
   const fetchOrders = async (reset = false) => {
     setLoading(true);
     try {

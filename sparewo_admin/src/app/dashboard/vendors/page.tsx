@@ -38,6 +38,14 @@ export default function VendorsPage() {
   const [hasMore, setHasMore] = useState(true);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    const queryFromUrl = (new URLSearchParams(window.location.search).get("query") || "").trim();
+    if (queryFromUrl) {
+      setSearchQuery(queryFromUrl);
+    }
+  }, []);
+
+  useEffect(() => {
     const fetchVendors = async () => {
       setLoading(true);
       try {

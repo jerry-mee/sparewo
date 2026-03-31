@@ -107,12 +107,14 @@ export default function SystemStatusPage() {
   const [events, setEvents] = useState<EventItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [probing, setProbing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedSystemKey, setSelectedSystemKey] = useState<string | null>(null);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [probeMessage, setProbeMessage] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     setProbeMessage(null);
     try {
       const token = await auth.currentUser?.getIdToken();
@@ -130,10 +132,12 @@ export default function SystemStatusPage() {
       ]);
 
       if (!overviewRes.ok) {
-        throw new Error('Failed to load overview');
+        const payload = (await overviewRes.json().catch(() => ({}))) as { error?: string };
+        throw new Error(payload.error || 'Failed to load overview');
       }
       if (!eventsRes.ok) {
-        throw new Error('Failed to load events');
+        const payload = (await eventsRes.json().catch(() => ({}))) as { error?: string };
+        throw new Error(payload.error || 'Failed to load events');
       }
 
       const overviewData = (await overviewRes.json()) as OverviewResponse;
@@ -142,6 +146,7 @@ export default function SystemStatusPage() {
       setEvents(eventsData.events || []);
     } catch (error) {
       await logError('system_status_page', 'Load failed', error);
+      setLoadError(error instanceof Error ? error.message : 'Failed to load system status');
     } finally {
       setLoading(false);
     }
@@ -260,6 +265,7 @@ export default function SystemStatusPage() {
         </Card>
       </div>
       {probeMessage ? <p className="text-xs text-muted-foreground">{probeMessage}</p> : null}
+      {loadError ? <p className="text-xs text-destructive">{loadError}</p> : null}
 
       <Card>
         <CardHeader>

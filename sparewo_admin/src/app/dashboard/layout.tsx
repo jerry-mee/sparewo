@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
@@ -27,6 +27,7 @@ import { NotificationDropdown } from "@/components/ui/notification-dropdown";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/context/auth-context";
 import { logOut } from "@/lib/firebase/auth";
+import { auth } from "@/lib/firebase/config";
 import { cn, getInitials } from "@/lib/utils";
 import { canAccessDashboardPath, getDefaultDashboardPath, normalizeRole } from "@/lib/auth/roles";
 
@@ -45,6 +46,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [isDesktopSidebarExpanded, setIsDesktopSidebarExpanded] = useState(true);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [searchValue, setSearchValue] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchResults, setSearchResults] = useState<
+    Array<{ id: string; type: "order" | "client" | "vendor" | "product"; title: string; subtitle: string; href: string }>
+  >([]);
+  const searchBoxRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setIsMobileSidebarOpen(false);
@@ -77,6 +84,71 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     router.replace(getDefaultDashboardPath(roleForNavigation));
   }, [roleForNavigation, loading, pathname, router]);
 
+  useEffect(() => {
+    if (!searchOpen) return;
+    const handleOutside = (event: MouseEvent) => {
+      if (!searchBoxRef.current) return;
+      if (!searchBoxRef.current.contains(event.target as Node)) {
+        setSearchOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleOutside);
+    };
+  }, [searchOpen]);
+
+  useEffect(() => {
+    const query = searchValue.trim();
+    if (query.length < 2) {
+      setSearchResults([]);
+      setSearching(false);
+      return;
+    }
+
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        setSearching(true);
+        const token = await auth.currentUser?.getIdToken();
+        if (!token) {
+          if (!cancelled) setSearchResults([]);
+          return;
+        }
+        const res = await fetch(`/api/dashboard/search?q=${encodeURIComponent(query)}`, {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        if (!res.ok) {
+          if (!cancelled) setSearchResults([]);
+          return;
+        }
+        const payload = (await res.json()) as {
+          results?: Array<{
+            id: string;
+            type: "order" | "client" | "vendor" | "product";
+            title: string;
+            subtitle: string;
+            href: string;
+          }>;
+        };
+        if (!cancelled) {
+          setSearchResults(payload.results || []);
+          setSearchOpen(true);
+        }
+      } catch {
+        if (!cancelled) setSearchResults([]);
+      } finally {
+        if (!cancelled) setSearching(false);
+      }
+    }, 220);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [searchValue]);
+
   const currentTitle = useMemo(() => {
     if (pathname === "/dashboard") return "Operations Overview";
     const item = visibleNavItems.find((nav) => pathname.startsWith(nav.href));
@@ -87,6 +159,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     event.preventDefault();
     const query = searchValue.trim();
     if (!query) return;
+    const firstMatch = searchResults[0];
+    if (firstMatch?.href) {
+      setSearchOpen(false);
+      router.push(firstMatch.href);
+      return;
+    }
     router.push(`/dashboard/orders?query=${encodeURIComponent(query)}`);
   };
 
@@ -196,7 +274,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       >
         <header className="sticky top-0 z-20 border-b border-border/70 bg-card/90 px-4 backdrop-blur-sm md:px-6 lg:px-8">
           <div className="flex min-h-20 flex-wrap items-center justify-between gap-3 py-3 md:flex-nowrap">
-            <div className="flex min-w-0 items-center gap-3 md:gap-6">
+            <div className="flex min-w-0 flex-1 items-center gap-3 md:gap-6">
               <Button
                 variant="ghost"
                 size="icon"
@@ -206,20 +284,53 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 {isMobileSidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
               </Button>
 
-              <div className="hidden min-w-0 max-w-[14rem] md:block lg:max-w-[18rem] xl:max-w-[22rem]">
+              <div className="hidden min-w-[160px] md:block md:max-w-[18rem] lg:max-w-[20rem] xl:max-w-[24rem]">
                 <p className="truncate text-base font-semibold font-display">{currentTitle}</p>
                 <p className="truncate text-xs text-muted-foreground">Platform command and monitoring</p>
               </div>
 
-              <form onSubmit={onSearch} className="relative hidden w-full md:block md:min-w-[240px] md:max-w-[42vw] lg:max-w-[520px]">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  value={searchValue}
-                  onChange={(event) => setSearchValue(event.target.value)}
-                  placeholder="Search orders, clients, vendors..."
-                  className="h-11 w-full rounded-xl border border-border bg-background pl-10 pr-4 text-sm outline-none ring-primary/30 transition focus:border-primary focus:ring-2"
-                />
-              </form>
+              <div
+                ref={searchBoxRef}
+                className="relative hidden md:block md:min-w-[280px] md:flex-1 md:max-w-[760px]"
+              >
+                <form onSubmit={onSearch}>
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    value={searchValue}
+                    onFocus={() => setSearchOpen(true)}
+                    onChange={(event) => setSearchValue(event.target.value)}
+                    placeholder="Search orders, clients, vendors..."
+                    className="h-11 w-full rounded-xl border border-border bg-background pl-10 pr-4 text-sm outline-none ring-primary/30 transition focus:border-primary focus:ring-2"
+                  />
+                </form>
+                {searchOpen && searchValue.trim().length >= 2 ? (
+                  <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-50 max-h-[360px] overflow-y-auto rounded-xl border border-border bg-card p-2 shadow-xl">
+                    {searching ? (
+                      <div className="px-3 py-2 text-xs text-muted-foreground">Searching...</div>
+                    ) : searchResults.length === 0 ? (
+                      <div className="px-3 py-2 text-xs text-muted-foreground">No live results found.</div>
+                    ) : (
+                      searchResults.map((result) => (
+                        <button
+                          key={`${result.type}-${result.id}`}
+                          type="button"
+                          className="flex w-full flex-col rounded-lg px-3 py-2 text-left transition hover:bg-muted/50"
+                          onClick={() => {
+                            setSearchOpen(false);
+                            setSearchValue("");
+                            router.push(result.href);
+                          }}
+                        >
+                          <span className="text-sm font-medium">{result.title}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {result.type.toUpperCase()} • {result.subtitle}
+                          </span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                ) : null}
+              </div>
             </div>
 
             <div className="flex items-center gap-1 md:gap-2">
