@@ -1,7 +1,7 @@
 name: sparewo_client
 description: SpareWo - Car Parts and Service App
 publish_to: 'none'
-version: 4.2.4+18
+version: 4.2.5+21
 
 environment:
   sdk: '>=3.8.0 <4.0.0'
