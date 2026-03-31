@@ -4,6 +4,7 @@ import { normalizeRole } from '@/lib/auth/roles';
 
 const EVENTS_COLLECTION = 'system_diagnostics_events';
 const TOKENS_COLLECTION_GROUP = 'tokens';
+const HEALTH_EVENT_DEDUPE_MS = 10 * 60 * 1000;
 
 const readToken = (req: Request): string | null => {
   const authHeader = req.headers.get('Authorization') || req.headers.get('authorization');
@@ -23,6 +24,60 @@ const ensureOperator = async (token: string) => {
 
 const healthStatusFromBool = (ok: boolean): 'healthy' | 'down' => (ok ? 'healthy' : 'down');
 
+type HealthStatus = 'healthy' | 'degraded' | 'down' | 'unknown';
+type HealthItem = {
+  key: string;
+  name: string;
+  status: HealthStatus;
+  summary: string;
+  details?: string;
+  updatedAt: string;
+};
+
+const healthSeverity = (status: HealthStatus): 'info' | 'warn' | 'error' => {
+  if (status === 'down') return 'error';
+  if (status === 'degraded') return 'warn';
+  return 'info';
+};
+
+const maybeWriteHealthEvent = async (
+  uid: string,
+  item: HealthItem
+): Promise<void> => {
+  const fingerprint = `system_health:${item.key}:${item.status}:${item.summary}`;
+  const existing = await db
+    .collection(EVENTS_COLLECTION)
+    .where('fingerprint', '==', fingerprint)
+    .orderBy('timestamp', 'desc')
+    .limit(1)
+    .get();
+
+  if (!existing.empty) {
+    const latest = existing.docs[0].data().timestamp;
+    const latestMs = typeof latest?.toMillis === 'function' ? latest.toMillis() : 0;
+    if (Date.now() - latestMs < HEALTH_EVENT_DEDUPE_MS) return;
+  }
+
+  await db.collection(EVENTS_COLLECTION).add({
+    source: 'admin',
+    service: item.key,
+    severity: healthSeverity(item.status),
+    code: item.status === 'healthy' ? null : `health_${item.status}`,
+    message: `${item.name}: ${item.summary}`,
+    fingerprint,
+    context: {
+      details: item.details || null,
+      status: item.status,
+      updatedAt: item.updatedAt,
+    },
+    platform: 'web',
+    uid,
+    timestamp: new Date(),
+    isoTimestamp: new Date().toISOString(),
+    createdAtMs: Date.now(),
+  });
+};
+
 export async function GET(req: Request) {
   try {
     const token = readToken(req);
@@ -34,18 +89,7 @@ export async function GET(req: Request) {
     const now = new Date();
     const cutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-    const [recentEventsSnap, tokenSnap] = await Promise.all([
-      db.collection(EVENTS_COLLECTION).where('timestamp', '>=', cutoff).limit(300).get(),
-      db.collectionGroup(TOKENS_COLLECTION_GROUP).limit(1000).get(),
-    ]);
-
-    let errors24h = 0;
-    let warnings24h = 0;
-    for (const doc of recentEventsSnap.docs) {
-      const severity = String(doc.data().severity || 'info').toLowerCase();
-      if (severity === 'error') errors24h += 1;
-      if (severity === 'warn') warnings24h += 1;
-    }
+    const tokenSnap = await db.collectionGroup(TOKENS_COLLECTION_GROUP).limit(1000).get();
 
     let authOk = false;
     let firestoreOk = false;
@@ -95,6 +139,70 @@ export async function GET(req: Request) {
       functionsDetail = error instanceof Error ? error.message : 'Unknown fanout path probe failure.';
     }
 
+    const systems: HealthItem[] = [
+      {
+        key: 'firebase_auth',
+        name: 'Firebase Auth',
+        status: healthStatusFromBool(authOk),
+        summary: authOk ? 'Auth admin SDK reachable.' : 'Auth check failed.',
+        details: authDetail,
+        updatedAt: now.toISOString(),
+      },
+      {
+        key: 'firestore',
+        name: 'Firestore',
+        status: healthStatusFromBool(firestoreOk),
+        summary: firestoreOk ? 'Firestore query check passed.' : 'Firestore probe failed.',
+        details: firestoreDetail,
+        updatedAt: now.toISOString(),
+      },
+      {
+        key: 'storage',
+        name: 'Firebase Storage',
+        status: healthStatusFromBool(storageOk),
+        summary: storageOk ? 'Storage bucket reachable.' : 'Storage probe failed.',
+        details: storageDetail,
+        updatedAt: now.toISOString(),
+      },
+      {
+        key: 'functions_push',
+        name: 'Functions Push Fanout',
+        status: healthStatusFromBool(functionsOk),
+        summary: functionsOk ? 'Notifications collection reachable.' : 'Functions probe failed.',
+        details: functionsDetail,
+        updatedAt: now.toISOString(),
+      },
+      {
+        key: 'fcm_tokens',
+        name: 'FCM Token Registry',
+        status: tokenSnap.size > 0 ? 'healthy' : 'degraded',
+        summary: `${tokenSnap.size} token document(s) visible in collection-group scan.`,
+        details:
+          tokenSnap.size > 0
+            ? 'Token registry is readable and populated.'
+            : 'No token documents discovered from collection-group scan.',
+        updatedAt: now.toISOString(),
+      },
+    ];
+
+    await Promise.all(
+      systems.map((system) => maybeWriteHealthEvent(decoded.uid, system))
+    );
+
+    const recentEventsSnap = await db
+      .collection(EVENTS_COLLECTION)
+      .where('timestamp', '>=', cutoff)
+      .limit(500)
+      .get();
+
+    let errors24h = 0;
+    let warnings24h = 0;
+    for (const doc of recentEventsSnap.docs) {
+      const severity = String(doc.data().severity || 'info').toLowerCase();
+      if (severity === 'error') errors24h += 1;
+      if (severity === 'warn') warnings24h += 1;
+    }
+
     const response = {
       generatedAt: now.toISOString(),
       counters: {
@@ -102,47 +210,7 @@ export async function GET(req: Request) {
         warnings24h,
         events24h: recentEventsSnap.size,
       },
-      systems: [
-        {
-          key: 'firebase_auth',
-          name: 'Firebase Auth',
-          status: healthStatusFromBool(authOk),
-          summary: authOk ? 'Auth admin SDK reachable.' : 'Auth check failed.',
-          details: authDetail,
-          updatedAt: now.toISOString(),
-        },
-        {
-          key: 'firestore',
-          name: 'Firestore',
-          status: healthStatusFromBool(firestoreOk),
-          summary: firestoreOk ? 'Firestore query check passed.' : 'Firestore probe failed.',
-          details: firestoreDetail,
-          updatedAt: now.toISOString(),
-        },
-        {
-          key: 'storage',
-          name: 'Firebase Storage',
-          status: healthStatusFromBool(storageOk),
-          summary: storageOk ? 'Storage bucket reachable.' : 'Storage probe failed.',
-          details: storageDetail,
-          updatedAt: now.toISOString(),
-        },
-        {
-          key: 'functions_push',
-          name: 'Functions Push Fanout',
-          status: healthStatusFromBool(functionsOk),
-          summary: functionsOk ? 'Notifications collection reachable.' : 'Functions probe failed.',
-          details: functionsDetail,
-          updatedAt: now.toISOString(),
-        },
-        {
-          key: 'fcm_tokens',
-          name: 'FCM Token Registry',
-          status: tokenSnap.size > 0 ? 'healthy' : 'degraded',
-          summary: `${tokenSnap.size} token document(s) visible in collection-group scan.`,
-          updatedAt: now.toISOString(),
-        },
-      ],
+      systems,
     };
 
     return NextResponse.json(response);
