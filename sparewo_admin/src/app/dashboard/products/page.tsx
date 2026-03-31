@@ -38,6 +38,7 @@ export default function ProductsPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [quickFilter, setQuickFilter] = useState<ProductFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [lastDoc, setLastDoc] = useState<DocumentData | undefined>(undefined);
   const [hasMore, setHasMore] = useState(true);
 
@@ -50,14 +51,19 @@ export default function ProductsPage() {
   }, []);
 
   useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchQuery), 240);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  useEffect(() => {
     const fetchProducts = async () => {
       setLoading(true);
       try {
         const status = statusFilter === "all" ? null : statusFilter;
-        const result = await getProducts(status, null, 10);
+        const result = await getProducts(status, null, 10, undefined, debouncedSearch);
         setProducts(result.products);
         setLastDoc(result.lastDoc);
-        setHasMore(result.products.length === 10);
+        setHasMore(debouncedSearch.trim().length === 0 && result.products.length === 10);
       } catch (error) {
         console.error("Error fetching products:", error);
       } finally {
@@ -66,17 +72,17 @@ export default function ProductsPage() {
     };
 
     fetchProducts();
-  }, [statusFilter]);
+  }, [statusFilter, debouncedSearch]);
 
   const loadMore = async () => {
     if (!lastDoc) return;
 
     try {
       const status = statusFilter === "all" ? null : statusFilter;
-      const result = await getProducts(status, null, 10, lastDoc);
+      const result = await getProducts(status, null, 10, lastDoc, debouncedSearch);
       setProducts([...products, ...result.products]);
       setLastDoc(result.lastDoc);
-      setHasMore(result.products.length === 10);
+      setHasMore(debouncedSearch.trim().length === 0 && result.products.length === 10);
     } catch (error) {
       console.error("Error loading more products:", error);
     }

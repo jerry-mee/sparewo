@@ -190,7 +190,8 @@ interface AvailableVendor {
 export const getOrders = async (
   status: string | null = null,
   pageSize: number = 10,
-  lastDoc?: DocumentData
+  lastDoc?: DocumentData,
+  searchQuery: string = ""
 ): Promise<{ orders: Order[], lastDoc: DocumentData | undefined }> => {
   try {
     const constraints: QueryConstraint[] = [orderBy('createdAt', 'desc')];
@@ -199,27 +200,48 @@ export const getOrders = async (
       constraints.push(where('status', '==', status));
     }
     
-    let q = query(
-      collection(db, 'orders'),
-      ...constraints,
-      limit(pageSize)
-    );
+    const normalizedSearch = searchQuery.trim().toLowerCase();
+    const fetchLimit = normalizedSearch ? Math.max(120, pageSize) : pageSize;
+
+    let q = query(collection(db, 'orders'), ...constraints, limit(fetchLimit));
     
     if (lastDoc) {
       q = query(q, startAfter(lastDoc));
     }
     
     const querySnapshot = await getDocs(q);
-    
+
     const orders: Order[] = [];
     let lastVisible: DocumentData | undefined = undefined;
-    
+
     querySnapshot.forEach((doc) => {
-      orders.push(normalizeOrder(doc.id, doc.data() as Record<string, unknown>));
+      const raw = doc.data() as Record<string, unknown>;
+      const normalized = normalizeOrder(doc.id, raw);
+      if (normalizedSearch) {
+        const customerName = String(
+          raw.customerName ||
+            raw.userName ||
+            normalized.customerId ||
+            normalized.userId ||
+            ''
+        ).toLowerCase();
+        const orderNeedle = String(normalized.orderNumber || normalized.id || '').toLowerCase();
+        if (
+          !orderNeedle.includes(normalizedSearch) &&
+          !customerName.includes(normalizedSearch) &&
+          !normalized.id.toLowerCase().includes(normalizedSearch)
+        ) {
+          return;
+        }
+      }
+      orders.push(normalized);
       lastVisible = doc;
     });
-    
-    return { orders, lastDoc: lastVisible };
+
+    return {
+      orders: normalizedSearch ? orders.slice(0, pageSize) : orders,
+      lastDoc: normalizedSearch ? undefined : lastVisible,
+    };
   } catch (error) {
     console.error('Error getting orders:', error);
     throw error;

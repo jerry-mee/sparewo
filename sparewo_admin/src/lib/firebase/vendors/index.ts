@@ -65,7 +65,8 @@ interface VendorWithMetrics extends Vendor {
 export const getVendors = async (
   status: string | null = null,
   pageSize: number = 10,
-  lastDoc?: DocumentData
+  lastDoc?: DocumentData,
+  searchQuery: string = ""
 ): Promise<{ vendors: Vendor[], lastDoc: DocumentData | undefined }> => {
   try {
     // Build query constraints
@@ -75,11 +76,10 @@ export const getVendors = async (
       constraints.push(where('status', '==', status));
     }
 
-    let q = query(
-      collection(db, 'vendors'),
-      ...constraints,
-      limit(pageSize)
-    );
+    const normalizedSearch = searchQuery.trim().toLowerCase();
+    const fetchLimit = normalizedSearch ? Math.max(120, pageSize) : pageSize;
+
+    let q = query(collection(db, 'vendors'), ...constraints, limit(fetchLimit));
 
     if (lastDoc) {
       q = query(q, startAfter(lastDoc));
@@ -91,11 +91,28 @@ export const getVendors = async (
     let lastVisible: DocumentData | undefined = undefined;
 
     querySnapshot.forEach((doc) => {
-      vendors.push({ id: doc.id, ...doc.data() } as Vendor);
+      const vendor = { id: doc.id, ...doc.data() } as Vendor;
+      if (normalizedSearch) {
+        const name = String(vendor.name || '').toLowerCase();
+        const email = String(vendor.email || '').toLowerCase();
+        const businessName = String(vendor.businessName || '').toLowerCase();
+        if (
+          !name.includes(normalizedSearch) &&
+          !email.includes(normalizedSearch) &&
+          !businessName.includes(normalizedSearch) &&
+          !vendor.id.toLowerCase().includes(normalizedSearch)
+        ) {
+          return;
+        }
+      }
+      vendors.push(vendor);
       lastVisible = doc;
     });
 
-    return { vendors, lastDoc: lastVisible };
+    return {
+      vendors: normalizedSearch ? vendors.slice(0, pageSize) : vendors,
+      lastDoc: normalizedSearch ? undefined : lastVisible,
+    };
   } catch (error) {
     console.error('Error getting vendors:', error);
     throw error;

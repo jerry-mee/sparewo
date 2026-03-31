@@ -34,6 +34,7 @@ export default function VendorsPage() {
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [lastDoc, setLastDoc] = useState<DocumentData | undefined>(undefined);
   const [hasMore, setHasMore] = useState(true);
 
@@ -46,14 +47,19 @@ export default function VendorsPage() {
   }, []);
 
   useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchQuery), 240);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  useEffect(() => {
     const fetchVendors = async () => {
       setLoading(true);
       try {
         const status = statusFilter === "all" ? null : statusFilter;
-        const result = await getVendors(status, 10);
+        const result = await getVendors(status, 10, undefined, debouncedSearch);
         setVendors(result.vendors);
         setLastDoc(result.lastDoc);
-        setHasMore(result.vendors.length === 10);
+        setHasMore(debouncedSearch.trim().length === 0 && result.vendors.length === 10);
       } catch (error) {
         console.error("Error fetching vendors:", error);
       } finally {
@@ -62,17 +68,17 @@ export default function VendorsPage() {
     };
 
     fetchVendors();
-  }, [statusFilter]);
+  }, [statusFilter, debouncedSearch]);
 
   const loadMore = async () => {
     if (!lastDoc) return;
 
     try {
       const status = statusFilter === "all" ? null : statusFilter;
-      const result = await getVendors(status, 10, lastDoc);
+      const result = await getVendors(status, 10, lastDoc, debouncedSearch);
       setVendors([...vendors, ...result.vendors]);
       setLastDoc(result.lastDoc);
-      setHasMore(result.vendors.length === 10);
+      setHasMore(debouncedSearch.trim().length === 0 && result.vendors.length === 10);
     } catch (error) {
       console.error("Error loading more vendors:", error);
     }

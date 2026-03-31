@@ -63,7 +63,12 @@ export default function OrdersPage() {
   const fetchOrders = async (reset = false) => {
     setLoading(true);
     try {
-      const result = await getOrders(statusFilter === "all" ? null : statusFilter, 10, reset ? undefined : lastDoc);
+      const result = await getOrders(
+        statusFilter === "all" ? null : statusFilter,
+        10,
+        reset ? undefined : lastDoc,
+        searchQuery
+      );
 
       const mappedOrders: Order[] = result.orders.map((order) => ({
         id: order.id,
@@ -83,7 +88,7 @@ export default function OrdersPage() {
       }
 
       setLastDoc(result.lastDoc);
-      setHasMore(result.orders.length === 10);
+      setHasMore(searchQuery.trim().length === 0 && result.orders.length === 10);
     } catch (error) {
       console.error("Error fetching orders:", error);
       toast.error("Failed to load orders");
@@ -96,6 +101,14 @@ export default function OrdersPage() {
     fetchOrders(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusFilter]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      void fetchOrders(true);
+    }, 240);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery]);
 
   useEffect(() => {
     getOrderStats()

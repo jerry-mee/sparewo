@@ -68,12 +68,10 @@ export const getClients = async (
 ): Promise<{ clients: UserProfile[], lastDoc: DocumentData | undefined }> => {
   try {
     const constraints: QueryConstraint[] = [orderBy('createdAt', 'desc')];
-    
-    let q = query(
-      collection(db, 'users'),
-      ...constraints,
-      limit(pageSize)
-    );
+    const normalizedSearch = searchQuery.trim().toLowerCase();
+    const fetchLimit = normalizedSearch ? Math.max(120, pageSize) : pageSize;
+
+    let q = query(collection(db, 'users'), ...constraints, limit(fetchLimit));
     
     if (lastDoc) {
       q = query(q, startAfter(lastDoc));
@@ -86,11 +84,14 @@ export const getClients = async (
     
     querySnapshot.forEach((doc) => {
       const data = doc.data();
-      if (searchQuery) {
+      if (normalizedSearch) {
         const name = (data.name || '').toLowerCase();
         const email = (data.email || '').toLowerCase();
-        const query = searchQuery.toLowerCase();
-        if (!name.includes(query) && !email.includes(query)) {
+        if (
+          !name.includes(normalizedSearch) &&
+          !email.includes(normalizedSearch) &&
+          !doc.id.toLowerCase().includes(normalizedSearch)
+        ) {
           return; 
         }
       }
@@ -108,7 +109,10 @@ export const getClients = async (
       lastVisible = doc;
     });
     
-    return { clients, lastDoc: lastVisible };
+    return {
+      clients: normalizedSearch ? clients.slice(0, pageSize) : clients,
+      lastDoc: normalizedSearch ? undefined : lastVisible,
+    };
   } catch (error) {
     console.error('Error getting clients:', error);
     throw error;

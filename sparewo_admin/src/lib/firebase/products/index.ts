@@ -83,7 +83,8 @@ export const getProducts = async (
   status: string | null = null,
   vendorId: string | null = null,
   pageSize: number = 10,
-  lastDoc?: DocumentData
+  lastDoc?: DocumentData,
+  searchQuery: string = ""
 ): Promise<{ products: Product[], lastDoc: DocumentData | undefined }> => {
   try {
     const constraints: QueryConstraint[] = [orderBy('createdAt', 'desc')];
@@ -96,11 +97,10 @@ export const getProducts = async (
       constraints.push(where('vendorId', '==', vendorId));
     }
     
-    let q = query(
-      collection(db, 'vendor_products'),
-      ...constraints,
-      limit(pageSize)
-    );
+    const normalizedSearch = searchQuery.trim().toLowerCase();
+    const fetchLimit = normalizedSearch ? Math.max(120, pageSize) : pageSize;
+
+    let q = query(collection(db, 'vendor_products'), ...constraints, limit(fetchLimit));
     
     if (lastDoc) {
       q = query(q, startAfter(lastDoc));
@@ -149,11 +149,29 @@ export const getProducts = async (
         rejectedAt: data.rejectedAt || null,
       };
       
+      if (normalizedSearch) {
+        const name = String(product.name || '').toLowerCase();
+        const brand = String(product.brand || '').toLowerCase();
+        const category = String(product.category || '').toLowerCase();
+        const vendorName = String(product.vendorName || '').toLowerCase();
+        if (
+          !name.includes(normalizedSearch) &&
+          !brand.includes(normalizedSearch) &&
+          !category.includes(normalizedSearch) &&
+          !vendorName.includes(normalizedSearch) &&
+          !product.id.toLowerCase().includes(normalizedSearch)
+        ) {
+          return;
+        }
+      }
       products.push(product);
       lastVisible = doc;
     });
-    
-    return { products, lastDoc: lastVisible };
+
+    return {
+      products: normalizedSearch ? products.slice(0, pageSize) : products,
+      lastDoc: normalizedSearch ? undefined : lastVisible,
+    };
   } catch (error) {
     console.error('Error getting products:', error);
     throw error;
