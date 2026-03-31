@@ -1163,6 +1163,13 @@ export const fanOutPushOnNotificationCreate = functions.firestore.onDocumentCrea
       }
 
       const tokenRefs = new Map<string, admin.firestore.DocumentReference[]>();
+      const tokenMeta = new Map<string, {
+        deviceId: string;
+        platform: string;
+        appVersion: string;
+        buildNumber: string;
+        tokenPath: string;
+      }>();
       const allTokenDocs = [
         ...userTokenSnap.docs,
         ...clientTokenSnap.docs,
@@ -1176,6 +1183,15 @@ export const fanOutPushOnNotificationCreate = functions.firestore.onDocumentCrea
         const existing = tokenRefs.get(token) || [];
         existing.push(doc.ref);
         tokenRefs.set(token, existing);
+        if (!tokenMeta.has(token)) {
+          tokenMeta.set(token, {
+            deviceId: toText(data.deviceId, "unknown"),
+            platform: toText(data.platform, "unknown"),
+            appVersion: toText(data.appVersion, "unknown"),
+            buildNumber: toText(data.buildNumber, "unknown"),
+            tokenPath: doc.ref.path,
+          });
+        }
       }
 
       const tokens = Array.from(tokenRefs.keys());
@@ -1275,6 +1291,13 @@ export const fanOutPushOnNotificationCreate = functions.firestore.onDocumentCrea
             token: tokens[index],
             code: result.error?.code || "unknown",
             message: result.error?.message || "",
+            ...(tokenMeta.get(tokens[index]) || {
+              deviceId: "unknown",
+              platform: "unknown",
+              appVersion: "unknown",
+              buildNumber: "unknown",
+              tokenPath: "unknown",
+            }),
           };
         })
         .filter(Boolean)
@@ -1304,6 +1327,21 @@ export const fanOutPushOnNotificationCreate = functions.firestore.onDocumentCrea
           successCount: response.successCount,
           failureCount: response.failureCount,
           deliveryErrors,
+          tokenTargets: tokens
+            .map((token) => {
+              const meta = tokenMeta.get(token);
+              return {
+                token,
+                ...(meta || {
+                  deviceId: "unknown",
+                  platform: "unknown",
+                  appVersion: "unknown",
+                  buildNumber: "unknown",
+                  tokenPath: "unknown",
+                }),
+              };
+            })
+            .slice(0, 50),
         },
         platform: "functions",
         uid: recipientId,

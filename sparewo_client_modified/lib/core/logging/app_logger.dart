@@ -11,7 +11,10 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
 
 class AppLogger {
   static final List<String> _recentLogs = <String>[];
@@ -38,7 +41,15 @@ class AppLogger {
   static bool _crashlyticsIncludeDebug = false;
   static bool _crashlyticsRecordNonFatalErrors = true;
   static String? _currentUserIdentifier;
+  static String? _deviceId;
+  static String? _appVersion;
+  static String? _appBuildNumber;
+  static String? _osVersion;
+  static String? _deviceModel;
+  static bool _deviceContextInitialized = false;
   static const String _diagnosticsCollection = 'system_diagnostics_events';
+  static const String _deviceIdPrefKey = 'diagnostics_installation_id_v1';
+  static const Uuid _uuid = Uuid();
 
   static Future<void> init() async {
     if (_initialized || _initializing) return;
@@ -48,6 +59,8 @@ class AppLogger {
     _writeConsole('[Logger] init start (session=$_sessionId at=$now)');
 
     try {
+      await _ensureDeviceContext();
+
       if (!kIsWeb) {
         final directory = await getApplicationDocumentsDirectory();
         final logDir = Directory('${directory.path}/logs');
@@ -118,6 +131,24 @@ class AppLogger {
         'app_logger_session',
         _sessionId,
       );
+      if (_deviceId != null && _deviceId!.isNotEmpty) {
+        await FirebaseCrashlytics.instance.setCustomKey(
+          'device_id',
+          _deviceId!,
+        );
+      }
+      if (_appVersion != null && _appVersion!.isNotEmpty) {
+        await FirebaseCrashlytics.instance.setCustomKey(
+          'app_version',
+          _appVersion!,
+        );
+      }
+      if (_appBuildNumber != null && _appBuildNumber!.isNotEmpty) {
+        await FirebaseCrashlytics.instance.setCustomKey(
+          'build_number',
+          _appBuildNumber!,
+        );
+      }
       await FirebaseCrashlytics.instance.log(
         'AppLogger Crashlytics forwarding enabled (session=$_sessionId)',
       );
@@ -229,6 +260,9 @@ class AppLogger {
     Object? error,
     StackTrace? stackTrace,
   }) {
+    if (!_deviceContextInitialized) {
+      unawaited(_ensureDeviceContext());
+    }
     final now = DateTime.now();
     final fingerprint = '$level|$context|$message|${extra?.toString() ?? ''}';
     if (_isDuplicateWithinWindow(fingerprint, now)) {
@@ -419,7 +453,9 @@ class AppLogger {
           errObject,
           stackTrace ?? StackTrace.current,
           reason: 'AppLogger ERROR in $context',
-          information: data == null ? const <Object>[] : <Object>[data.toString()],
+          information: data == null
+              ? const <Object>[]
+              : <Object>[data.toString()],
           fatal: false,
         ),
       );
@@ -471,15 +507,67 @@ class AppLogger {
         'message': message,
         'fingerprint': fingerprint,
         'context': {
+          ...getDeviceContext(),
           if (data != null) ...data,
           if (error != null) 'error': error.toString(),
         },
         'platform': Platform.operatingSystem,
         'uid': _currentUserIdentifier,
+        'deviceId': _deviceId,
+        'appVersion': _appVersion,
+        'buildNumber': _appBuildNumber,
         'timestamp': FieldValue.serverTimestamp(),
         'isoTimestamp': DateTime.now().toIso8601String(),
         'createdAtMs': DateTime.now().millisecondsSinceEpoch,
       }),
     );
+  }
+
+  static Future<void> _ensureDeviceContext() async {
+    if (_deviceContextInitialized) return;
+    _deviceContextInitialized = true;
+
+    if (kIsWeb) {
+      _deviceModel = 'web';
+      _osVersion = 'web';
+      return;
+    }
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final existing = prefs.getString(_deviceIdPrefKey);
+      final resolved = (existing == null || existing.isEmpty)
+          ? _uuid.v4()
+          : existing;
+      if (existing == null || existing.isEmpty) {
+        await prefs.setString(_deviceIdPrefKey, resolved);
+      }
+      _deviceId = resolved;
+    } catch (_) {
+      _deviceId ??= _uuid.v4();
+    }
+
+    try {
+      final packageInfo = await PackageInfo.fromPlatform();
+      _appVersion = packageInfo.version;
+      _appBuildNumber = packageInfo.buildNumber;
+    } catch (_) {
+      // Best effort.
+    }
+
+    _osVersion = Platform.operatingSystemVersion;
+    _deviceModel = Platform.localHostname;
+  }
+
+  static Map<String, dynamic> getDeviceContext() {
+    return <String, dynamic>{
+      'sessionId': _sessionId,
+      if (_deviceId != null) 'deviceId': _deviceId,
+      if (_deviceModel != null) 'deviceModel': _deviceModel,
+      if (_osVersion != null) 'osVersion': _osVersion,
+      if (_appVersion != null) 'appVersion': _appVersion,
+      if (_appBuildNumber != null) 'buildNumber': _appBuildNumber,
+      'platform': kIsWeb ? 'web' : Platform.operatingSystem,
+    };
   }
 }

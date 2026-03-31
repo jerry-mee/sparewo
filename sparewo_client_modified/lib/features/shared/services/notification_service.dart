@@ -522,6 +522,7 @@ class NotificationService {
 
   Future<bool> saveTokenToFirestore(String userId, String token) async {
     try {
+      final deviceContext = AppLogger.getDeviceContext();
       final userTokenRef = FirebaseFirestore.instance
           .collection('users')
           .doc(userId)
@@ -536,6 +537,12 @@ class NotificationService {
       final tokenPayload = {
         'token': token,
         'platform': Platform.operatingSystem,
+        'deviceId': deviceContext['deviceId'],
+        'deviceModel': deviceContext['deviceModel'],
+        'osVersion': deviceContext['osVersion'],
+        'appVersion': deviceContext['appVersion'],
+        'buildNumber': deviceContext['buildNumber'],
+        'sessionId': deviceContext['sessionId'],
         'lastUsed': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       };
@@ -564,7 +571,7 @@ class NotificationService {
         _recordPushTelemetry(
           event: 'fcm_token_saved',
           severity: 'info',
-          data: {'uid': userId, 'tokenLength': token.length},
+          data: {'uid': userId, 'tokenLength': token.length, ...deviceContext},
         ),
       );
       _hasLoggedTokenPersistPermissionBlock = false;
@@ -1276,19 +1283,19 @@ class NotificationService {
     Map<String, dynamic>? data,
   }) async {
     try {
+      final deviceContext = AppLogger.getDeviceContext();
       await FirebaseFirestore.instance.collection(_diagnosticsCollection).add({
         'source': 'client',
         'service': 'notification_service',
         'severity': severity,
         'code': event,
         'message': event,
-        'context': {
-          'uid': _currentUserId,
-          'platform': kIsWeb ? 'web' : Platform.operatingSystem,
-          ...?data,
-        },
+        'context': {'uid': _currentUserId, ...deviceContext, ...?data},
         'platform': kIsWeb ? 'web' : Platform.operatingSystem,
         'uid': _currentUserId,
+        'deviceId': deviceContext['deviceId'],
+        'appVersion': deviceContext['appVersion'],
+        'buildNumber': deviceContext['buildNumber'],
         'timestamp': FieldValue.serverTimestamp(),
         'isoTimestamp': DateTime.now().toIso8601String(),
         'createdAtMs': DateTime.now().millisecondsSinceEpoch,

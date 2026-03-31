@@ -4,6 +4,7 @@ import type { DiagnosticEvent } from '@/lib/diagnostics/types';
 
 const EVENT_COLLECTION = 'system_diagnostics_events';
 const DEDUPE_WINDOW_MS = 2500;
+const DEVICE_ID_STORAGE_KEY = 'sparewo_admin_device_id_v1';
 const seenFingerprints = new Map<string, number>();
 
 const nowMs = (): number => Date.now();
@@ -29,6 +30,22 @@ const sanitizeContext = (
   return redacted;
 };
 
+const resolveDeviceId = (): string | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const existing = window.localStorage.getItem(DEVICE_ID_STORAGE_KEY);
+    if (existing && existing.trim().length > 0) return existing;
+    const generated =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `web-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    window.localStorage.setItem(DEVICE_ID_STORAGE_KEY, generated);
+    return generated;
+  } catch {
+    return null;
+  }
+};
+
 export const recordDiagnosticEvent = async (
   event: DiagnosticEvent
 ): Promise<void> => {
@@ -42,6 +59,17 @@ export const recordDiagnosticEvent = async (
     }
 
     const uid = auth.currentUser?.uid || event.uid || null;
+    const deviceId = resolveDeviceId();
+    const platform =
+      event.platform ||
+      (typeof navigator !== 'undefined' ? navigator.platform || 'web' : 'web');
+    const userAgent =
+      typeof navigator !== 'undefined' ? navigator.userAgent : undefined;
+    const mergedContext = sanitizeContext({
+      ...event.context,
+      ...(deviceId ? { deviceId } : {}),
+      ...(userAgent ? { userAgent } : {}),
+    });
 
     await addDoc(collection(db, EVENT_COLLECTION), {
       source: event.source,
@@ -50,9 +78,11 @@ export const recordDiagnosticEvent = async (
       message: event.message,
       code: event.code || null,
       fingerprint,
-      context: sanitizeContext(event.context),
-      platform: event.platform || 'web',
+      context: mergedContext,
+      platform,
       uid,
+      deviceId,
+      userAgent: userAgent || null,
       timestamp: serverTimestamp(),
       isoTimestamp: event.timestamp || new Date().toISOString(),
       createdAtMs: nowMs(),
