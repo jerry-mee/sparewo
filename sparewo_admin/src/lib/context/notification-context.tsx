@@ -2,10 +2,13 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { onSnapshot, query, collection, where, orderBy, limit } from 'firebase/firestore';
+import { useRouter } from 'next/navigation';
 import { db } from '@/lib/firebase/config';
 import { Notification } from '@/lib/types/notification';
 import { useAuth } from './auth-context';
 import { markNotificationAsRead } from '@/lib/firebase/notifications';
+import { initAdminWebPush } from '@/lib/firebase/messaging';
+import { logError } from '@/lib/diagnostics/logger';
 
 interface NotificationContextType {
   notifications: Notification[];
@@ -28,6 +31,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
+  const router = useRouter();
 
   useEffect(() => {
     if (!user) {
@@ -68,18 +72,67 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
       setUnreadCount(unread);
       setLoading(false);
     }, (error) => {
-      console.error('Error fetching notifications:', error);
+      void logError('notification_context', 'Error fetching notifications', error);
       setLoading(false);
     });
 
     return () => unsubscribe();
   }, [user]);
 
+  useEffect(() => {
+    if (!user) return;
+
+    let cancelled = false;
+    let cleanupPush: (() => void) | null = null;
+
+    const handleServiceWorkerMessage = (event: MessageEvent) => {
+      const payload = event.data;
+      if (!payload || payload.type !== 'sparewo_notification_click') return;
+      const data = payload.data ?? {};
+      const link =
+        typeof data.link === 'string' && data.link.startsWith('/')
+          ? data.link
+          : '/dashboard/notifications';
+      const notificationId =
+        typeof data.notificationId === 'string' ? data.notificationId : '';
+      if (notificationId) {
+        void markNotificationAsRead(notificationId).catch(() => {});
+      }
+      router.push(link);
+    };
+
+    if (typeof navigator !== 'undefined' && navigator.serviceWorker) {
+      navigator.serviceWorker.addEventListener('message', handleServiceWorkerMessage);
+    }
+
+    void initAdminWebPush(user.uid)
+      .then((cleanup) => {
+        if (cancelled) {
+          cleanup();
+          return;
+        }
+        cleanupPush = cleanup;
+      })
+      .catch((error) => {
+        void logError('notification_context', 'Admin web push init failed', error);
+      });
+
+    return () => {
+      cancelled = true;
+      if (cleanupPush) {
+        cleanupPush();
+      }
+      if (typeof navigator !== 'undefined' && navigator.serviceWorker) {
+        navigator.serviceWorker.removeEventListener('message', handleServiceWorkerMessage);
+      }
+    };
+  }, [user, router]);
+
   const markAsRead = async (id: string) => {
     try {
       await markNotificationAsRead(id);
     } catch (error) {
-      console.error('Error marking notification as read:', error);
+      void logError('notification_context', 'Error marking notification as read', error);
     }
   };
 

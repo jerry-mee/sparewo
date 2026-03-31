@@ -1,12 +1,12 @@
 // lib/features/auth/presentation/login_screen.dart
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sparewo_client/features/auth/application/auth_provider.dart';
+import 'package:sparewo_client/features/auth/data/auth_repository.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:sparewo_client/core/theme/app_theme.dart';
 import 'package:sparewo_client/core/router/app_router.dart';
@@ -143,6 +143,12 @@ class _LoginFormState extends ConsumerState<_LoginForm> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscure = true;
+  bool _isAuthActionInFlight = false;
+
+  bool get _showAppleSignIn =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.iOS ||
+          defaultTargetPlatform == TargetPlatform.macOS);
 
   String _cleanError(Object error) =>
       error.toString().replaceAll('Exception: ', '').trim();
@@ -177,7 +183,9 @@ class _LoginFormState extends ConsumerState<_LoginForm> {
   }
 
   Future<void> _handleLogin() async {
+    if (_isAuthActionInFlight) return;
     if (_formKey.currentState?.validate() ?? false) {
+      setState(() => _isAuthActionInFlight = true);
       try {
         await ref
             .read(authNotifierProvider.notifier)
@@ -204,17 +212,45 @@ class _LoginFormState extends ConsumerState<_LoginForm> {
           return;
         }
         _showFeedback(message);
+      } finally {
+        if (mounted) {
+          setState(() => _isAuthActionInFlight = false);
+        }
       }
     }
   }
 
   Future<void> _handleGoogleLogin() async {
+    if (_isAuthActionInFlight) return;
+    setState(() => _isAuthActionInFlight = true);
     try {
       await ref.read(authNotifierProvider.notifier).signInWithGoogle();
       await _routeAfterAuth();
     } catch (error) {
       if (!mounted) return;
+      if (error is AuthCancelledException) return;
       _showFeedback(_cleanError(error));
+    } finally {
+      if (mounted) {
+        setState(() => _isAuthActionInFlight = false);
+      }
+    }
+  }
+
+  Future<void> _handleAppleLogin() async {
+    if (_isAuthActionInFlight) return;
+    setState(() => _isAuthActionInFlight = true);
+    try {
+      await ref.read(authNotifierProvider.notifier).signInWithApple();
+      await _routeAfterAuth();
+    } catch (error) {
+      if (!mounted) return;
+      if (error is AuthCancelledException) return;
+      _showFeedback(_cleanError(error));
+    } finally {
+      if (mounted) {
+        setState(() => _isAuthActionInFlight = false);
+      }
     }
   }
 
@@ -277,22 +313,6 @@ class _LoginFormState extends ConsumerState<_LoginForm> {
 
   Future<void> _routeAfterAuth() async {
     if (!mounted) return;
-
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid != null && uid.isNotEmpty) {
-      final prefs = await SharedPreferences.getInstance();
-      final perUserKey = 'hasSeenOnboarding_$uid';
-      final hasSeenOnboarding =
-          (prefs.getBool(perUserKey) ?? false) ||
-          (prefs.getBool('hasSeenOnboarding') ?? false);
-
-      if (!hasSeenOnboarding) {
-        await prefs.setBool(perUserKey, true);
-        await prefs.setBool('hasSeenOnboarding', true);
-        _goSafely('/add-car?nudge=true');
-        return;
-      }
-    }
 
     if (!mounted) return;
     if (widget.returnTo != null) {
@@ -363,11 +383,24 @@ class _LoginFormState extends ConsumerState<_LoginForm> {
                       .sendPasswordResetEmail(
                         email: emailController.text.trim(),
                       );
-                  EasyLoading.showSuccess('Reset link sent!');
+                  EasyLoading.dismiss();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: const Text('Password reset link sent!'),
+                        backgroundColor: AppColors.primary,
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    );
+                  }
                 } catch (e) {
-                  EasyLoading.showError(
-                    e.toString().replaceAll('Exception: ', ''),
-                  );
+                  EasyLoading.dismiss();
+                  if (context.mounted) {
+                    _showFeedback(e.toString().replaceAll('Exception: ', ''));
+                  }
                 }
               }
             },
@@ -380,6 +413,9 @@ class _LoginFormState extends ConsumerState<_LoginForm> {
 
   @override
   Widget build(BuildContext context) {
+    final authActionState = ref.watch(authNotifierProvider);
+    final isAuthActionRunning =
+        _isAuthActionInFlight || authActionState.isLoading;
     final theme = Theme.of(context);
 
     return AutofillGroup(
@@ -457,7 +493,7 @@ class _LoginFormState extends ConsumerState<_LoginForm> {
               width: double.infinity,
               height: widget.compact ? 52 : 56,
               child: FilledButton(
-                onPressed: _handleLogin,
+                onPressed: isAuthActionRunning ? null : _handleLogin,
                 style: FilledButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   shape: RoundedRectangleBorder(
@@ -475,7 +511,7 @@ class _LoginFormState extends ConsumerState<_LoginForm> {
 
             SizedBox(height: widget.compact ? 8 : 12),
             TextButton(
-              onPressed: _continueAsGuest,
+              onPressed: isAuthActionRunning ? null : _continueAsGuest,
               child: Text(
                 'Continue as Guest',
                 style: TextStyle(
@@ -507,7 +543,7 @@ class _LoginFormState extends ConsumerState<_LoginForm> {
               width: double.infinity,
               height: widget.compact ? 52 : 56,
               child: OutlinedButton.icon(
-                onPressed: _handleGoogleLogin,
+                onPressed: isAuthActionRunning ? null : _handleGoogleLogin,
                 icon: Image.asset(
                   'assets/icons/Google Logo Icon.png',
                   width: 24,
@@ -523,15 +559,37 @@ class _LoginFormState extends ConsumerState<_LoginForm> {
               ),
             ),
 
+            if (_showAppleSignIn) ...[
+              SizedBox(height: widget.compact ? 12 : 14),
+              SizedBox(
+                width: double.infinity,
+                height: widget.compact ? 52 : 56,
+                child: OutlinedButton.icon(
+                  onPressed: isAuthActionRunning ? null : _handleAppleLogin,
+                  icon: const Icon(Icons.apple),
+                  label: const Text('Continue with Apple'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: theme.textTheme.bodyLarge?.color,
+                    side: BorderSide(color: theme.dividerColor),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(30),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+
             SizedBox(height: widget.compact ? 20 : 32),
 
             GestureDetector(
-              onTap: () {
-                final route = widget.returnTo != null
-                    ? '/signup?returnTo=${Uri.encodeComponent(widget.returnTo!)}'
-                    : '/signup';
-                context.push(route);
-              },
+              onTap: isAuthActionRunning
+                  ? null
+                  : () {
+                      final route = widget.returnTo != null
+                          ? '/signup?returnTo=${Uri.encodeComponent(widget.returnTo!)}'
+                          : '/signup';
+                      context.push(route);
+                    },
               child: RichText(
                 text: TextSpan(
                   text: "Don't have an account? ",

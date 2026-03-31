@@ -1,14 +1,12 @@
 // lib/features/auth/presentation/email_verification_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:sparewo_client/features/auth/application/auth_provider.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'dart:async';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sparewo_client/core/theme/app_theme.dart';
 import 'package:sparewo_client/core/widgets/responsive_screen.dart';
 
@@ -41,6 +39,7 @@ class _EmailVerificationScreenState
   int _secondsRemaining = 30;
   bool _canResend = false;
   bool _isVerifying = false;
+  String? _errorMessage;
   Timer? _clipboardTimer;
 
   void _goSafely(String route) {
@@ -54,6 +53,23 @@ class _EmailVerificationScreenState
   void initState() {
     super.initState();
     _startTimer();
+
+    // Wire up backspace functionality for empty fields
+    for (int i = 0; i < 6; i++) {
+      _focusNodes[i].onKeyEvent = (node, event) {
+        if (event is KeyDownEvent &&
+            event.logicalKey == LogicalKeyboardKey.backspace) {
+          if (_controllers[i].text.isEmpty && i > 0) {
+            _focusNodes[i - 1].requestFocus();
+            _controllers[i - 1].selection = TextSelection.collapsed(
+              offset: _controllers[i - 1].text.length,
+            );
+            return KeyEventResult.handled;
+          }
+        }
+        return KeyEventResult.ignored;
+      };
+    }
   }
 
   @override
@@ -95,17 +111,32 @@ class _EmailVerificationScreenState
       await ref
           .read(authNotifierProvider.notifier)
           .resendVerificationCode(email: widget.email);
-      EasyLoading.showSuccess('Code sent!');
+      EasyLoading.dismiss();
       _startTimer();
-      // Clear fields
-      for (var controller in _controllers) {
-        controller.clear();
+      // Clear fields and error
+      if (mounted) {
+        setState(() => _errorMessage = null);
+        for (var controller in _controllers) {
+          controller.clear();
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('A new code has been sent to your email'),
+            backgroundColor: AppColors.primary,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
       }
     } catch (e) {
-      EasyLoading.showError(
-        e.toString().replaceAll('Exception: ', ''),
-        duration: const Duration(seconds: 3),
-      );
+      EasyLoading.dismiss();
+      if (mounted) {
+        setState(() {
+          _errorMessage = e.toString().replaceAll('Exception: ', '');
+        });
+      }
     }
   }
 
@@ -114,7 +145,7 @@ class _EmailVerificationScreenState
 
     final code = _controllers.map((c) => c.text).join();
     if (code.length != 6) {
-      EasyLoading.showError('Please enter the complete code');
+      setState(() => _errorMessage = 'Please enter all 6 digits');
       return;
     }
 
@@ -140,38 +171,21 @@ class _EmailVerificationScreenState
             _goSafely(widget.returnTo!);
             return;
           }
-
-          final uid = FirebaseAuth.instance.currentUser?.uid;
-          if (uid != null && uid.isNotEmpty) {
-            final prefs = await SharedPreferences.getInstance();
-            final perUserKey = 'hasSeenOnboarding_$uid';
-            final hasSeenOnboarding =
-                (prefs.getBool(perUserKey) ?? false) ||
-                (prefs.getBool('hasSeenOnboarding') ?? false);
-            if (!hasSeenOnboarding) {
-              await prefs.setBool(perUserKey, true);
-              await prefs.setBool('hasSeenOnboarding', true);
-              if (mounted) {
-                _goSafely('/add-car?nudge=true');
-              }
-              return;
-            }
-          }
           if (!mounted) return;
           _goSafely('/home');
         }
       }
     } catch (e) {
-      EasyLoading.showError(
-        e.toString().replaceAll('Exception: ', ''),
-        duration: const Duration(seconds: 3),
-      );
+      EasyLoading.dismiss();
       // Clear the code fields on error
       if (mounted) {
         for (var controller in _controllers) {
           controller.clear();
         }
         _focusNodes[0].requestFocus();
+        setState(() {
+          _errorMessage = e.toString().replaceAll('Exception: ', '');
+        });
       }
     } finally {
       if (mounted) {
@@ -322,6 +336,7 @@ class _EmailVerificationScreenState
                               color: codeColor,
                             ),
                             decoration: InputDecoration(
+                              contentPadding: EdgeInsets.zero,
                               counterText: '',
                               filled: true,
                               fillColor: fieldFillColor,
@@ -382,18 +397,59 @@ class _EmailVerificationScreenState
                                   offset: _controllers[index - 1].text.length,
                                 );
                               }
+                              if (_errorMessage != null) {
+                                setState(() => _errorMessage = null);
+                              }
                             },
                           ),
                         );
                       }),
                     ).animate().fadeIn(delay: 250.ms),
 
-                    const SizedBox(height: 40),
+                    // Inline error message
+                    if (_errorMessage != null) ...[
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.error.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: AppColors.error.withValues(alpha: 0.2),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.error_outline_rounded,
+                              size: 18,
+                              color: AppColors.error,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                _errorMessage!,
+                                style: const TextStyle(
+                                  color: AppColors.error,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+
+                    const SizedBox(height: 32),
 
                     // Verify Button
                     SizedBox(
-                      width: double.infinity,
-                      height: 48,
+                      width: 200,
+                      height: 44,
                       child: FilledButton(
                         onPressed: _isVerifying ? null : _verifyCode,
                         style: FilledButton.styleFrom(

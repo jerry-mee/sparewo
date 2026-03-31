@@ -35,6 +35,7 @@ import Link from "next/link";
 import { CheckCircle, XCircle, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import Image from "next/image";
+import { logError } from "@/lib/diagnostics/logger";
 
 export default function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -68,7 +69,7 @@ export default function ProductDetailPage() {
           setVendor(vendorData);
         }
       } catch (error) {
-        console.error("Error fetching product data:", error);
+        void logError("product_detail_page", "Error fetching product data", error);
         toast.error("Failed to load product data");
       } finally {
         setLoading(false);
@@ -138,8 +139,8 @@ export default function ProductDetailPage() {
         toast.success(`Product ${product.name || product.partName} has been rejected`);
       }
     } catch (error) {
-      console.error(`Error ${dialogAction}ing product:`, error);
-      toast.error(`Failed to ${dialogAction} product`);
+      void logError("product_detail_page", "Error updating product status", error, { action: dialogAction });
+      toast.error("Failed to " + dialogAction + " product");
     } finally {
       setDialogOpen(false);
     }
@@ -379,14 +380,15 @@ export default function ProductDetailPage() {
                     <div>
                       <div className="aspect-video relative bg-gray-100 rounded-lg overflow-hidden mb-4">
                         {activeImage && (
-                          <Image 
-                            src={activeImage} 
+                          <Image
+                            src={activeImage}
                             alt={productName}
                             fill
+                            unoptimized
                             sizes="(max-width: 1024px) 100vw, 66vw"
                             className="object-contain"
                             onError={() => {
-                              console.error('Image failed to load:', activeImage);
+                              void logError("product_detail_page", "Image failed to load", activeImage);
                             }}
                           />
                         )}
@@ -402,14 +404,15 @@ export default function ProductDetailPage() {
                             `}
                             onClick={() => setActiveImage(url)}
                           >
-                            <Image 
-                              src={url} 
-                              alt={`${productName} - Image ${index + 1}`}
+                            <Image
+                              src={url}
+                              alt={productName + " - Image " + (index + 1)}
                               fill
+                              unoptimized
                               sizes="(max-width: 640px) 25vw, 12vw"
                               className="object-cover"
                               onError={() => {
-                                console.error('Thumbnail failed to load:', url);
+                                void logError("product_detail_page", "Thumbnail failed to load", url);
                               }}
                             />
                           </div>
@@ -515,7 +518,7 @@ export default function ProductDetailPage() {
                         setProduct({ ...product, showInCatalog: checked });
                         toast.success("Catalog status updated");
                       } catch (error) {
-                        console.error("Error updating catalog status:", error);
+                        void logError("product_detail_page", "Error updating catalog status", error);
                         toast.error("Failed to update catalog status");
                       }
                     }}

@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart';
@@ -36,6 +37,8 @@ class AppLogger {
   static bool _crashlyticsIncludeInfo = true;
   static bool _crashlyticsIncludeDebug = false;
   static bool _crashlyticsRecordNonFatalErrors = true;
+  static String? _currentUserIdentifier;
+  static const String _diagnosticsCollection = 'system_diagnostics_events';
 
   static Future<void> init() async {
     if (_initialized || _initializing) return;
@@ -124,6 +127,7 @@ class AppLogger {
   }
 
   static Future<void> setUserIdentifier(String? uid) async {
+    _currentUserIdentifier = uid;
     if (!_crashlyticsForwardingEnabled || kIsWeb || Firebase.apps.isEmpty) {
       return;
     }
@@ -268,6 +272,13 @@ class AppLogger {
       error: error,
       stackTrace: stackTrace,
     );
+    _forwardToDiagnostics(
+      level: level,
+      context: context,
+      message: message,
+      data: data,
+      error: error,
+    );
   }
 
   static bool _isDuplicateWithinWindow(String fingerprint, DateTime now) {
@@ -352,6 +363,9 @@ class AppLogger {
   }
 
   static void _writeConsole(String line) {
+    if (kReleaseMode) {
+      return;
+    }
     try {
       debugPrint(line);
     } catch (_) {
@@ -434,5 +448,38 @@ class AppLogger {
       return _logFile!.path;
     }
     return 'Log file unavailable';
+  }
+
+  static void _forwardToDiagnostics({
+    required String level,
+    required String context,
+    required String message,
+    required Map<String, dynamic>? data,
+    Object? error,
+  }) {
+    if (kIsWeb || Firebase.apps.isEmpty) return;
+    if (level != 'WARN' && level != 'ERROR') return;
+
+    final severity = level == 'ERROR' ? 'error' : 'warn';
+    final fingerprint = '$level|$context|$message|${data?.toString() ?? ''}';
+    unawaited(
+      FirebaseFirestore.instance.collection(_diagnosticsCollection).add({
+        'source': 'client',
+        'service': context,
+        'severity': severity,
+        'code': level.toLowerCase(),
+        'message': message,
+        'fingerprint': fingerprint,
+        'context': {
+          if (data != null) ...data,
+          if (error != null) 'error': error.toString(),
+        },
+        'platform': Platform.operatingSystem,
+        'uid': _currentUserIdentifier,
+        'timestamp': FieldValue.serverTimestamp(),
+        'isoTimestamp': DateTime.now().toIso8601String(),
+        'createdAtMs': DateTime.now().millisecondsSinceEpoch,
+      }),
+    );
   }
 }

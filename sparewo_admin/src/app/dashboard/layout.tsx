@@ -7,6 +7,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   CircleAlert,
+  ServerCrash,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -59,6 +60,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       { title: "Orders", href: "/dashboard/orders", icon: ShoppingCart, roles: ["Administrator", "Manager", "Mechanic"] },
       { title: "Issues", href: "/dashboard/issues", icon: CircleAlert, roles: ["Administrator", "Manager"] },
       { title: "Comms", href: "/dashboard/comms", icon: MessageSquareWarning, roles: ["Administrator", "Manager"] },
+      { title: "System Status", href: "/dashboard/system-status", icon: ServerCrash, roles: ["Administrator", "Manager"] },
       { title: "Settings", href: "/dashboard/settings", icon: Settings, roles: ["Administrator"] },
     ],
     []
@@ -116,8 +118,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         )}
       >
         <div className="flex h-full flex-col">
-          <div className="flex h-20 items-center justify-between border-b border-sidebar-border px-5">
-            <Link href="/dashboard" className="flex min-w-0 items-center gap-3">
+          <div className="flex h-20 items-center justify-between border-b border-sidebar-border px-4 lg:px-5">
+            <Link href="/dashboard" className="flex min-w-0 flex-1 items-center gap-3">
               <Image
                 src="/images/logo.png"
                 alt="SpareWo"
@@ -136,7 +138,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               variant="ghost"
               size="icon"
               onClick={() => setIsDesktopSidebarExpanded((open) => !open)}
-              className="hidden lg:inline-flex"
+              className="ml-2 hidden shrink-0 lg:inline-flex"
             >
               {isDesktopSidebarExpanded ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
             </Button>
@@ -193,7 +195,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         )}
       >
         <header className="sticky top-0 z-20 border-b border-border/70 bg-card/90 px-4 backdrop-blur-sm md:px-6 lg:px-8">
-          <div className="flex h-20 items-center justify-between gap-3">
+          <div className="flex min-h-20 flex-wrap items-center justify-between gap-3 py-3 md:flex-nowrap">
             <div className="flex min-w-0 items-center gap-3 md:gap-6">
               <Button
                 variant="ghost"
@@ -204,12 +206,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 {isMobileSidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
               </Button>
 
-              <div className="hidden min-w-0 md:block">
+              <div className="hidden min-w-0 max-w-[14rem] md:block lg:max-w-[18rem] xl:max-w-[22rem]">
                 <p className="truncate text-base font-semibold font-display">{currentTitle}</p>
                 <p className="truncate text-xs text-muted-foreground">Platform command and monitoring</p>
               </div>
 
-              <form onSubmit={onSearch} className="relative hidden w-full max-w-xl md:block">
+              <form onSubmit={onSearch} className="relative hidden w-full md:block md:min-w-[240px] md:max-w-[42vw] lg:max-w-[520px]">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <input
                   value={searchValue}

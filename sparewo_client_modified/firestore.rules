@@ -58,15 +58,80 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    function isVendorOwner(vendorId) {
-      return isSignedIn() && request.auth.uid == vendorId;
-    }
-
     function isVendor() {
       return isSignedIn() && (
         exists(/databases/$(database)/documents/vendors/$(request.auth.uid)) ||
         isStaff()
       );
+    }
+
+    function isOwnedByCurrentUser(data) {
+      return isSignedIn() && (
+        data.userId == request.auth.uid ||
+        data.clientId == request.auth.uid ||
+        data.customerId == request.auth.uid ||
+        data.recipientId == request.auth.uid ||
+        data.recipientUid == request.auth.uid ||
+        data.uid == request.auth.uid
+      );
+    }
+
+    // ----------------------------------------------------------------------
+    // EMERGENCY INCIDENT HOTFIX (2026-03-31)
+    // Goal: restore core read/write paths while forensic investigation continues.
+    // Remove or tighten this section after backend policy drift is resolved.
+    // ----------------------------------------------------------------------
+    match /catalog_products/{docPath=**} {
+      allow read: if true;
+    }
+
+    match /users/{userId}/{docPath=**} {
+      allow read, write: if (isSignedIn() && request.auth.uid == userId) || isStaff();
+    }
+
+    match /clients/{clientId}/{docPath=**} {
+      allow read, write: if (isSignedIn() && request.auth.uid == clientId) || isStaff();
+    }
+
+    match /orders/{orderPath=**} {
+      allow read: if isStaff() || (isSignedIn() && (
+        resource.data.userId == request.auth.uid ||
+        resource.data.clientId == request.auth.uid ||
+        resource.data.customerId == request.auth.uid
+      ));
+      allow create: if isSignedIn() && (
+        request.resource.data.userId == request.auth.uid ||
+        request.resource.data.clientId == request.auth.uid ||
+        request.resource.data.customerId == request.auth.uid
+      );
+    }
+
+    match /service_bookings/{bookingPath=**} {
+      allow read: if isStaff() || (isSignedIn() && (
+        resource.data.userId == request.auth.uid ||
+        resource.data.clientId == request.auth.uid ||
+        resource.data.customerId == request.auth.uid
+      ));
+      allow create: if isSignedIn() && (
+        request.resource.data.userId == request.auth.uid ||
+        request.resource.data.clientId == request.auth.uid ||
+        request.resource.data.customerId == request.auth.uid
+      );
+      allow update: if isAdmin();
+    }
+
+    match /notifications/{notificationPath=**} {
+      allow read: if isStaff() || (isSignedIn() && (
+        resource.data.userId == request.auth.uid ||
+        resource.data.recipientId == request.auth.uid ||
+        resource.data.recipientUid == request.auth.uid
+      ));
+    }
+
+    match /system_diagnostics_events/{eventId} {
+      allow create: if isSignedIn();
+      allow read: if isStaff();
+      allow update, delete: if false;
     }
 
     // ----------------------------------------------------------------------
@@ -86,7 +151,13 @@ service cloud.firestore {
       }
 
       match /cars/{carId} {
-        allow read, write: if isClient(userId) || isStaff();
+        allow read, write: if isClient(userId);
+        allow read, write: if isStaff();
+      }
+      // Query/list requests evaluate collection paths, so mirror list access for
+      // the collection root in addition to per-document rules above.
+      match /cars/{carPath=**} {
+        allow list: if isClient(userId) || isStaff();
       }
 
       match /addresses/{addressId} {
@@ -132,10 +203,18 @@ service cloud.firestore {
       }
 
       match /cars/{carId} {
-        allow read, write: if isClient(clientId) || isStaff();
+        allow read, write: if isClient(clientId);
+        allow read, write: if isStaff();
+      }
+      match /cars/{carPath=**} {
+        allow list: if isClient(clientId) || isStaff();
       }
 
       match /addresses/{addressId} {
+        allow read, write: if isClient(clientId) || isStaff();
+      }
+
+      match /tokens/{tokenId} {
         allow read, write: if isClient(clientId) || isStaff();
       }
     }
@@ -150,6 +229,9 @@ service cloud.firestore {
     match /catalog_products/{productId} {
       allow get, list: if true;
       allow write: if isAdmin();
+    }
+    match /catalog_products/{productPath=**} {
+      allow list: if true;
     }
 
     match /vendor_products/{productId} {
@@ -185,12 +267,15 @@ service cloud.firestore {
     // ORDERS & FULFILMENT
     // ----------------------------------------------------------------------
     match /orders/{orderId} {
-      allow read: if isSignedIn() && (
-        resource.data.userId == request.auth.uid || isStaff()
-      );
+      allow get, list: if isStaff() || isOwnedByCurrentUser(resource.data);
       allow create: if isSignedIn() &&
-        request.auth.uid == request.resource.data.userId;
+        (request.auth.uid == request.resource.data.userId ||
+         request.auth.uid == request.resource.data.clientId ||
+         request.auth.uid == request.resource.data.customerId);
       allow update, delete: if isAdmin();
+    }
+    match /orders/{orderPath=**} {
+      allow list: if isStaff() || isOwnedByCurrentUser(resource.data);
     }
 
     match /order_fulfillments/{fulfillmentId} {
@@ -229,14 +314,16 @@ service cloud.firestore {
     // SERVICE BOOKINGS (AutoHub)
     // ----------------------------------------------------------------------
     match /service_bookings/{bookingId} {
-      allow read: if isSignedIn() && (
-        resource.data.userId == request.auth.uid || isStaff()
-      );
+      allow get, list: if isStaff() || isOwnedByCurrentUser(resource.data);
       allow create: if isSignedIn() &&
-        (request.auth.uid == request.resource.data.userId || isStaff());
-      allow update: if isSignedIn() && (
-        resource.data.userId == request.auth.uid || isStaff()
-      );
+        (request.auth.uid == request.resource.data.userId ||
+         request.auth.uid == request.resource.data.clientId ||
+         request.auth.uid == request.resource.data.customerId ||
+         isStaff());
+      allow update: if isStaff();
+      allow update: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow update: if isSignedIn() && resource.data.clientId == request.auth.uid;
+      allow update: if isSignedIn() && resource.data.customerId == request.auth.uid;
       allow delete: if isAdmin();
     }
 
@@ -346,23 +433,42 @@ service cloud.firestore {
     }
 
     match /notifications/{notificationId} {
-      function notifOwner() {
-        return isSignedIn() && (
-          resource.data.userId == request.auth.uid ||
-          resource.data.recipientId == request.auth.uid ||
-          resource.data.vendorId == request.auth.uid ||
-          resource.data.recipientUid == request.auth.uid
-        );
-      }
-
-      allow get, list: if isStaff() || notifOwner();
+      allow get, list: if isStaff() || isOwnedByCurrentUser(resource.data) || (
+        isSignedIn() && resource.data.vendorId == request.auth.uid
+      );
       allow create: if isStaff();
-      allow delete: if isStaff() || notifOwner();
+      allow delete: if isStaff();
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.recipientId == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.clientId == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.customerId == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.vendorId == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.recipientUid == request.auth.uid;
 
       // Support both "read" (current app) and "isRead" (legacy)
-      allow update: if isStaff() || (
-        notifOwner() &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'isRead', 'updatedAt'])
+      allow update: if isStaff();
+      allow update: if isSignedIn() &&
+        resource.data.userId == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'isRead', 'updatedAt']);
+      allow update: if isSignedIn() &&
+        resource.data.recipientId == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'isRead', 'updatedAt']);
+      allow update: if isSignedIn() &&
+        resource.data.clientId == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'isRead', 'updatedAt']);
+      allow update: if isSignedIn() &&
+        resource.data.customerId == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'isRead', 'updatedAt']);
+      allow update: if isSignedIn() &&
+        resource.data.vendorId == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'isRead', 'updatedAt']);
+      allow update: if isSignedIn() &&
+        resource.data.recipientUid == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'isRead', 'updatedAt']);
+    }
+    match /notifications/{notificationPath=**} {
+      allow list: if isStaff() || isOwnedByCurrentUser(resource.data) || (
+        isSignedIn() && resource.data.vendorId == request.auth.uid
       );
     }
 

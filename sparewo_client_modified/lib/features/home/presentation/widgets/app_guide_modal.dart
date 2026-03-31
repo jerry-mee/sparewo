@@ -1,4 +1,5 @@
 // lib/features/home/presentation/widgets/app_guide_modal.dart
+import 'dart:async';
 import 'dart:ui';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -8,7 +9,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sparewo_client/core/theme/app_theme.dart';
 
 class AppGuideModal extends StatefulWidget {
-  const AppGuideModal({super.key});
+  const AppGuideModal({super.key, this.userId});
+
+  final String? userId;
 
   @override
   State<AppGuideModal> createState() => _AppGuideModalState();
@@ -18,18 +21,38 @@ class _AppGuideModalState extends State<AppGuideModal> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
   bool _dontShowAgain = true;
+  bool _didPersistOnClose = false;
 
   String _onboardingKey() {
+    final explicitUserId = widget.userId?.trim();
+    if (explicitUserId != null && explicitUserId.isNotEmpty) {
+      return 'hasSeenOnboarding_$explicitUserId';
+    }
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null || uid.isEmpty) return 'hasSeenOnboarding';
     return 'hasSeenOnboarding_$uid';
   }
 
-  Future<void> _completeOnboarding() async {
+  String _canonicalGuideKey() {
+    final explicitUserId = widget.userId?.trim();
+    if (explicitUserId != null && explicitUserId.isNotEmpty) {
+      return 'mycarGuideCompleted_$explicitUserId';
+    }
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null || uid.isEmpty) return 'mycarGuideCompleted';
+    return 'mycarGuideCompleted_$uid';
+  }
+
+  Future<void> _persistOnboardingPreference({bool completed = false}) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_onboardingKey(), _dontShowAgain);
+    final shouldPersistComplete = completed ? true : _dontShowAgain;
+    await prefs.setBool(_onboardingKey(), shouldPersistComplete);
+    await prefs.setBool(_canonicalGuideKey(), shouldPersistComplete);
     // Keep legacy key aligned for older checks.
-    await prefs.setBool('hasSeenOnboarding', _dontShowAgain);
+    await prefs.setBool('hasSeenOnboarding', shouldPersistComplete);
+    if (completed) {
+      _didPersistOnClose = true;
+    }
   }
 
   void _onNext() {
@@ -41,20 +64,23 @@ class _AppGuideModalState extends State<AppGuideModal> {
   }
 
   Future<void> _onClose() async {
-    await _completeOnboarding();
+    await _persistOnboardingPreference(completed: true);
     if (!mounted) return;
-    context.pop();
+    context.pop(_dontShowAgain);
   }
 
   Future<void> _onSetupCar() async {
-    await _completeOnboarding();
+    await _persistOnboardingPreference(completed: true);
     if (!mounted) return;
-    context.pop();
+    context.pop(_dontShowAgain);
     context.push('/add-car');
   }
 
   @override
   void dispose() {
+    if (!_didPersistOnClose) {
+      unawaited(_persistOnboardingPreference());
+    }
     _pageController.dispose();
     super.dispose();
   }
@@ -80,9 +106,9 @@ class _AppGuideModalState extends State<AppGuideModal> {
       ),
       const _AppGuideSlide(
         animationAsset: 'assets/animations/car_motorly_navy.json',
-        title: 'My Car keeps your car organised',
+        title: 'MyCar keeps your car organised',
         body:
-            'Add your car in My Car to store servicing, mileage and insurance details so you never miss an important date.',
+            'Add your car in MyCar to store servicing, mileage and insurance details so you never miss an important date.',
       ),
       const _AppGuideSlide(
         animationAsset: 'assets/animations/driving_sparewo_brand.json',
@@ -92,173 +118,185 @@ class _AppGuideModalState extends State<AppGuideModal> {
       ),
     ];
 
-    return BackdropFilter(
-      filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-      child: Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-        child: Container(
-          width: double.infinity,
-          // Fixed: Flexible height constraint instead of hard fixed height
-          constraints: BoxConstraints(
-            maxHeight: size.height * 0.85,
-            minHeight: 400,
+    return PopScope(
+      canPop: true,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) return;
+        unawaited(_persistOnboardingPreference(completed: true));
+      },
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        child: Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 24,
           ),
-          decoration: BoxDecoration(
-            color: theme.cardColor.withValues(alpha: 0.95),
-            borderRadius: BorderRadius.circular(36),
-            border: Border.all(
-              color: isDark
-                  ? Colors.white.withValues(alpha: 0.1)
-                  : Colors.black.withValues(alpha: 0.05),
+          child: Container(
+            width: double.infinity,
+            // Fixed: Flexible height constraint instead of hard fixed height
+            constraints: BoxConstraints(
+              maxHeight: size.height * 0.85,
+              minHeight: 400,
             ),
-            boxShadow: AppShadows.floatingShadow,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min, // Shrink to fit if content is small
-            children: [
-              // Top Bar (Skip)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    if (_currentPage < pages.length - 1)
-                      TextButton(
-                        onPressed: _onClose,
-                        child: Text(
-                          'Skip',
-                          style: TextStyle(
-                            color: theme.hintColor,
-                            fontWeight: FontWeight.w600,
+            decoration: BoxDecoration(
+              color: theme.cardColor.withValues(alpha: 0.95),
+              borderRadius: BorderRadius.circular(36),
+              border: Border.all(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.1)
+                    : Colors.black.withValues(alpha: 0.05),
+              ),
+              boxShadow: AppShadows.floatingShadow,
+            ),
+            child: Column(
+              mainAxisSize:
+                  MainAxisSize.min, // Shrink to fit if content is small
+              children: [
+                // Top Bar (Skip)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      if (_currentPage < pages.length - 1)
+                        TextButton(
+                          onPressed: _onClose,
+                          child: Text(
+                            'Skip',
+                            style: TextStyle(
+                              color: theme.hintColor,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
 
-              // Content PageView
-              Expanded(
-                child: PageView.builder(
-                  controller: _pageController,
-                  itemCount: pages.length,
-                  onPageChanged: (index) =>
-                      setState(() => _currentPage = index),
-                  itemBuilder: (context, index) {
-                    if (index == pages.length - 1) {
-                      // Custom layout for the final slide with buttons
-                      return _AppGuideSlide(
-                        animationAsset:
-                            'assets/animations/driving_sparewo_brand.json',
-                        title: 'Drive smarter with SpareWo',
-                        body:
-                            'Get SpareWo discounts, reminders and simple car care tips tailored to your car.',
-                        primaryAction: FilledButton(
-                          onPressed: _onSetupCar,
+                // Content PageView
+                Expanded(
+                  child: PageView.builder(
+                    controller: _pageController,
+                    itemCount: pages.length,
+                    onPageChanged: (index) =>
+                        setState(() => _currentPage = index),
+                    itemBuilder: (context, index) {
+                      if (index == pages.length - 1) {
+                        // Custom layout for the final slide with buttons
+                        return _AppGuideSlide(
+                          animationAsset:
+                              'assets/animations/driving_sparewo_brand.json',
+                          title: 'Drive smarter with SpareWo',
+                          body:
+                              'Get SpareWo discounts, reminders and simple car care tips tailored to your car.',
+                          primaryAction: FilledButton(
+                            onPressed: _onSetupCar,
+                            style: FilledButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              foregroundColor: Colors.white,
+                              minimumSize: const Size(0, 56),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              elevation: 8,
+                              shadowColor: AppColors.primary.withValues(
+                                alpha: 0.4,
+                              ),
+                            ),
+                            child: const Text('Tell us about your car'),
+                          ),
+                          secondaryAction: TextButton(
+                            onPressed: _onClose,
+                            child: Text(
+                              'Do this later',
+                              style: TextStyle(color: theme.hintColor),
+                            ),
+                          ),
+                        );
+                      }
+                      return pages[index];
+                    },
+                  ),
+                ),
+
+                // Bottom Dots + Next Button (Only for first 3 slides)
+                if (_currentPage < pages.length - 1)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(32, 0, 32, 32),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Dots
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: List.generate(
+                            pages.length,
+                            (index) => AnimatedContainer(
+                              duration: const Duration(milliseconds: 300),
+                              margin: const EdgeInsets.symmetric(horizontal: 4),
+                              height: 8,
+                              width: _currentPage == index ? 32 : 8,
+                              decoration: BoxDecoration(
+                                color: _currentPage == index
+                                    ? AppColors.primary
+                                    : theme.dividerColor,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        // Next Button
+                        FilledButton(
+                          onPressed: _onNext,
                           style: FilledButton.styleFrom(
                             backgroundColor: AppColors.primary,
-                            foregroundColor: Colors.white,
                             minimumSize: const Size(0, 56),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(16),
                             ),
-                            elevation: 8,
-                            shadowColor: AppColors.primary.withValues(
-                              alpha: 0.4,
-                            ),
                           ),
-                          child: const Text('Tell us about your car'),
-                        ),
-                        secondaryAction: TextButton(
-                          onPressed: _onClose,
-                          child: Text(
-                            'Do this later',
-                            style: TextStyle(color: theme.hintColor),
-                          ),
-                        ),
-                      );
-                    }
-                    return pages[index];
-                  },
-                ),
-              ),
-
-              // Bottom Dots + Next Button (Only for first 3 slides)
-              if (_currentPage < pages.length - 1)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(32, 0, 32, 32),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Dots
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: List.generate(
-                          pages.length,
-                          (index) => AnimatedContainer(
-                            duration: const Duration(milliseconds: 300),
-                            margin: const EdgeInsets.symmetric(horizontal: 4),
-                            height: 8,
-                            width: _currentPage == index ? 32 : 8,
-                            decoration: BoxDecoration(
-                              color: _currentPage == index
-                                  ? AppColors.primary
-                                  : theme.dividerColor,
-                              borderRadius: BorderRadius.circular(4),
+                          child: const Text(
+                            'Next',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
                             ),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 24),
-                      // Next Button
-                      FilledButton(
-                        onPressed: _onNext,
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          minimumSize: const Size(0, 56),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
+                        const SizedBox(height: 10),
+                        CheckboxListTile(
+                          value: _dontShowAgain,
+                          onChanged: (value) {
+                            setState(() => _dontShowAgain = value ?? true);
+                            unawaited(_persistOnboardingPreference());
+                          },
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          visualDensity: const VisualDensity(
+                            horizontal: -4,
+                            vertical: -4,
+                          ),
+                          controlAffinity: ListTileControlAffinity.leading,
+                          title: Text(
+                            "Don't show this again",
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: theme.hintColor,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
-                        child: const Text(
-                          'Next',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      CheckboxListTile(
-                        value: _dontShowAgain,
-                        onChanged: (value) {
-                          setState(() => _dontShowAgain = value ?? true);
-                        },
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
-                        visualDensity: const VisualDensity(
-                          horizontal: -4,
-                          vertical: -4,
-                        ),
-                        controlAffinity: ListTileControlAffinity.leading,
-                        title: Text(
-                          "Don't show this again",
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: theme.hintColor,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              else
-                // Spacer for the last slide so content isn't flush with bottom
-                const SizedBox(height: 24),
-            ],
+                      ],
+                    ),
+                  )
+                else
+                  // Spacer for the last slide so content isn't flush with bottom
+                  const SizedBox(height: 24),
+              ],
+            ),
           ),
         ),
       ),

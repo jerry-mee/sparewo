@@ -1,7 +1,9 @@
 // lib/features/home/presentation/home_screen.dart
 import 'dart:math' as math;
 import 'dart:ui';
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -27,16 +29,134 @@ import 'package:sparewo_client/core/widgets/site_footer.dart';
 final activeOrdersCountProvider = StreamProvider.autoDispose<int>((ref) {
   final user = ref.watch(currentUserProvider).asData?.value;
   if (user == null) return Stream.value(0);
-  return FirebaseFirestore.instance
-      .collection('orders')
-      .where('userId', isEqualTo: user.id)
-      .where(
-        'status',
-        whereIn: ['pending', 'confirmed', 'processing', 'shipped'],
-      )
-      .snapshots()
-      .map((s) => s.docs.length);
+  return _safeActiveOrdersCountStream(user.id);
 });
+
+Stream<int> _safeActiveOrdersCountStream(String uid) {
+  const activeStatuses = <String>[
+    'pending',
+    'confirmed',
+    'processing',
+    'shipped',
+  ];
+  const ownershipFields = <String>['userId'];
+  const maxOwnershipRetries = 5;
+
+  return Stream.multi((controller) {
+    final firestore = FirebaseFirestore.instance;
+    final idsByField = <String, Set<String>>{};
+    final subscriptions =
+        <String, StreamSubscription<QuerySnapshot<Map<String, dynamic>>>>{};
+    final retryTimers = <String, Timer>{};
+    final retryAttempts = <String, int>{};
+
+    void emit() {
+      final uniqueIds = <String>{};
+      for (final ids in idsByField.values) {
+        uniqueIds.addAll(ids);
+      }
+      controller.add(uniqueIds.length);
+    }
+
+    void attachField(String field) {
+      final query = firestore
+          .collection('orders')
+          .where(field, isEqualTo: uid)
+          .where('status', whereIn: activeStatuses);
+
+      final subscription = query.snapshots().listen(
+        (snapshot) {
+          retryAttempts.remove(field);
+          idsByField[field] = snapshot.docs.map((doc) => doc.id).toSet();
+          emit();
+        },
+        onError: (error, stackTrace) {
+          if (error is FirebaseException &&
+              (error.code == 'permission-denied' ||
+                  error.code == 'unauthenticated')) {
+            AppLogger.warn(
+              'HomeScreen',
+              'Active orders count blocked for ownership field; scheduling retry',
+              extra: {
+                'uid': uid,
+                'field': field,
+                'code': error.code,
+                'attempt': retryAttempts[field] ?? 0,
+              },
+            );
+            idsByField.remove(field);
+            final sub = subscriptions.remove(field);
+            sub?.cancel();
+            final currentAttempt = retryAttempts[field] ?? 0;
+            if (currentAttempt >= maxOwnershipRetries) {
+              AppLogger.warn(
+                'HomeScreen',
+                'Active orders retries exhausted for ownership field; pinned to fallback count',
+                extra: {'uid': uid, 'field': field, 'attempt': currentAttempt},
+              );
+              if (subscriptions.isEmpty) {
+                controller.add(0);
+              } else {
+                emit();
+              }
+              return;
+            }
+            if (retryTimers[field] == null) {
+              final nextAttempt = currentAttempt + 1;
+              retryAttempts[field] = nextAttempt;
+              retryTimers[field] = Timer(const Duration(seconds: 4), () {
+                retryTimers.remove(field);
+                if (controller.isClosed) return;
+                if (subscriptions.containsKey(field)) return;
+                attachField(field);
+              });
+            }
+            if (subscriptions.isEmpty) {
+              controller.add(0);
+            } else {
+              emit();
+            }
+            return;
+          }
+
+          AppLogger.error(
+            'HomeScreen',
+            'Failed to compute active orders count',
+            error: error,
+            stackTrace: stackTrace,
+            extra: {'uid': uid, 'field': field},
+          );
+          for (final sub in subscriptions.values) {
+            sub.cancel();
+          }
+          for (final timer in retryTimers.values) {
+            timer.cancel();
+          }
+          controller.addError(error, stackTrace);
+        },
+      );
+
+      subscriptions[field] = subscription;
+    }
+
+    for (final field in ownershipFields) {
+      attachField(field);
+    }
+
+    controller.add(0);
+
+    controller.onCancel = () {
+      for (final subscription in subscriptions.values) {
+        subscription.cancel();
+      }
+      for (final timer in retryTimers.values) {
+        timer.cancel();
+      }
+      subscriptions.clear();
+      retryTimers.clear();
+    };
+  });
+}
 
 class CarFuluTip {
   final String headline;
@@ -118,7 +238,7 @@ const _carFuluTips = <CarFuluTip>[
 ];
 
 final carFuluTipProvider = Provider<CarFuluTip>((ref) {
-  // TODO: Replace with Firestore/Admin-managed daily tips when dashboard endpoint is ready.
+  // Deterministic tip rotation keeps content fresh even before dashboard-driven tip feeds.
   final now = DateTime.now();
   final anchor = DateTime(2026, 1, 1);
   final days = now.difference(anchor).inDays.abs();
@@ -146,6 +266,8 @@ class MobileHomeScreen extends ConsumerStatefulWidget {
 
 class _MobileHomeScreenState extends ConsumerState<MobileHomeScreen> {
   final ScrollController _scrollController = ScrollController();
+  bool _guidePromptHandledThisSession = false;
+  bool _guideCheckInFlight = false;
 
   @override
   void initState() {
@@ -159,28 +281,80 @@ class _MobileHomeScreenState extends ConsumerState<MobileHomeScreen> {
   }
 
   Future<void> _checkAndShowAppGuide() async {
-    final user = ref.read(currentUserProvider).value;
-    if (user == null) return;
+    if (_guidePromptHandledThisSession || _guideCheckInFlight) return;
+    final authUid = FirebaseAuth.instance.currentUser?.uid;
+    final profileUid = ref.read(currentUserProvider).value?.id;
+    final effectiveUid = (authUid != null && authUid.isNotEmpty)
+        ? authUid
+        : profileUid;
+    if (effectiveUid == null || effectiveUid.isEmpty) return;
+
+    _guideCheckInFlight = true;
     final prefs = await SharedPreferences.getInstance();
-    final perUserKey = 'hasSeenOnboarding_${user.id}';
-    final legacySeen = prefs.getBool('hasSeenOnboarding') ?? false;
-    var hasSeenGuide = prefs.getBool(perUserKey);
+    try {
+      final perUserKey = 'hasSeenOnboarding_$effectiveUid';
+      final canonicalGuideKey = 'mycarGuideCompleted_$effectiveUid';
+      final legacySeen = prefs.getBool('hasSeenOnboarding') ?? false;
+      var hasSeenGuide = prefs.getBool(perUserKey);
+      final canonicalSeen = prefs.getBool(canonicalGuideKey) ?? false;
 
-    // Migration: if the user had already seen the legacy onboarding flag,
-    // preserve that behavior and avoid showing onboarding again.
-    if (hasSeenGuide == null && legacySeen) {
-      hasSeenGuide = true;
-      await prefs.setBool(perUserKey, true);
-    }
+      if (canonicalSeen && hasSeenGuide != true) {
+        hasSeenGuide = true;
+        await prefs.setBool(perUserKey, true);
+      }
 
-    if (!(hasSeenGuide ?? false) && mounted) {
-      AppLogger.info('HomeScreen', 'Showing Guide Modal');
-      await showDialog(
-        context: context,
-        barrierDismissible: false,
-        barrierColor: Colors.black.withValues(alpha: 0.6),
-        builder: (context) => const AppGuideModal(),
-      );
+      // Migration: if the user had already seen the legacy onboarding flag,
+      // preserve that behavior and avoid showing onboarding again.
+      if (hasSeenGuide == null && legacySeen) {
+        hasSeenGuide = true;
+        await prefs.setBool(perUserKey, true);
+        await prefs.setBool(canonicalGuideKey, true);
+      }
+
+      if ((hasSeenGuide ?? false) && !canonicalSeen) {
+        await prefs.setBool(canonicalGuideKey, true);
+      }
+
+      AppLogger.debug(
+        'HomeScreen',
+          'Guide preference evaluated',
+          extra: {
+            'key': perUserKey,
+            'canonicalKey': canonicalGuideKey,
+            'effectiveUid': effectiveUid,
+            'authUid': authUid,
+            'profileUid': profileUid,
+            'legacySeen': legacySeen,
+            'canonicalSeen': canonicalSeen,
+            'hasSeenGuide': hasSeenGuide ?? false,
+          },
+        );
+
+      if (!(hasSeenGuide ?? false) && mounted) {
+        AppLogger.info('HomeScreen', 'Showing Guide Modal');
+        final dontShowAgain = await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          barrierColor: Colors.black.withValues(alpha: 0.6),
+          builder: (context) => AppGuideModal(userId: effectiveUid),
+        );
+        if (dontShowAgain != null) {
+          // Product decision: never show guide again once completed.
+          await prefs.setBool(perUserKey, true);
+          await prefs.setBool(canonicalGuideKey, true);
+          await prefs.setBool('hasSeenOnboarding', true);
+        }
+        AppLogger.info(
+          'HomeScreen',
+          'Guide Modal closed',
+          extra: {'effectiveUid': effectiveUid, 'dontShowAgain': dontShowAgain},
+        );
+      }
+
+      // Prevent repeated prompts in the same app session.
+      _guidePromptHandledThisSession = true;
+    } finally {
+      _guideCheckInFlight = false;
     }
   }
 
@@ -223,16 +397,19 @@ class _MobileHomeScreenState extends ConsumerState<MobileHomeScreen> {
             toolbarHeight: 70,
             centerTitle: true,
             title: Image.asset(logoAsset, height: 28, fit: BoxFit.contain),
-            actions: [
-              Padding(
-                padding: const EdgeInsets.only(right: 10.0),
+            leading: Padding(
+              padding: const EdgeInsets.only(left: 12.0),
+              child: Center(
                 child: _buildGlassNotificationIcon(
                   context,
                   unreadNotifications,
                 ),
               ),
+            ),
+            leadingWidth: 64,
+            actions: [
               Padding(
-                padding: const EdgeInsets.only(right: 16.0),
+                padding: const EdgeInsets.only(right: 12.0),
                 child: _buildGlassCartIcon(context, cartAsync),
               ),
             ],
@@ -295,7 +472,7 @@ class _MobileHomeScreenState extends ConsumerState<MobileHomeScreen> {
                 _buildAutoHubCard(context),
                 const SizedBox(height: 32),
                 Text(
-                  'My Garage Updates',
+                  'MyCar Updates',
                   style: AppTextStyles.h3.copyWith(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 16),
@@ -402,17 +579,17 @@ class _MobileHomeScreenState extends ConsumerState<MobileHomeScreen> {
     final isDark = theme.brightness == Brightness.dark;
 
     return ClipRRect(
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(12),
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
         child: Container(
-          width: 44,
-          height: 44,
+          width: 40,
+          height: 40,
           decoration: BoxDecoration(
             color: isDark
                 ? Colors.white.withValues(alpha: 0.1)
                 : Colors.grey.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: isDark
                   ? Colors.white.withValues(alpha: 0.1)
@@ -429,7 +606,7 @@ class _MobileHomeScreenState extends ConsumerState<MobileHomeScreen> {
               child: Icon(
                 Icons.shopping_bag_outlined,
                 color: theme.iconTheme.color,
-                size: 22,
+                size: 19,
               ),
             ),
           ),
@@ -443,17 +620,17 @@ class _MobileHomeScreenState extends ConsumerState<MobileHomeScreen> {
     final isDark = theme.brightness == Brightness.dark;
 
     return ClipRRect(
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(12),
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
         child: Container(
-          width: 44,
-          height: 44,
+          width: 40,
+          height: 40,
           decoration: BoxDecoration(
             color: isDark
                 ? Colors.white.withValues(alpha: 0.1)
                 : Colors.grey.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: isDark
                   ? Colors.white.withValues(alpha: 0.1)
@@ -472,7 +649,7 @@ class _MobileHomeScreenState extends ConsumerState<MobileHomeScreen> {
                 color: unreadCount > 0
                     ? AppColors.primary
                     : theme.iconTheme.color,
-                size: 22,
+                size: 19,
               ),
             ),
           ),
@@ -672,7 +849,7 @@ class _MobileHomeScreenState extends ConsumerState<MobileHomeScreen> {
                   padding: const EdgeInsets.only(right: 12),
                   child: _buildUpdateCard(
                     context,
-                    title: 'My Garage',
+                    title: 'MyCar',
                     value: 'Add Car',
                     desc: 'Track service & insurance',
                     color: AppColors.primary,
@@ -681,7 +858,7 @@ class _MobileHomeScreenState extends ConsumerState<MobileHomeScreen> {
                       AuthGuardModal.check(
                         context: context,
                         ref: ref,
-                        title: 'My Garage',
+                        title: 'MyCar',
                         message: 'Sign in to add and manage your vehicles.',
                         onAuthenticated: () => context.push('/my-cars'),
                       );
@@ -1070,7 +1247,7 @@ class DesktopHomeScreen extends ConsumerWidget {
                         ),
                       ),
                       DesktopSection(
-                        title: 'My Garage Updates',
+                        title: 'MyCar Updates',
                         subtitle:
                             'Active orders, service, and insurance at a glance',
                         child: _buildDesktopGarageGrid(
@@ -1401,7 +1578,7 @@ class DesktopHomeScreen extends ConsumerWidget {
           cards.add(
             _buildUpdateCard(
               context,
-              title: 'My Garage',
+              title: 'MyCar',
               value: 'Add Car',
               desc: 'Track service & insurance',
               color: AppColors.primary,
@@ -1410,7 +1587,7 @@ class DesktopHomeScreen extends ConsumerWidget {
                 AuthGuardModal.check(
                   context: context,
                   ref: ref,
-                  title: 'My Garage',
+                  title: 'MyCar',
                   message: 'Sign in to add and manage your vehicles.',
                   onAuthenticated: () => context.push('/my-cars'),
                 );

@@ -3,15 +3,15 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sparewo_client/features/shared/widgets/legal_modal.dart';
 import 'package:sparewo_client/features/auth/application/auth_provider.dart';
+import 'package:sparewo_client/features/auth/data/auth_repository.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:sparewo_client/core/theme/app_theme.dart';
 import 'package:sparewo_client/core/router/app_router.dart';
@@ -31,7 +31,12 @@ class SignUpScreen extends ConsumerWidget {
         theme.platform == TargetPlatform.iOS && mediaQuery.size.height <= 860;
     ref.listen(authNotifierProvider, (_, state) {
       if (state.isLoading) {
-        EasyLoading.show(status: 'Creating account...');
+        final registrationInProgress = ref.read(registrationInProgressProvider);
+        EasyLoading.show(
+          status: registrationInProgress
+              ? 'Creating account...'
+              : 'Signing in...',
+        );
       } else {
         EasyLoading.dismiss();
       }
@@ -111,11 +116,17 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
   bool _agreedToTerms = false;
   bool _isEmailTaken = false;
   bool _isSubmitting = false;
+  bool _isSocialSubmitting = false;
   String? _emailInlineError;
   Timer? _emailCheckDebounce;
   int _emailCheckVersion = 0;
   final GlobalKey _passwordSectionKey = GlobalKey();
   bool _didFocusPasswordSection = false;
+
+  bool get _showAppleSignIn =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.iOS ||
+          defaultTargetPlatform == TargetPlatform.macOS);
 
   @override
   void initState() {
@@ -261,7 +272,7 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
   }
 
   Future<void> _handleSignUp() async {
-    if (_isSubmitting) return;
+    if (_isSubmitting || _isSocialSubmitting) return;
     if (!_agreedToTerms) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please agree to the Terms & Conditions')),
@@ -278,8 +289,7 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
             extra: {'email': _emailController.text.trim().toLowerCase()},
           );
           await _showExistingAccountDialog(
-            'This email already has an account. If the email is unverified, tap "Complete setup" to continue verification.',
-            canResume: true,
+            'This email already has an account. Please log in instead.',
           );
           return;
         }
@@ -321,8 +331,7 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
             _emailInlineError = 'This email already has an account.';
           });
           await _showExistingAccountDialog(
-            'This email already has an account. If the email is unverified, tap "Complete setup" to continue verification.',
-            canResume: true,
+            'This email already has an account. Please log in instead.',
           );
           return;
         }
@@ -345,10 +354,7 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
         value.contains('continue setup');
   }
 
-  Future<void> _showExistingAccountDialog(
-    String message, {
-    bool canResume = false,
-  }) async {
+  Future<void> _showExistingAccountDialog(String message) async {
     final route = widget.returnTo != null
         ? '/login?returnTo=${Uri.encodeComponent(widget.returnTo!)}'
         : '/login';
@@ -366,14 +372,6 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
               onPressed: () => Navigator.of(dialogContext).pop(),
               child: const Text('Stay here'),
             ),
-            if (canResume)
-              FilledButton.tonal(
-                onPressed: () async {
-                  Navigator.of(dialogContext).pop();
-                  await _resumePartialOnboardingFromSignUp();
-                },
-                child: const Text('Continue setup'),
-              ),
             FilledButton(
               onPressed: () {
                 Navigator.of(dialogContext).pop();
@@ -387,45 +385,8 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
     );
   }
 
-  Future<void> _resumePartialOnboardingFromSignUp() async {
-    final email = _emailController.text.trim().toLowerCase();
-    final password = _passwordController.text.trim();
-    if (email.isEmpty || password.isEmpty) {
-      _showSignupFeedback(
-        'Enter the same email and password you used before, then continue setup.',
-        isFailure: true,
-      );
-      return;
-    }
-    try {
-      await ref
-          .read(authNotifierProvider.notifier)
-          .resumeIncompleteOnboarding(
-            email: email,
-            password: password,
-            name: _nameController.text.trim(),
-          );
-      final returnParam = widget.returnTo != null
-          ? '&returnTo=${Uri.encodeComponent(widget.returnTo!)}'
-          : '';
-      _goSafely(
-        '/verify-email?email=${Uri.encodeComponent(email)}&partial=1$returnParam',
-      );
-    } catch (error) {
-      if (!mounted) return;
-      final message = error.toString().replaceAll('Exception: ', '');
-      if (_looksLikeExistingAccountError(message)) {
-        await _showExistingAccountDialog(
-          'This account is already active. Please log in instead.',
-          canResume: false,
-        );
-        return;
-      }
-      _showSignupFeedback(message, isFailure: true);
-    }
-  }
-
   Future<void> _handleGoogleSignUp() async {
+    if (_isSubmitting || _isSocialSubmitting) return;
     TextInput.finishAutofillContext();
     if (!_agreedToTerms) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -436,14 +397,53 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
       return;
     }
     try {
+      if (mounted) {
+        setState(() => _isSocialSubmitting = true);
+      }
       await ref.read(authNotifierProvider.notifier).signInWithGoogle();
       await _routeAfterAuth();
     } catch (e) {
       if (!mounted) return;
+      if (e is AuthCancelledException) return;
       _showSignupFeedback(
         e.toString().replaceAll('Exception: ', ''),
         isFailure: true,
       );
+    } finally {
+      if (mounted) {
+        setState(() => _isSocialSubmitting = false);
+      }
+    }
+  }
+
+  Future<void> _handleAppleSignUp() async {
+    if (_isSubmitting || _isSocialSubmitting) return;
+    TextInput.finishAutofillContext();
+    if (!_agreedToTerms) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please agree to the Terms & Conditions first'),
+        ),
+      );
+      return;
+    }
+    try {
+      if (mounted) {
+        setState(() => _isSocialSubmitting = true);
+      }
+      await ref.read(authNotifierProvider.notifier).signInWithApple();
+      await _routeAfterAuth();
+    } catch (e) {
+      if (!mounted) return;
+      if (e is AuthCancelledException) return;
+      _showSignupFeedback(
+        e.toString().replaceAll('Exception: ', ''),
+        isFailure: true,
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSocialSubmitting = false);
+      }
     }
   }
 
@@ -480,22 +480,6 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
   Future<void> _routeAfterAuth() async {
     if (!mounted) return;
 
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid != null && uid.isNotEmpty) {
-      final prefs = await SharedPreferences.getInstance();
-      final perUserKey = 'hasSeenOnboarding_$uid';
-      final hasSeenOnboarding =
-          (prefs.getBool(perUserKey) ?? false) ||
-          (prefs.getBool('hasSeenOnboarding') ?? false);
-
-      if (!hasSeenOnboarding) {
-        await prefs.setBool(perUserKey, true);
-        await prefs.setBool('hasSeenOnboarding', true);
-        _goSafely('/add-car?nudge=true');
-        return;
-      }
-    }
-
     if (widget.returnTo != null) {
       _goNow(widget.returnTo!);
     } else {
@@ -514,6 +498,9 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
 
   @override
   Widget build(BuildContext context) {
+    final authActionState = ref.watch(authNotifierProvider);
+    final isAuthActionRunning =
+        _isSubmitting || _isSocialSubmitting || authActionState.isLoading;
     final theme = Theme.of(context);
     final password = _passwordController.text;
     final strengthScore = _passwordScore(password);
@@ -606,7 +593,7 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
                         SizedBox(
                           width: MediaQuery.of(context).size.width - 130,
                           child: Text(
-                            'This email already has an account. If setup is incomplete, continue registration.',
+                            'This email already has an account. Please log in.',
                             maxLines: 3,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
@@ -617,7 +604,12 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
                           ),
                         ),
                         TextButton(
-                          onPressed: _resumePartialOnboardingFromSignUp,
+                          onPressed: () {
+                            final route = widget.returnTo != null
+                                ? '/login?returnTo=${Uri.encodeComponent(widget.returnTo!)}'
+                                : '/login';
+                            _goNow(route);
+                          },
                           style: TextButton.styleFrom(
                             visualDensity: VisualDensity.compact,
                             padding: const EdgeInsets.symmetric(horizontal: 6),
@@ -625,7 +617,7 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
                             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           ),
                           child: const Text(
-                            'Complete setup',
+                            'Go to Login',
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w700,
@@ -873,7 +865,7 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
                   width: double.infinity,
                   height: widget.compact ? 46 : 50,
                   child: FilledButton(
-                    onPressed: _isSubmitting ? null : _handleSignUp,
+                    onPressed: isAuthActionRunning ? null : _handleSignUp,
                     style: FilledButton.styleFrom(
                       backgroundColor: AppColors.primary,
                       shape: RoundedRectangleBorder(
@@ -910,12 +902,14 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
               width: double.infinity,
               height: 44,
               child: OutlinedButton(
-                onPressed: () {
-                  final route = widget.returnTo != null
-                      ? '/login?returnTo=${Uri.encodeComponent(widget.returnTo!)}'
-                      : '/login';
-                  _goNow(route);
-                },
+                onPressed: isAuthActionRunning
+                    ? null
+                    : () {
+                        final route = widget.returnTo != null
+                            ? '/login?returnTo=${Uri.encodeComponent(widget.returnTo!)}'
+                            : '/login';
+                        _goNow(route);
+                      },
                 child: const Text(
                   'Already have an account? Login',
                   style: TextStyle(fontWeight: FontWeight.w700),
@@ -945,7 +939,7 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
               width: double.infinity,
               height: widget.compact ? 46 : 48,
               child: OutlinedButton.icon(
-                onPressed: _isSubmitting ? null : _handleGoogleSignUp,
+                onPressed: isAuthActionRunning ? null : _handleGoogleSignUp,
                 icon: Image.asset(
                   'assets/icons/Google Logo Icon.png',
                   width: 22,
@@ -960,11 +954,30 @@ class _SignUpFormState extends ConsumerState<_SignUpForm> {
                 ),
               ),
             ),
+            if (_showAppleSignIn) ...[
+              SizedBox(height: widget.compact ? 10 : 12),
+              SizedBox(
+                width: double.infinity,
+                height: widget.compact ? 46 : 48,
+                child: OutlinedButton.icon(
+                  onPressed: isAuthActionRunning ? null : _handleAppleSignUp,
+                  icon: const Icon(Icons.apple),
+                  label: const Text('Continue with Apple'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: theme.textTheme.bodyLarge?.color,
+                    side: BorderSide(color: theme.dividerColor),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(30),
+                    ),
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 6),
             SizedBox(
               width: double.infinity,
               child: TextButton(
-                onPressed: _continueAsGuest,
+                onPressed: isAuthActionRunning ? null : _continueAsGuest,
                 style: TextButton.styleFrom(
                   minimumSize: const Size(0, 38),
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,

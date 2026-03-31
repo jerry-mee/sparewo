@@ -6,6 +6,7 @@ import { auth } from '@/lib/firebase/config';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase/config';
 import { AdminUser } from '@/lib/types';
+import { logWarn, logError } from '@/lib/diagnostics/logger';
 
 interface AuthContextType {
   user: User | null;
@@ -38,11 +39,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           if (docSnap.exists()) {
             setAdminData({ id: docSnap.id, ...docSnap.data() } as AdminUser);
           } else {
-            console.log('No admin data found');
+            void logWarn('auth_context', 'No admin data found');
             setAdminData(null);
           }
         } catch (error) {
-          console.error('Error fetching admin data:', error);
+          void logError('auth_context', 'Error fetching admin data', error);
         }
       } else {
         setAdminData(null);

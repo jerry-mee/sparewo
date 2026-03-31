@@ -3,6 +3,7 @@
 import { ThemeProvider } from './theme-provider';
 import { AuthProvider } from './auth-provider';
 import { NotificationProvider } from './notification-provider';
+import { ProductionConsoleGuard } from './production-console-guard';
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
@@ -12,10 +13,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
       enableSystem
       disableTransitionOnChange
     >
+      <ProductionConsoleGuard />
       <AuthProvider>
-        <NotificationProvider>
-          {children}
-        </NotificationProvider>
+        <NotificationProvider>{children}</NotificationProvider>
       </AuthProvider>
     </ThemeProvider>
   );
