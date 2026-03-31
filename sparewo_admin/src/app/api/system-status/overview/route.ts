@@ -29,7 +29,7 @@ export async function GET(req: Request) {
     if (!token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    await ensureOperator(token);
+    const decoded = await ensureOperator(token);
 
     const now = new Date();
     const cutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
@@ -51,34 +51,48 @@ export async function GET(req: Request) {
     let firestoreOk = false;
     let storageOk = false;
     let functionsOk = false;
+    let authDetail = '';
+    let firestoreDetail = '';
+    let storageDetail = '';
+    let functionsDetail = '';
 
     try {
-      await auth.getUser('Fl7w7xFuX6Xow8uqBMlJC28oPyl1');
+      await auth.getUser(decoded.uid);
       authOk = true;
-    } catch {
+      authDetail = `Token verified for operator uid ${decoded.uid}.`;
+    } catch (error) {
       authOk = false;
+      authDetail = error instanceof Error ? error.message : 'Unknown auth check failure.';
     }
 
     try {
       const probe = await db.collection('catalog_products').limit(1).get();
       firestoreOk = !probe.empty || probe.empty;
-    } catch {
+      firestoreDetail = `Query returned ${probe.size} record(s) in sample.`;
+    } catch (error) {
       firestoreOk = false;
+      firestoreDetail = error instanceof Error ? error.message : 'Unknown Firestore probe failure.';
     }
 
     try {
       const bucket = db.app.storage().bucket();
-      const [exists] = await bucket.file('vendors').exists();
-      storageOk = exists || !exists;
-    } catch {
+      const metadata = await bucket.getMetadata();
+      storageOk = Boolean(metadata?.[0]?.name);
+      storageDetail = metadata?.[0]?.name
+        ? `Bucket reachable: ${metadata[0].name}`
+        : 'Bucket metadata response missing name.';
+    } catch (error) {
       storageOk = false;
+      storageDetail = error instanceof Error ? error.message : 'Unknown Storage probe failure.';
     }
 
     try {
       const funcProbe = await db.collection('notifications').orderBy('createdAt', 'desc').limit(1).get();
       functionsOk = !funcProbe.empty || funcProbe.empty;
-    } catch {
+      functionsDetail = `Notifications probe returned ${funcProbe.size} record(s) in sample.`;
+    } catch (error) {
       functionsOk = false;
+      functionsDetail = error instanceof Error ? error.message : 'Unknown fanout path probe failure.';
     }
 
     const response = {
@@ -94,6 +108,7 @@ export async function GET(req: Request) {
           name: 'Firebase Auth',
           status: healthStatusFromBool(authOk),
           summary: authOk ? 'Auth admin SDK reachable.' : 'Auth check failed.',
+          details: authDetail,
           updatedAt: now.toISOString(),
         },
         {
@@ -101,6 +116,7 @@ export async function GET(req: Request) {
           name: 'Firestore',
           status: healthStatusFromBool(firestoreOk),
           summary: firestoreOk ? 'Firestore query check passed.' : 'Firestore probe failed.',
+          details: firestoreDetail,
           updatedAt: now.toISOString(),
         },
         {
@@ -108,6 +124,7 @@ export async function GET(req: Request) {
           name: 'Firebase Storage',
           status: healthStatusFromBool(storageOk),
           summary: storageOk ? 'Storage bucket reachable.' : 'Storage probe failed.',
+          details: storageDetail,
           updatedAt: now.toISOString(),
         },
         {
@@ -115,6 +132,7 @@ export async function GET(req: Request) {
           name: 'Functions Push Fanout',
           status: healthStatusFromBool(functionsOk),
           summary: functionsOk ? 'Notifications collection reachable.' : 'Functions probe failed.',
+          details: functionsDetail,
           updatedAt: now.toISOString(),
         },
         {

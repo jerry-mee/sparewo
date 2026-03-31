@@ -40,12 +40,20 @@ export async function GET(req: Request) {
     const limit = Math.min(Number(url.searchParams.get('limit') || 50), 200);
     const severity = (url.searchParams.get('severity') || '').toLowerCase();
     const source = (url.searchParams.get('source') || '').toLowerCase();
+    const service = (url.searchParams.get('service') || '').toLowerCase();
 
     let query = db.collection(EVENTS_COLLECTION).orderBy('timestamp', 'desc').limit(limit);
     if (severity) {
       query = db
         .collection(EVENTS_COLLECTION)
         .where('severity', '==', severity)
+        .orderBy('timestamp', 'desc')
+        .limit(limit);
+    }
+    if (service) {
+      query = db
+        .collection(EVENTS_COLLECTION)
+        .where('service', '==', service)
         .orderBy('timestamp', 'desc')
         .limit(limit);
     }

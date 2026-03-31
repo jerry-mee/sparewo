@@ -51,7 +51,9 @@ export const logError = async (
     code,
     context: {
       ...context,
+      errorName: error instanceof Error ? error.name : undefined,
       error: error instanceof Error ? error.message : String(error ?? ''),
+      stack: error instanceof Error ? error.stack : undefined,
     },
     severity: 'error',
   });
